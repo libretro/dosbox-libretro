@@ -16,6 +16,8 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#include <algorithm>
+#include <string> 
 
 
 #include "../libco/libco.h"
@@ -26,6 +28,7 @@
 #include "mapper.h"
 #include "keyboard.h"
 #include "control.h"
+#include "pic.h"
 
 //
 
@@ -36,7 +39,6 @@ static retro_audio_sample_batch_t audio_batch_cb = NULL;
 retro_environment_t environ_cb = NULL;
 
 //
-
 
 cothread_t mainThread;
 cothread_t emuThread;
@@ -147,7 +149,17 @@ void MIDI_Init(Section*)
     // Nothing
 }
 
-// GFX
+// Events
+void MIXER_CallBack(void * userdata, uint8_t *stream, int len);
+
+static void retro_leave_thread(Bitu)
+{
+    uint8_t streamBuffer[735 * 4];
+    MIXER_CallBack(0, streamBuffer, sizeof(streamBuffer));
+    audio_batch_cb((int16_t*)streamBuffer, 735);
+
+    co_switch(mainThread);
+}
 
 void retro_handle_dos_events()
 {
@@ -258,25 +270,32 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
     info->timing.sample_rate = 44100.0;
 }
 
-static char loadPath[512];
+static std::string loadPath;
+static bool loadConf;
 static void emu_run()
 {
-    static const char* const argv[2] = {"dosbox", loadPath};
-	CommandLine com_line(2,argv);
+    static const char* const argv[2] = {"dosbox", loadPath.c_str()};
+	CommandLine com_line(loadConf ? 1 : 2, argv);
 	Config myconf(&com_line);
 	control=&myconf;
+
 	/* Init the configuration system and add default values */
 	DOSBOX_Init();
 
-	/* Parse configuration files */
-	std::string config_file,config_path;
-	Cross::GetPlatformConfigDir(config_path);
+    /* Load config */
+    if(loadConf)
+    {
+        control->ParseConfigFile(loadPath.c_str());    
+    }
 	
     /* Init all the sections */
     control->Init();
 
     /* Init the keyMapper */
     MAPPER_Init();
+
+    /* Init done, go back to the main thread */
+    co_switch(mainThread);
 
     control->StartUp();
     
@@ -305,6 +324,10 @@ void retro_reset (void)
 
 void retro_run (void)
 {
+    // Add frame exit handler
+    PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
+
+    // Run emu
     co_switch(emuThread);
 }
 
@@ -331,7 +354,16 @@ void retro_cheat_set(unsigned unused, bool unused1, const char* unused2)
 
 bool retro_load_game(const struct retro_game_info *game)
 {
-    strncpy(loadPath, game->path, sizeof(loadPath));
+    loadPath = game->path;
+    const size_t lastDot = loadPath.find_last_of('.');
+    
+    if(std::string::npos != lastDot)
+    {
+        std::string extension = loadPath.substr(lastDot + 1);
+        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+        loadConf = (extension == "conf");
+    }
+
     return true;
 }
 

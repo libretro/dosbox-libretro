@@ -414,7 +414,11 @@ static void MIXER_Mix_NoSound(void) {
 	mixer.done=0;
 }
 
+#ifndef __LIBRETRO__ // Need to call MIXER_CallBack externally
 static void MIXER_CallBack(void * userdata, Uint8 *stream, int len) {
+#else
+void MIXER_CallBack(void * userdata, Uint8 *stream, int len) {
+#endif
 	Bitu need=(Bitu)len/MIXER_SSIZE;
 	Bit16s * output=(Bit16s *)stream;
 	Bitu reduce;

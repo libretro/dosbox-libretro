@@ -1,13 +1,11 @@
 #include <string.h>
 
-#include "../libco/libco.h"
 #include "libretro.h"
 
 #include "dosbox.h"
 #include "video.h"
 
 extern retro_video_refresh_t video_cb;
-extern cothread_t mainThread;
 extern void retro_handle_dos_events();
 
 // GFX
@@ -68,7 +66,6 @@ void GFX_EndUpdate( const Bit16u *changedLines )
     {
         video_cb(screenBuffer, screenWidth, screenHeight, screenWidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == screenColorMode) ? 4 : 2));
     }
-    co_switch(mainThread);
 }
 
 void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused)
