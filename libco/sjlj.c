@@ -17,6 +17,11 @@
 #include <signal.h>
 #include <setjmp.h>
 
+#ifdef __LIBRETRO__ // Must NOT use SIGUSR1 on android, it is reserved to run JVM GC and segfaults here
+# undef SIGUSR1
+# define SIGUSR1 SIGUSR2
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
