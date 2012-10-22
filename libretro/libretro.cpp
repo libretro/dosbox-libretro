@@ -32,7 +32,7 @@
 
 //
 
-retro_video_refresh_t video_cb = NULL;
+static retro_video_refresh_t video_cb = NULL;
 static retro_input_poll_t poll_cb = NULL;
 static retro_input_state_t input_cb = NULL;
 static retro_audio_sample_batch_t audio_batch_cb = NULL;
@@ -152,50 +152,56 @@ void MIDI_Init(Section*)
 // Events
 void MIXER_CallBack(void * userdata, uint8_t *stream, int len);
 
+static std::string loadPath;
+static bool loadConf;
+static uint8_t audioData[735 * 4];
+
+extern Bit8u screenBuffer[1024*768*4];
+extern Bitu screenWidth, screenHeight;
+extern unsigned screenColorMode;
+
 static void retro_leave_thread(Bitu)
 {
-    uint8_t streamBuffer[735 * 4];
-    MIXER_CallBack(0, streamBuffer, sizeof(streamBuffer));
-    audio_batch_cb((int16_t*)streamBuffer, 735);
+    MIXER_CallBack(0, audioData, sizeof(audioData));
 
     co_switch(mainThread);
+    
+    PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
 }
 
-void retro_handle_dos_events()
+static void retro_start_emulator()
 {
-    poll_cb();
+    const char* const argv[2] = {"dosbox", loadPath.c_str()};
+	CommandLine com_line(loadConf ? 1 : 2, argv);
+	Config myconf(&com_line);
+	control=&myconf;
 
-    // Mouse movement
-    const int16_t mouseX = input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
-    const int16_t mouseY = input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
+	/* Init the configuration system and add default values */
+	DOSBOX_Init();
 
-    if(mouseX || mouseY)
+    /* Load config */
+    if(loadConf)
     {
-        Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
+        control->ParseConfigFile(loadPath.c_str());    
     }
+	
+    /* Init all the sections */
+    control->Init();
 
-    // Mouse Buttons
-    static ButtonHandler<0> left;
-    left.process(input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT));
-        
-    static ButtonHandler<1> right;
-    right.process(input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT));
+    /* Init the keyMapper */
+    MAPPER_Init();
+
+    /* Init done, go back to the main thread */
+    co_switch(mainThread);
+
+    PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
+    control->StartUp();
     
-    // Keys
-    for(int i = 0; i != sizeof(keyMap) / sizeof(keyMap[0]); i ++)
+    // Dead emulator
+    while(true)
     {
-        const bool downNow = input_cb(0, RETRO_DEVICE_KEYBOARD, 0, keyMap[i].retroID);
-    
-        if(downNow && !keyMap[i].down)
-        {
-            KEYBOARD_AddKey(keyMap[i].dosboxID, true);
-        }
-        else if(!downNow && keyMap[i].down)
-        {
-            KEYBOARD_AddKey(keyMap[i].dosboxID, false);
-        }
-        
-        keyMap[i].down = downNow;
+        environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
+        co_switch(mainThread);
     }
 }
 
@@ -270,47 +276,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
     info->timing.sample_rate = 44100.0;
 }
 
-static std::string loadPath;
-static bool loadConf;
-static void emu_run()
-{
-    static const char* const argv[2] = {"dosbox", loadPath.c_str()};
-	CommandLine com_line(loadConf ? 1 : 2, argv);
-	Config myconf(&com_line);
-	control=&myconf;
-
-	/* Init the configuration system and add default values */
-	DOSBOX_Init();
-
-    /* Load config */
-    if(loadConf)
-    {
-        control->ParseConfigFile(loadPath.c_str());    
-    }
-	
-    /* Init all the sections */
-    control->Init();
-
-    /* Init the keyMapper */
-    MAPPER_Init();
-
-    /* Init done, go back to the main thread */
-    co_switch(mainThread);
-
-    control->StartUp();
-    
-    // Dead emulator
-    while(true)
-    {
-        environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
-        co_switch(mainThread);
-    }
-}
-
 void retro_init (void)
 {
     mainThread = co_active();
-    emuThread = co_create(65536*sizeof(void*), emu_run);
+    emuThread = co_create(65536*sizeof(void*), retro_start_emulator);
 }
 
 void retro_deinit(void)
@@ -324,11 +293,54 @@ void retro_reset (void)
 
 void retro_run (void)
 {
-    // Add frame exit handler
-    PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
+    poll_cb();
 
+    // Mouse movement
+    const int16_t mouseX = input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
+    const int16_t mouseY = input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
+
+    if(mouseX || mouseY)
+    {
+        Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
+    }
+
+    // Mouse Buttons
+    static ButtonHandler<0> left;
+    left.process(input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT));
+        
+    static ButtonHandler<1> right;
+    right.process(input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT));
+    
+    // Keys
+    for(int i = 0; i != sizeof(keyMap) / sizeof(keyMap[0]); i ++)
+    {
+        const bool downNow = input_cb(0, RETRO_DEVICE_KEYBOARD, 0, keyMap[i].retroID);
+    
+        if(downNow && !keyMap[i].down)
+        {
+            KEYBOARD_AddKey(keyMap[i].dosboxID, true);
+        }
+        else if(!downNow && keyMap[i].down)
+        {
+            KEYBOARD_AddKey(keyMap[i].dosboxID, false);
+        }
+        
+        keyMap[i].down = downNow;
+    }
+    
     // Run emu
     co_switch(emuThread);
+
+    // Upload video
+    if(screenWidth && screenHeight)
+    {
+        video_cb(screenBuffer, screenWidth, screenHeight, screenWidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == screenColorMode) ? 4 : 2));
+    }
+
+
+    // Upload audio    
+    audio_batch_cb((int16_t*)audioData, 735);
+    
 }
 
 size_t retro_serialize_size (void)

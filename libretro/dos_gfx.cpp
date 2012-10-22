@@ -9,9 +9,9 @@ extern retro_video_refresh_t video_cb;
 extern void retro_handle_dos_events();
 
 // GFX
-static Bit8u screenBuffer[1024*768*4];
-static Bitu screenWidth, screenHeight;
-static unsigned screenColorMode = RETRO_PIXEL_FORMAT_0RGB1555;
+Bit8u screenBuffer[1024*768*4];
+Bitu screenWidth, screenHeight;
+unsigned screenColorMode = RETRO_PIXEL_FORMAT_0RGB1555;
 
 void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries)
 {
@@ -49,6 +49,11 @@ Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,G
     screenWidth = width;
     screenHeight = height;
     
+    if(screenWidth > 1024 || screenHeight > 768)
+    {
+        return 0;
+    }
+    
     return GFX_GetBestMode(0);
 }
 
@@ -62,10 +67,7 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch)
 
 void GFX_EndUpdate( const Bit16u *changedLines )
 {
-    if(screenWidth && screenHeight)
-    {
-        video_cb(screenBuffer, screenWidth, screenHeight, screenWidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == screenColorMode) ? 4 : 2));
-    }
+    // Nothing
 }
 
 void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused)
@@ -81,7 +83,7 @@ void GFX_ShowMsg(char const* format,...)
 
 void GFX_Events()
 {
-    retro_handle_dos_events();
+    // Nothing
 }
 
 void GFX_GetSize(int &width, int &height, bool &fullscreen)
