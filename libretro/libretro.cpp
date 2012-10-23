@@ -156,9 +156,10 @@ static std::string loadPath;
 static bool loadConf;
 static uint8_t audioData[735 * 4];
 
-extern Bit8u screenBuffer[1024*768*4];
-extern Bitu screenWidth, screenHeight;
-extern unsigned screenColorMode;
+extern Bit8u RDOSGFXbuffer[1024*768*4];
+extern Bitu RDOSGFXwidth, RDOSGFXheight;
+extern unsigned RDOSGFXcolorMode;
+extern bool RDOSGFXhaveFrame;
 
 static void retro_leave_thread(Bitu)
 {
@@ -331,14 +332,14 @@ void retro_run (void)
     // Run emu
     co_switch(emuThread);
 
-    // Upload video
-    if(screenWidth && screenHeight)
+    // Upload video: TODO: Check the CANDUPE env value
+    if(RDOSGFXhaveFrame && RDOSGFXwidth && RDOSGFXheight)
     {
-        video_cb(screenBuffer, screenWidth, screenHeight, screenWidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == screenColorMode) ? 4 : 2));
+        video_cb(RDOSGFXbuffer, RDOSGFXwidth, RDOSGFXheight, RDOSGFXwidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == RDOSGFXcolorMode) ? 4 : 2));
+        RDOSGFXhaveFrame = false;
     }
 
-
-    // Upload audio    
+    // Upload audio: TODO: Support sample rate control
     audio_batch_cb((int16_t*)audioData, 735);
     
 }

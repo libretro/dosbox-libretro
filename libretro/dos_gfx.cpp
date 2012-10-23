@@ -9,9 +9,10 @@ extern retro_video_refresh_t video_cb;
 extern void retro_handle_dos_events();
 
 // GFX
-Bit8u screenBuffer[1024*768*4];
-Bitu screenWidth, screenHeight;
-unsigned screenColorMode = RETRO_PIXEL_FORMAT_0RGB1555;
+Bit8u RDOSGFXbuffer[1024*768*4];
+Bitu RDOSGFXwidth, RDOSGFXheight;
+unsigned RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_0RGB1555;
+bool RDOSGFXhaveFrame;
 
 void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries)
 {
@@ -20,7 +21,7 @@ void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries)
 
 Bitu GFX_GetBestMode(Bitu flags)
 {
-    switch(screenColorMode)
+    switch(RDOSGFXcolorMode)
     {
         case RETRO_PIXEL_FORMAT_0RGB1555: return GFX_CAN_15 | GFX_RGBONLY;
         case RETRO_PIXEL_FORMAT_XRGB8888: return GFX_CAN_32 | GFX_RGBONLY;
@@ -32,7 +33,7 @@ Bitu GFX_GetBestMode(Bitu flags)
 
 Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue)
 {
-    switch(screenColorMode)
+    switch(RDOSGFXcolorMode)
     {
         case RETRO_PIXEL_FORMAT_0RGB1555: return ((red >> 3) << 10) | ((green >> 3) << 5) | (blue >> 3);
         case RETRO_PIXEL_FORMAT_XRGB8888: return (red << 16) | (green << 8) | (blue);
@@ -44,12 +45,12 @@ Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue)
 
 Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,GFX_CallBack_t cb)
 {
-    memset(screenBuffer, 0, sizeof(screenBuffer));
+    memset(RDOSGFXbuffer, 0, sizeof(RDOSGFXbuffer));
     
-    screenWidth = width;
-    screenHeight = height;
+    RDOSGFXwidth = width;
+    RDOSGFXheight = height;
     
-    if(screenWidth > 1024 || screenHeight > 768)
+    if(RDOSGFXwidth > 1024 || RDOSGFXheight > 768)
     {
         return 0;
     }
@@ -59,15 +60,15 @@ Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,G
 
 bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch)
 {
-    pixels = screenBuffer;
-    pitch = screenWidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == screenColorMode) ? 4 : 2);
+    pixels = RDOSGFXbuffer;
+    pitch = RDOSGFXwidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == RDOSGFXcolorMode) ? 4 : 2);
     
     return true;
 }
 
 void GFX_EndUpdate( const Bit16u *changedLines )
 {
-    // Nothing
+    RDOSGFXhaveFrame = true;
 }
 
 void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused)
@@ -88,7 +89,7 @@ void GFX_Events()
 
 void GFX_GetSize(int &width, int &height, bool &fullscreen)
 {
-	width = screenWidth;
-	height = screenHeight;
+	width = RDOSGFXwidth;
+	height = RDOSGFXheight;
 	fullscreen = false;
 }
