@@ -15,28 +15,6 @@ typedef unsigned long Uint32;
 typedef int SDL_mutex;
 
 #define SDL_GetError() "FAKE"
-#define SDL_LockAudio()
-#define SDL_UnlockAudio()
-#define SDL_PauseAudio(...)
-
-#define AUDIO_S16SYS 1
-
-typedef struct{
-  int freq;
-  Uint16 format;
-  Uint8 channels;
-  Uint8 silence;
-  Uint16 samples;
-  Uint32 size;
-  void (*callback)(void *userdata, Uint8 *stream, int len);
-  void *userdata;
-} SDL_AudioSpec;
-
-static int SDL_OpenAudio(SDL_AudioSpec* aIn, SDL_AudioSpec* aOut)
-{
-    memcpy(aOut, aIn, sizeof(SDL_AudioSpec));
-    return 0;
-}
 
 // TIMER
 #include <sys/time.h>

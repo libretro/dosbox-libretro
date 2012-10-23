@@ -17,10 +17,9 @@
  */
 
 
-/* 
-	Remove the sdl code from here and have it handeld in the sdlmain.
-	That should call the mixer start from there or something.
-*/
+#ifdef __LIBRETRO__ // AndroidNDK needs <stdlib.h> for strtod, it shouldn't hurt anything else either.
+# include <stdlib.h>
+#endif
 
 #include <string.h>
 #include <sys/types.h>
@@ -35,7 +34,6 @@
 #include <mmsystem.h>
 #endif
 
-#include "SDL.h"
 #include "mem.h"
 #include "pic.h"
 #include "dosbox.h"
@@ -132,9 +130,7 @@ void MixerChannel::Enable(bool _yesno) {
 	enabled=_yesno;
 	if (enabled) {
 		freq_index=MIXER_REMAIN;
-		SDL_LockAudio();
 		if (done<mixer.done) done=mixer.done;
-		SDL_UnlockAudio();
 	}
 }
 
@@ -336,14 +332,11 @@ void MixerChannel::AddSamples_s32_nonnative(Bitu len,const Bit32s * data) {
 }
 
 void MixerChannel::FillUp(void) {
-	SDL_LockAudio();
 	if (!enabled || done<mixer.done) {
-		SDL_UnlockAudio();
 		return;
 	}
 	float index=PIC_TickIndex();
 	Mix((Bitu)(index*mixer.needed));
-	SDL_UnlockAudio();
 }
 
 extern bool ticksLocked;
@@ -382,12 +375,10 @@ static void MIXER_MixData(Bitu needed) {
 }
 
 static void MIXER_Mix(void) {
-	SDL_LockAudio();
 	MIXER_MixData(mixer.needed);
 	mixer.tick_remain+=mixer.tick_add;
 	mixer.needed+=(mixer.tick_remain>>MIXER_SHIFT);
 	mixer.tick_remain&=MIXER_REMAIN;
-	SDL_UnlockAudio();
 }
 
 static void MIXER_Mix_NoSound(void) {
@@ -633,35 +624,14 @@ void MIXER_Init(Section* sec) {
 	mixer.mastervol[0]=1.0f;
 	mixer.mastervol[1]=1.0f;
 
-	/* Start the Mixer using SDL Sound at 22 khz */
-	SDL_AudioSpec spec;
-	SDL_AudioSpec obtained;
-
-	spec.freq=mixer.freq;
-	spec.format=AUDIO_S16SYS;
-	spec.channels=2;
-	spec.callback=MIXER_CallBack;
-	spec.userdata=NULL;
-	spec.samples=(Uint16)mixer.blocksize;
-
 	mixer.tick_remain=0;
 	if (mixer.nosound) {
 		LOG_MSG("MIXER:No Sound Mode Selected.");
 		mixer.tick_add=((mixer.freq) << MIXER_SHIFT)/1000;
 		TIMER_AddTickHandler(MIXER_Mix_NoSound);
-	} else if (SDL_OpenAudio(&spec, &obtained) <0 ) {
-		mixer.nosound = true;
-		LOG_MSG("MIXER:Can't open audio: %s , running in nosound mode.",SDL_GetError());
-		mixer.tick_add=((mixer.freq) << MIXER_SHIFT)/1000;
-		TIMER_AddTickHandler(MIXER_Mix_NoSound);
 	} else {
-		if((mixer.freq != obtained.freq) || (mixer.blocksize != obtained.samples))
-			LOG_MSG("MIXER:Got different values from SDL: freq %d, blocksize %d",obtained.freq,obtained.samples);
-		mixer.freq=obtained.freq;
-		mixer.blocksize=obtained.samples;
 		mixer.tick_add=(mixer.freq << MIXER_SHIFT)/1000;
 		TIMER_AddTickHandler(MIXER_Mix);
-		SDL_PauseAudio(0);
 	}
 	mixer.min_needed=section->Get_int("prebuffer");
 	if (mixer.min_needed>100) mixer.min_needed=100;
