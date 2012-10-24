@@ -100,11 +100,7 @@ SOURCES = \
 	src/dos/dos_mscdex.cpp \
 	src/dos/dos_keyboard_layout.cpp \
 	src/dos/cdrom.cpp \
-	src/dos/cdrom_ioctl_win32.cpp \
-	src/dos/cdrom_aspi_win32.cpp \
-	src/dos/cdrom_ioctl_linux.cpp \
 	src/dos/cdrom_image.cpp \
-	src/dos/cdrom_ioctl_os2.cpp \
     src/fpu/fpu.cpp \
     src/hardware/adlib.cpp \
     src/hardware/dma.cpp \

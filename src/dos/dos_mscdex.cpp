@@ -256,6 +256,7 @@ int CMscdex::AddDrive(Bit16u _drive, char* physicalPath, Bit8u& subUnit)
 	// Get Mounttype and init needed cdrom interface
 	switch (CDROM_GetMountType(physicalPath,forceCD)) {
 	case 0x00: {	
+#ifndef __LIBRETRO__ // No physical cds
 		LOG(LOG_MISC,LOG_NORMAL)("MSCDEX: Mounting physical cdrom: %s"	,physicalPath);
 #if defined (WIN32)
 		// Check OS
@@ -295,6 +296,7 @@ int CMscdex::AddDrive(Bit16u _drive, char* physicalPath, Bit8u& subUnit)
 		// Default case windows and other oses
 		cdrom[numDrives] = new CDROM_Interface_SDL();
 		LOG(LOG_MISC,LOG_NORMAL)("MSCDEX: SDL Interface.");
+#endif
 #endif
 		} break;
 	case 0x01:	// iso cdrom interface	
