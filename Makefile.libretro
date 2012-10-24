@@ -110,7 +110,7 @@ SOURCES = \
     src/hardware/joystick.cpp \
     src/hardware/keyboard.cpp \
     src/hardware/memory.cpp \
-    src/hardware/mixer-retro.cpp \
+    libretro/mixer-retro.cpp \
     src/hardware/pcspeaker.cpp \
     src/hardware/pci_bus.cpp \
     src/hardware/pic.cpp \
