@@ -1,22 +1,25 @@
 libretro wrapper for DOSBox
 
-To use you can either load an exe/com/bat file or a *.conf file.
-If loading exe/com/bat the system directory will be searched for a 'dosbox.conf' file to load. If one isn't available default values will be used. This mode is equivalent to running a DOSBox binary with the specified file as the command line argument.
-If loading a conf file DOSBox will be loaded with the options in the config file. This mode is useful if you just want to be dumped at a command prompt, but can also be used to load a game by putting commands in the autoexec section.
-To be useful the frontend will need to have keyboard+mouse support, and all keyboard shortcuts need to be remapped.
+* To use you can either load an exe/com/bat file or a *.conf file.
+* If loading exe/com/bat the system directory will be searched for a 'dosbox.conf' file to load. If one isn't available default values will be used. This mode is equivalent to running a DOSBox binary with the specified file as the command line argument.
+* If loading a conf file DOSBox will be loaded with the options in the config file. This mode is useful if you just want to be dumped at a command prompt, but can also be used to load a game by putting commands in the autoexec section.
+* To be useful the frontend will need to have keyboard+mouse support, and all keyboard shortcuts need to be remapped.
 
 Unsupported features:
-  Physical CD-ROMs, CD images are supported.
-  MIDI, will be added soon via fluidsynth or timidity.
-  The key mapper. Built in shortcuts and remapping keys will not work, yet.
-  Joysticks
+
+* Physical CD-ROMs, CD images are supported.
+* MIDI, will be added soon via fluidsynth or timidity.
+* The key mapper. Built in shortcuts and remapping keys will not work, yet.
+* Joysticks
   
 Building:
-  You must edit include/config.h to set options for build platform, the supplied version is for 64-bit OSX with latest xcode and clang.
-  Build with the command 'make -f Makefile.libretro'
+
+* You must edit include/config.h to set options for build platform, the supplied version is for 64-bit OSX with latest xcode and clang.
+* Build with the command 'make -f Makefile.libretro'
   
 Notes:
-  There seems to be no trivial way to have the DOSBox core return periodically, so libco is used to enter/exit the emulator loop. This actually works better than one would expect.
-  There is no serialization support, it's not supported by DOSBox.
-  DOSBox uses 'wall time' for timing, frontend fast forward and slow motion features will have no effect.
-  
+
+* There seems to be no trivial way to have the DOSBox core return periodically, so libco is used to enter/exit the emulator loop. This actually works better than one would expect.
+* There is no serialization support, it's not supported by DOSBox.
+* DOSBox uses 'wall time' for timing, frontend fast forward and slow motion features will have no effect.
+ 
