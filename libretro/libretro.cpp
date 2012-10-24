@@ -159,7 +159,7 @@ void MIDI_Init(Section*)
 void MIXER_CallBack(void * userdata, uint8_t *stream, int len);
 
 static std::string loadPath;
-static bool loadConf;
+static std::string configPath;
 static uint8_t audioData[735 * 4];
 static bool DOSBOXwantsExit;
 static bool FRONTENDwantsExit;
@@ -188,7 +188,7 @@ static void retro_leave_thread(Bitu)
 static void retro_start_emulator()
 {
     const char* const argv[2] = {"dosbox", loadPath.c_str()};
-	CommandLine com_line(loadConf ? 1 : 2, argv);
+	CommandLine com_line(loadPath.empty() ? 1 : 2, argv);
 	Config myconf(&com_line);
 	control=&myconf;
 
@@ -196,9 +196,9 @@ static void retro_start_emulator()
 	DOSBOX_Init();
 
     /* Load config */
-    if(loadConf)
+    if(!configPath.empty())
     {
-        control->ParseConfigFile(loadPath.c_str());    
+        control->ParseConfigFile(configPath.c_str());
     }
 	
     /* Init all the sections */
@@ -341,15 +341,29 @@ void retro_deinit(void)
 bool retro_load_game(const struct retro_game_info *game)
 {
     if(emuThread)
-    {
+    {    
+        // Copy the game path
         loadPath = game->path;
         const size_t lastDot = loadPath.find_last_of('.');
         
+        // Find any config file to load
         if(std::string::npos != lastDot)
         {
             std::string extension = loadPath.substr(lastDot + 1);
             std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-            loadConf = (extension == "conf");
+            
+            if((extension == "conf"))
+            {
+                configPath = loadPath;
+                loadPath.clear();
+            }
+            else
+            {
+                const char* systemDir = 0;
+                const bool gotSysDir = environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &systemDir);
+            
+                configPath = std::string(gotSysDir ? systemDir : ".") + "/dosbox.conf";
+            }
         }
         
         return true;
