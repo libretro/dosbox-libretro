@@ -625,7 +625,7 @@ void MIXER_Init(Section* sec) {
 	mixer.mastervol[1]=1.0f;
 
 	mixer.tick_remain=0;
-	if (mixer.nosound) {
+	if (mixer.nosound || mixer.freq > 49716) {
 		LOG_MSG("MIXER:No Sound Mode Selected.");
 		mixer.tick_add=((mixer.freq) << MIXER_SHIFT)/1000;
 		TIMER_AddTickHandler(MIXER_Mix_NoSound);
@@ -640,3 +640,10 @@ void MIXER_Init(Section* sec) {
 	mixer.needed=mixer.min_needed+1;
 	PROGRAMS_MakeFile("MIXER.COM",MIXER_ProgramStart);
 }
+
+// Need to put it in the av_info struct
+Bit32u MIXER_RETRO_GetFrequency()
+{
+    return mixer.freq;
+}
+

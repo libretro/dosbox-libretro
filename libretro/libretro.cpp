@@ -113,6 +113,7 @@ struct ButtonHandler
     }
 };
 
+Bit32u MIXER_RETRO_GetFrequency();
 
 bool autofire;
 bool startup_state_capslock;
@@ -160,7 +161,8 @@ void MIXER_CallBack(void * userdata, uint8_t *stream, int len);
 
 static std::string loadPath;
 static std::string configPath;
-static uint8_t audioData[735 * 4];
+static uint8_t audioData[829 * 4]; // 49716hz max
+static uint32_t samplesPerFrame = 735;
 static bool DOSBOXwantsExit;
 static bool FRONTENDwantsExit;
 
@@ -171,7 +173,7 @@ extern bool RDOSGFXhaveFrame;
 
 static void retro_leave_thread(Bitu)
 {
-    MIXER_CallBack(0, audioData, sizeof(audioData));
+    MIXER_CallBack(0, audioData, samplesPerFrame * 4);
     
     co_switch(mainThread);
     
@@ -301,7 +303,7 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
     info->geometry.max_height = 480;
     info->geometry.aspect_ratio = 1.333333f;
     info->timing.fps = 60.0;
-    info->timing.sample_rate = 44100.0;
+    info->timing.sample_rate = (double)MIXER_RETRO_GetFrequency();
 }
 
 void retro_init (void)
@@ -366,6 +368,9 @@ bool retro_load_game(const struct retro_game_info *game)
             }
         }
         
+        co_switch(emuThread);
+        samplesPerFrame = MIXER_RETRO_GetFrequency() / 60;
+        
         return true;
     }
     else
@@ -425,7 +430,7 @@ void retro_run (void)
         }
     
         // Upload audio: TODO: Support sample rate control
-        audio_batch_cb((int16_t*)audioData, 735);
+        audio_batch_cb((int16_t*)audioData, samplesPerFrame);
     }
     else
     {
