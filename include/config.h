@@ -21,176 +21,63 @@
  */
 
 
-/* Define if building universal (internal helper macro) */
+// ----- OS ! YOU MUST CHANGE THIS FOR THE BUILD PLATFORM
 /* #undef AC_APPLE_UNIVERSAL_BUILD */
-
-/* Compiling on BSD */
 /* #undef BSD */
-
-/* Determines if the compilers supports always_inline attribute. */
-#define C_ATTRIBUTE_ALWAYS_INLINE 1
-
-/* Determines if the compilers supports fastcall attribute. */
-/* #undef C_ATTRIBUTE_FASTCALL */
-
-/* Define to 1 to use inlined memory functions in cpu core */
-/* #undef C_CORE_INLINE */
-
-/* Define to 1 to enable internal debugger, requires libcurses */
-/* #undef C_DEBUG */
-
-/* Define to 1 if you want serial passthrough support (Win32, Posix and OS/2).
-   */
-#define C_DIRECTSERIAL 1
-
-/* Define to 1 to use x86 dynamic cpu core */
-/* #undef C_DYNAMIC_X86 */
-
-/* Define to 1 to use recompiling cpu core. Can not be used together with the
-   dynamic-x86 core */
-#define C_DYNREC 1
-
-/* Define to 1 to enable floating point emulation */
-#define C_FPU 1
-
-/* Define to 1 to use a x86 assembly fpu core */
-/* #undef C_FPU_X86 */
-
-/* Determines if the compilers supports attributes for structures. */
-#define C_HAS_ATTRIBUTE 1
-
-/* Determines if the compilers supports __builtin_expect for branch
-   prediction. */
-#define C_HAS_BUILTIN_EXPECT 1
-
-/* Define to 1 if you have the mprotect function */
-#define C_HAVE_MPROTECT 1
-
-/* Define to 1 to enable heavy debugging, also have to enable C_DEBUG */
-/* #undef C_HEAVY_DEBUG */
-
-/* Define to 1 to enable IPX over Internet networking, requires SDL_net */
-/* #undef C_IPX */
-
-/* Define to 1 to enable internal modem support, requires SDL_net */
-/* #undef C_MODEM */
-
-/* Define to 1 to use opengl display output support */
-#define C_OPENGL 1
-
-/* Define to 1 to enable SDL_sound support */
-/* #undef C_SDL_SOUND */
-
-/* Define to 1 if you have setpriority support */
-#define C_SET_PRIORITY 1
-
-/* Define to 1 to enable screenshots, requires libpng */
-#define C_SSHOT 0
-
-/* The type of cpu this target has */
-#define C_TARGETCPU X86_64
-
-/* Define to 1 to use a unaligned memory access */
-#define C_UNALIGNED_MEMORY 1
-
-/* define to 1 if you have XKBlib.h and X11 lib */
-/* #undef C_X11_XKB */
-
-/* libm doesn't include powf */
-/* #undef DB_HAVE_NO_POWF */
-
-/* struct dirent has d_type */
-#define DIRENT_HAS_D_TYPE 1
-
-/* environ can be included */
-/* #undef ENVIRON_INCLUDED */
-
-/* environ can be linked */
-#define ENVIRON_LINKED 1
-
-/* Define to 1 to use ALSA for MIDI */
-/* #undef HAVE_ALSA */
-
-/* Define to 1 if you have the <ddraw.h> header file. */
-/* #undef HAVE_DDRAW_H */
-
-/* Define to 1 if you have the <inttypes.h> header file. */
-#define HAVE_INTTYPES_H 1
-
-/* Define to 1 if you have the `asound' library (-lasound). */
-/* #undef HAVE_LIBASOUND */
-
-/* Define to 1 if you have the <memory.h> header file. */
-#define HAVE_MEMORY_H 1
-
-/* Define to 1 if you have the <netinet/in.h> header file. */
-#define HAVE_NETINET_IN_H 1
-
-/* Define to 1 if you have the <pwd.h> header file. */
-#define HAVE_PWD_H 1
-
-/* Define to 1 if you have the <stdint.h> header file. */
-#define HAVE_STDINT_H 1
-
-/* Define to 1 if you have the <stdlib.h> header file. */
-#define HAVE_STDLIB_H 1
-
-/* Define to 1 if you have the <strings.h> header file. */
-#define HAVE_STRINGS_H 1
-
-/* Define to 1 if you have the <string.h> header file. */
-#define HAVE_STRING_H 1
-
-/* Define to 1 if you have the <sys/socket.h> header file. */
-#define HAVE_SYS_SOCKET_H 1
-
-/* Define to 1 if you have the <sys/stat.h> header file. */
-#define HAVE_SYS_STAT_H 1
-
-/* Define to 1 if you have the <sys/types.h> header file. */
-#define HAVE_SYS_TYPES_H 1
-
-/* Define to 1 if you have the <unistd.h> header file. */
-#define HAVE_UNISTD_H 1
-
-/* Compiling on GNU/Linux */
 /* #undef LINUX */
-
-/* Compiling on Mac OS X */
 #define MACOSX 1
-
-/* Compiling on OS/2 EMX */
 /* #undef OS2 */
 
-/* Name of package */
-#define PACKAGE "dosbox"
+// ----- RECOMPILER ! YOU MUST CHANGE THIS FOR THE BUILD PLATFORM
+/* #undef C_DYNAMIC_X86 */ /* Define to 1 to use x86 dynamic cpu core */
+#define C_DYNREC 1 /* Define to 1 to use recompiling cpu core. Can not be used together with the dynamic-x86 core */
+/* #undef C_FPU_X86 */ /* Define to 1 to use a x86 assembly fpu core */
+#define C_TARGETCPU X86_64 /* The type of cpu this target has */
+#define C_UNALIGNED_MEMORY 1 /* Define to 1 to use a unaligned memory access */
 
-/* Define to the address where bug reports for this package should be sent. */
-#define PACKAGE_BUGREPORT ""
+// ----- DOSBOX CORE FEATURES: Many of these probably won't work even if you enable them
+#define C_FPU 1 /* Define to 1 to enable floating point emulation */
+/* #undef C_CORE_INLINE */ /* Define to 1 to use inlined memory functions in cpu core */
+/* #undef C_DIRECTSERIAL */ /* Define to 1 if you want serial passthrough support (Win32, Posix and OS/2). */
+/* #undef C_IPX */ /* Define to 1 to enable IPX over Internet networking, requires SDL_net */
+/* #undef C_MODEM */ /* Define to 1 to enable internal modem support, requires SDL_net */
+/* #undef C_SDL_SOUND */ /* Define to 1 to enable SDL_sound support */
+/* #undef C_SSHOT */ /* Define to 1 to enable screenshots, requires libpng */
 
-/* Define to the full name of this package. */
-#define PACKAGE_NAME "dosbox"
+// ----- HEADERS: Define if headers exist in build environment
+#define HAVE_INTTYPES_H 1
+#define HAVE_MEMORY_H 1
+#define HAVE_NETINET_IN_H 1
+#define HAVE_PWD_H 1
+#define HAVE_STDINT_H 1
+#define HAVE_STDLIB_H 1
+#define HAVE_STRINGS_H 1
+#define HAVE_STRING_H 1
+#define HAVE_SYS_SOCKET_H 1
+#define HAVE_SYS_STAT_H 1
+#define HAVE_SYS_TYPES_H 1
+#define HAVE_UNISTD_H 1
 
-/* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dosbox SVN"
+// ----- STANDARD LIBRARY FEATURES
+#define DIRENT_HAS_D_TYPE 1 /* struct dirent has d_type */
+#define C_HAVE_MPROTECT 1 /* Define to 1 if you have the mprotect function */
+/* #undef DB_HAVE_NO_POWF */ /* libm doesn't include powf */
+/* #undef TM_IN_SYS_TIME */ /* Define to 1 if your <sys/time.h> declares `struct tm'. */
+/* #undef size_t */ /* Define to `unsigned int' if <sys/types.h> does not define. */
+/* #undef socklen_t */ /* Define to `int` if you don't have socklen_t */
 
-/* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "dosbox"
+// ----- COMPILER FEATURES
+#define C_ATTRIBUTE_ALWAYS_INLINE 1
+#define C_HAS_ATTRIBUTE 1
+#define C_HAS_BUILTIN_EXPECT 1
+/* #undef C_ATTRIBUTE_FASTCALL */
 
-/* Define to the home page for this package. */
-#define PACKAGE_URL ""
 
-/* Define to the version of this package. */
-#define PACKAGE_VERSION "SVN"
 
-/* Define to 1 if you have the ANSI C header files. */
-#define STDC_HEADERS 1
-
-/* Define to 1 if your <sys/time.h> declares `struct tm'. */
-/* #undef TM_IN_SYS_TIME */
+///////////////////
 
 /* Version number of package */
-#define VERSION "SVN"
+#define VERSION "SVN-libretro"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
@@ -212,12 +99,6 @@
 #ifndef __cplusplus
 /* #undef inline */
 #endif
-
-/* Define to `unsigned int' if <sys/types.h> does not define. */
-/* #undef size_t */
-
-/* Define to `int` if you don't have socklen_t */
-/* #undef socklen_t */
 
 #if C_ATTRIBUTE_ALWAYS_INLINE
 #define INLINE inline __attribute__((always_inline))
