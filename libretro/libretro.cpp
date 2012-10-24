@@ -30,6 +30,12 @@
 #include "control.h"
 #include "pic.h"
 
+#if 0
+# define LOG(msg) fprintf(stderr, "%s\n", msg)
+#else
+# define LOG(msg)
+#endif
+
 //
 
 static retro_video_refresh_t video_cb = NULL;
@@ -155,6 +161,8 @@ void MIXER_CallBack(void * userdata, uint8_t *stream, int len);
 static std::string loadPath;
 static bool loadConf;
 static uint8_t audioData[735 * 4];
+static bool DOSBOXwantsExit;
+static bool FRONTENDwantsExit;
 
 extern Bit8u RDOSGFXbuffer[1024*768*4];
 extern Bitu RDOSGFXwidth, RDOSGFXheight;
@@ -164,9 +172,16 @@ extern bool RDOSGFXhaveFrame;
 static void retro_leave_thread(Bitu)
 {
     MIXER_CallBack(0, audioData, sizeof(audioData));
-
+    
     co_switch(mainThread);
     
+    // If the frontend said to exit, throw an int to be caught in retro_start_emulator.
+    if(FRONTENDwantsExit)
+    {
+        throw 1;
+    }
+    
+    // Schedule the next frontend interrupt 
     PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
 }
 
@@ -195,28 +210,45 @@ static void retro_start_emulator()
     /* Init done, go back to the main thread */
     co_switch(mainThread);
 
+    // Schedule an interrupt time to return to the frontend
     PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
-    control->StartUp();
     
-    // Dead emulator
+    try
+    {
+        control->StartUp();
+    }
+    catch(int)
+    {
+        LOG("Frontend said to quit.");
+        return;
+    }
+    
+    LOG("DOSBox said to quit.");
+    DOSBOXwantsExit = true;
+}
+
+static void retro_wrap_emulator()
+{
+    retro_start_emulator();
+    
+    // Exit comes from DOSBox, tell the frontend
+    if(DOSBOXwantsExit)
+    {
+        environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);    
+    }
+        
+    // Were done here
+    co_switch(mainThread);
+        
+    // Dead emulator, but libco says not to return
     while(true)
     {
-        environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
+        LOG("Running a dead emulator.");
         co_switch(mainThread);
     }
 }
 
 //
-
-void *retro_get_memory_data(unsigned type)
-{
-   return 0;
-}
-
-size_t retro_get_memory_size(unsigned type)
-{
-   return 0;
-}
 
 unsigned retro_api_version(void)
 {
@@ -260,11 +292,6 @@ void retro_get_system_info(struct retro_system_info *info)
    info->block_extract = false;
 }
 
-void retro_set_controller_port_device(unsigned in_port, unsigned device)
-{
-    //TODO
-}
-
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
     // TODO
@@ -279,69 +306,137 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 
 void retro_init (void)
 {
-    mainThread = co_active();
-    emuThread = co_create(65536*sizeof(void*), retro_start_emulator);
+    if(!emuThread && !mainThread)
+    {
+        mainThread = co_active();
+        emuThread = co_create(65536*sizeof(void*), retro_wrap_emulator);
+    }
+    else
+    {
+        LOG("retro_init called more than once.");
+    }
 }
 
 void retro_deinit(void)
 {
-    co_delete(emuThread);
+    FRONTENDwantsExit = !DOSBOXwantsExit;
+    
+    if(emuThread)
+    {
+        // If the frontend says to exit we need to let the emulator run to finish its job.
+        if(FRONTENDwantsExit)
+        {
+            co_switch(emuThread);
+        }
+        
+        co_delete(emuThread);
+        emuThread = 0;
+    }
+    else
+    {
+        LOG("retro_deinit called when there is no emulator thread.");
+    }
 }
 
-void retro_reset (void)
+bool retro_load_game(const struct retro_game_info *game)
 {
+    if(emuThread)
+    {
+        loadPath = game->path;
+        const size_t lastDot = loadPath.find_last_of('.');
+        
+        if(std::string::npos != lastDot)
+        {
+            std::string extension = loadPath.substr(lastDot + 1);
+            std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+            loadConf = (extension == "conf");
+        }
+        
+        return true;
+    }
+    else
+    {
+        LOG("retro_load_game called when there is no emulator thread.");
+        return false;
+    }
 }
 
 void retro_run (void)
 {
-    poll_cb();
-
-    // Mouse movement
-    const int16_t mouseX = input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
-    const int16_t mouseY = input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
-
-    if(mouseX || mouseY)
+    if(emuThread)
     {
-        Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
-    }
-
-    // Mouse Buttons
-    static ButtonHandler<0> left;
-    left.process(input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT));
-        
-    static ButtonHandler<1> right;
-    right.process(input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT));
+        poll_cb();
     
-    // Keys
-    for(int i = 0; i != sizeof(keyMap) / sizeof(keyMap[0]); i ++)
-    {
-        const bool downNow = input_cb(0, RETRO_DEVICE_KEYBOARD, 0, keyMap[i].retroID);
+        // Mouse movement
+        const int16_t mouseX = input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
+        const int16_t mouseY = input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
     
-        if(downNow && !keyMap[i].down)
+        if(mouseX || mouseY)
         {
-            KEYBOARD_AddKey(keyMap[i].dosboxID, true);
+            Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
         }
-        else if(!downNow && keyMap[i].down)
+    
+        // Mouse Buttons
+        static ButtonHandler<0> left;
+        left.process(input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT));
+            
+        static ButtonHandler<1> right;
+        right.process(input_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT));
+        
+        // Keys
+        for(int i = 0; i != sizeof(keyMap) / sizeof(keyMap[0]); i ++)
         {
-            KEYBOARD_AddKey(keyMap[i].dosboxID, false);
+            const bool downNow = input_cb(0, RETRO_DEVICE_KEYBOARD, 0, keyMap[i].retroID);
+        
+            if(downNow && !keyMap[i].down)
+            {
+                KEYBOARD_AddKey(keyMap[i].dosboxID, true);
+            }
+            else if(!downNow && keyMap[i].down)
+            {
+                KEYBOARD_AddKey(keyMap[i].dosboxID, false);
+            }
+            
+            keyMap[i].down = downNow;
         }
         
-        keyMap[i].down = downNow;
-    }
+        // Run emu
+        co_switch(emuThread);
     
-    // Run emu
-    co_switch(emuThread);
-
-    // Upload video: TODO: Check the CANDUPE env value
-    if(RDOSGFXhaveFrame && RDOSGFXwidth && RDOSGFXheight)
+        // Upload video: TODO: Check the CANDUPE env value
+        if(RDOSGFXhaveFrame && RDOSGFXwidth && RDOSGFXheight)
+        {
+            video_cb(RDOSGFXbuffer, RDOSGFXwidth, RDOSGFXheight, RDOSGFXwidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == RDOSGFXcolorMode) ? 4 : 2));
+            RDOSGFXhaveFrame = false;
+        }
+    
+        // Upload audio: TODO: Support sample rate control
+        audio_batch_cb((int16_t*)audioData, 735);
+    }
+    else
     {
-        video_cb(RDOSGFXbuffer, RDOSGFXwidth, RDOSGFXheight, RDOSGFXwidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == RDOSGFXcolorMode) ? 4 : 2));
-        RDOSGFXhaveFrame = false;
+        LOG("retro_run called when there is no emulator thread.");
     }
+}
 
-    // Upload audio: TODO: Support sample rate control
-    audio_batch_cb((int16_t*)audioData, 735);
-    
+// Stubs
+void retro_set_controller_port_device(unsigned in_port, unsigned device)
+{
+    //TODO
+}
+
+void *retro_get_memory_data(unsigned type)
+{
+   return 0;
+}
+
+size_t retro_get_memory_size(unsigned type)
+{
+   return 0;
+}
+
+void retro_reset (void)
+{
 }
 
 size_t retro_serialize_size (void)
@@ -364,21 +459,6 @@ void retro_cheat_reset(void)
 
 void retro_cheat_set(unsigned unused, bool unused1, const char* unused2)
 {}
-
-bool retro_load_game(const struct retro_game_info *game)
-{
-    loadPath = game->path;
-    const size_t lastDot = loadPath.find_last_of('.');
-    
-    if(std::string::npos != lastDot)
-    {
-        std::string extension = loadPath.substr(lastDot + 1);
-        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-        loadConf = (extension == "conf");
-    }
-
-    return true;
-}
 
 bool retro_load_game_special(
   unsigned game_type,
