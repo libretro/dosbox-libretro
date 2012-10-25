@@ -308,6 +308,18 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 
 void retro_init (void)
 {
+    // Get color mode: 32 first as VGA has 6 bits per pixel
+    RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_XRGB8888;
+    if(!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &RDOSGFXcolorMode))
+    {
+        RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_RGB565;
+        if(!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &RDOSGFXcolorMode))
+        {
+            RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_0RGB1555;
+        }
+    }
+
+
     if(!emuThread && !mainThread)
     {
         mainThread = co_active();
