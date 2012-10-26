@@ -285,7 +285,7 @@ bool retro_load_game(const struct retro_game_info *game)
                 configPath = loadPath;
                 loadPath.clear();
             }
-            else
+            else if(configPath.empty())
             {
                 const char* systemDir = 0;
                 const bool gotSysDir = environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &systemDir);
@@ -304,6 +304,16 @@ bool retro_load_game(const struct retro_game_info *game)
         LOG("retro_load_game called when there is no emulator thread.");
         return false;
     }
+}
+
+bool retro_load_game_special(unsigned game_type, const struct retro_game_info *info, size_t num_info)
+{
+    if(RETRO_GAME_TYPE_SUPER_GAME_BOY == game_type && 2 == num_info)
+    {
+        configPath = info[1].path;
+        return retro_load_game(&info[0]);
+    }
+    return false;
 }
 
 void retro_run (void)
@@ -372,12 +382,6 @@ void retro_cheat_reset(void)
 
 void retro_cheat_set(unsigned unused, bool unused1, const char* unused2)
 {}
-
-bool retro_load_game_special(
-  unsigned game_type,
-  const struct retro_game_info *info, size_t num_info
-)
-{ return false; }
 
 void retro_unload_game (void)
 {
