@@ -9,7 +9,7 @@ Unsupported features:
 
 * Physical CD-ROMs, CD images are supported.
 * MIDI, will be added soon via fluidsynth or timidity.
-* The key mapper. Built in shortcuts and remapping keys will not work, yet.
+* The key mapper, key remapping does not work.
 * Joysticks
   
 Building:
