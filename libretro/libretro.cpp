@@ -37,8 +37,6 @@
 //
 
 static retro_video_refresh_t video_cb = NULL;
-static retro_input_poll_t poll_cb = NULL;
-retro_input_state_t input_cb = NULL;
 static retro_audio_sample_batch_t audio_batch_cb = NULL;
 retro_environment_t environ_cb = NULL;
 
@@ -194,20 +192,12 @@ void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb)
    audio_batch_cb = cb;
 }
 
-void retro_set_input_poll(retro_input_poll_t cb)
-{
-   poll_cb = cb;
-}
-
-void retro_set_input_state(retro_input_state_t cb)
-{
-   input_cb = cb;
-}
-
 void retro_set_environment(retro_environment_t cb)
 {
    environ_cb = cb;
 }
+
+// input_poll and input_state are in libretro/mapper.cpp
 
 void retro_get_system_info(struct retro_system_info *info)
 {
@@ -319,9 +309,7 @@ bool retro_load_game(const struct retro_game_info *game)
 void retro_run (void)
 {
     if(emuThread)
-    {
-        poll_cb();
-            
+    {       
         // Keys
         MAPPER_Run(false);
         
