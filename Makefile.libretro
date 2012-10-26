@@ -110,7 +110,6 @@ SOURCES = \
     src/hardware/joystick.cpp \
     src/hardware/keyboard.cpp \
     src/hardware/memory.cpp \
-    libretro/mixer-retro.cpp \
     src/hardware/pcspeaker.cpp \
     src/hardware/pci_bus.cpp \
     src/hardware/pic.cpp \
@@ -174,7 +173,9 @@ SOURCES = \
     src/gui/render.cpp \
     src/gui/render_scalers.cpp \
     libretro/libretro.cpp \
-    libretro/dos_gfx.cpp
+    libretro/dos_gfx.cpp \
+    libretro/mapper.cpp \
+    libretro/mixer-retro.cpp
 
 OBJECTS    = $(SOURCES:.cpp=.o) libco/libco.o
 LIBS       = -lz -lm
