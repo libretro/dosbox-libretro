@@ -6,6 +6,7 @@
 #include "mapper.h"
 #include "keyboard.h"
 #include "mouse.h"
+#include "joystick.h"
 
 ////////////////////
 // RETRO CALLBACKS
@@ -24,6 +25,34 @@ void retro_set_input_state(retro_input_state_t cb)
 }
 
 //////////
+// INPUT
+//////////
+namespace INPUT
+{
+    template<typename T>
+    struct Item
+    {
+        bool down;
+        
+        Item() : down(false) {}
+        
+        void process(const T& aItem, bool aDownNow)
+        {
+            if(aDownNow && !down)
+            {
+                aItem.press();
+            }
+            else if(!aDownNow && down)
+            {
+                aItem.release();
+            }
+            
+            down = aDownNow;
+        }
+    };
+}
+
+//////////
 // MOUSE
 //////////
 namespace MOUSE
@@ -31,24 +60,21 @@ namespace MOUSE
     template<int BUTTON, int I>
     struct Handler
     {
-        bool down;
-        
-        Handler() : down(false) {}
-        
+        INPUT::Item<Handler> item;
+    
         void process()
         {
-            const bool downNow = input_cb(1, RETRO_DEVICE_MOUSE, 0, BUTTON);
+            item.process(*this, input_cb(1, RETRO_DEVICE_MOUSE, 0, BUTTON));
+        }
+    
+        void press() const
+        {
+            Mouse_ButtonPressed(I);
+        }
         
-            if(downNow && !down)
-            {
-                Mouse_ButtonPressed(I);
-            }
-            else if(!downNow && down)
-            {
-                Mouse_ButtonReleased(I);
-            }
-            
-            down = downNow;
+        void release() const
+        {
+            Mouse_ButtonReleased(I);
         }
     };
 
@@ -62,25 +88,25 @@ namespace MOUSE
 namespace KEYBOARD
 {
     struct Handler
-    {
+    {    
         unsigned retroID;
         KBD_KEYS dosboxID;
-        bool down;
+     
+        INPUT::Item<Handler> item;     
         
         void process()
         {
-            const bool downNow = input_cb(0, RETRO_DEVICE_KEYBOARD, 0, retroID);
+            item.process(*this, input_cb(0, RETRO_DEVICE_KEYBOARD, 0, retroID));
+        }
         
-            if(downNow && !down)
-            {
-                KEYBOARD_AddKey(dosboxID, true);
-            }
-            else if(!downNow && down)
-            {
-                KEYBOARD_AddKey(dosboxID, false);
-            }
-            
-            down = downNow;
+        void press() const
+        {
+            KEYBOARD_AddKey(dosboxID, true);
+        }
+        
+        void release() const
+        {
+            KEYBOARD_AddKey(dosboxID, false);
         }
     };
     
@@ -122,6 +148,152 @@ namespace KEYBOARD
     static const unsigned count = sizeof(map) / sizeof(map[0]);
 };
 
+/////////////
+// JOYSTICK
+/////////////
+/*namespace JOYSTICK
+{
+    struct ButtonHandler
+    {
+        unsigned retroPort;
+        unsigned retroID;
+        unsigned dosboxPort;
+        unsigned dosboxID;
+    
+        INPUT::Item<ButtonHandler> item;
+        
+        void process()
+        {
+            item.process(*this, input_cb(retroPort, RETRO_DEVICE_JOYPAD, 0, retroID));
+        }
+        
+        void press() const
+        {
+            JOYSTICK_Button(dosboxPort, dosboxID & 1, true);
+        }
+
+        void release() const
+        {
+            JOYSTICK_Button(dosboxPort, dosboxID & 1, false);
+        }
+    };
+    
+    struct AxisHandler
+    {
+        unsigned retroPort;
+        unsigned retroSide;
+        unsigned retroAxis;
+        
+        unsigned dosboxPort;
+        unsigned dosboxAxis;
+        
+        void process()
+        {
+            const float value = (float)input_cb(retroPort, RETRO_DEVICE_ANALOG, retroSide, retroAxis);        
+        
+            if(dosboxAxis == 0)
+            {
+                JOYSTICK_Move_X(dosboxPort, value / 32768.0f);
+            }
+            else
+            {
+                JOYSTICK_Move_Y(dosboxPort, value / 32768.0f);
+            }
+        }
+    };
+    
+    struct Handler
+    {
+        bool ports[2];
+    
+        unsigned buttonCount;
+        ButtonHandler button[4]; 
+        
+        unsigned axisCount;
+        AxisHandler axis[4];
+        
+        void enable()
+        {
+            for(int i = 0; i != 2; i ++)
+            {
+                JOYSTICK_Enable(i, ports[i]);
+            }
+        }
+        
+        void process()
+        {
+            for(int i = 0; i != buttonCount; i ++)
+            {
+                button[i].process();
+            }
+            
+            for(int i = 0; i != axisCount; i ++)
+            {
+                axis[i].process();
+            }
+        }
+    };
+
+    static Handler JSNone = 
+    {
+        {false, false},
+        0, {}, 0, {}
+    };
+
+    static Handler JS2Axis =
+    {
+        {true, true},
+        4, {
+            {0, RETRO_DEVICE_ID_JOYPAD_Y, 0, 0},
+            {0, RETRO_DEVICE_ID_JOYPAD_B, 0, 1},
+            {1, RETRO_DEVICE_ID_JOYPAD_Y, 1, 0},
+            {1, RETRO_DEVICE_ID_JOYPAD_B, 1, 1}
+        },
+        4, {
+            {0, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, 0, 0},
+            {0, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, 0, 1},
+            {1, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, 1, 0},
+            {1, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, 1, 1}
+        }
+    };
+    
+    static Handler JS4Axis =
+    {
+        {true, false},
+        4, {
+            {0, RETRO_DEVICE_ID_JOYPAD_Y, 0, 0},
+            {0, RETRO_DEVICE_ID_JOYPAD_B, 0, 1},
+            {0, RETRO_DEVICE_ID_JOYPAD_X, 1, 0},
+            {0, RETRO_DEVICE_ID_JOYPAD_A, 1, 1}
+        },
+        4, {
+            {0, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, 0, 0},
+            {0, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, 0, 1},
+            {0, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, 1, 0},
+            {0, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, 1, 1}
+        }
+    };
+
+    static Handler JS4Axis2 =
+    {
+        {false, true},
+        4, {
+            {1, RETRO_DEVICE_ID_JOYPAD_Y, 0, 0},
+            {1, RETRO_DEVICE_ID_JOYPAD_B, 0, 1},
+            {1, RETRO_DEVICE_ID_JOYPAD_X, 1, 0},
+            {1, RETRO_DEVICE_ID_JOYPAD_A, 1, 1}
+        },
+        4, {
+            {1, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, 0, 0},
+            {1, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, 0, 1},
+            {1, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, 1, 0},
+            {1, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, 1, 1}
+        }
+    };
+    
+    static Handler* Joystick;
+}*/
+
 //////////
 // EVENT
 //////////
@@ -162,7 +334,7 @@ namespace EVENT
             
             for(int i = 0; i != keyCount; i ++)
             {
-                if(!KEYBOARD::map[keys[i]].down)
+                if(!KEYBOARD::map[keys[i]].item.down)
                 {
                     isDownNow = false;
                     break;
@@ -190,6 +362,7 @@ namespace EVENT
 
 void MAPPER_Init(void)
 {
+    // TODO: Select JS Type
 }
 
 void MAPPER_AddHandler(MAPPER_Handler * handler,MapKeys key,Bitu mods,char const * const eventname,char const * const buttonname)
@@ -219,6 +392,12 @@ void MAPPER_Run(bool pressed)
     {
         KEYBOARD::map[i].process();
     }
+
+    // Joystick
+//    if(JOYSTICK::Joystick) 
+//    {
+//        JOYSTICK::Joystick->process();
+//    }
 
     // Run Events
     for(std::vector<EVENT::Handler>::iterator i = EVENT::list.begin(); i != EVENT::list.end(); i ++)

@@ -54,12 +54,13 @@ bool startup_state_numlock;
 
 void Mouse_AutoLock(bool enable)
 {
-    // Nothing
+    // Nothing: The frontend should lock the mouse there's no way to tell it to do that though.
 }
 
 void restart_program(std::vector<std::string> & parameters)
 {
-    // Nothing
+    // Not supported; this is used by the CONFIG -r command.
+    LOG("Program restart not supported.");
 }
 
 // MIDI
