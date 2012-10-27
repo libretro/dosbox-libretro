@@ -82,6 +82,7 @@ MidiHandler Midi_none;
 
 /* Include different midi drivers, lowest ones get checked first for default */
 
+#if !defined(__LIBRETRO__) || defined(RETRO_HWMIDI) // Disable hardware MIDI devices
 #if defined(MACOSX)
 
 #include "midi_coremidi.h"
@@ -101,6 +102,7 @@ MidiHandler Midi_none;
 
 #include "midi_alsa.h"
 
+#endif
 #endif
 
 static struct {

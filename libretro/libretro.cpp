@@ -63,22 +63,6 @@ void restart_program(std::vector<std::string> & parameters)
     LOG("Program restart not supported.");
 }
 
-// MIDI
-bool MIDI_Available()
-{
-    return false;
-}
-
-void MIDI_RawOutByte(unsigned char)
-{
-    // Nothing
-}
-
-void MIDI_Init(Section*)
-{
-    // Nothing
-}
-
 // Events
 void MIXER_CallBack(void * userdata, uint8_t *stream, int len);
 
