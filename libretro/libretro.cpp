@@ -74,7 +74,7 @@ static bool DOSBOXwantsExit;
 static bool FRONTENDwantsExit;
 
 extern Bit8u RDOSGFXbuffer[1024*768*4];
-extern Bitu RDOSGFXwidth, RDOSGFXheight;
+extern Bitu RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch;
 extern unsigned RDOSGFXcolorMode;
 extern bool RDOSGFXhaveFrame;
 
@@ -314,7 +314,7 @@ void retro_run (void)
         // Upload video: TODO: Check the CANDUPE env value
         if(RDOSGFXhaveFrame && RDOSGFXwidth && RDOSGFXheight)
         {
-            video_cb(RDOSGFXbuffer, RDOSGFXwidth, RDOSGFXheight, RDOSGFXwidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == RDOSGFXcolorMode) ? 4 : 2));
+            video_cb(RDOSGFXbuffer, RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch);
             RDOSGFXhaveFrame = false;
         }
     

@@ -5,27 +5,28 @@
 #include "dosbox.h"
 #include "video.h"
 
-extern retro_video_refresh_t video_cb;
-extern void retro_handle_dos_events();
-
 // GFX
 Bit8u RDOSGFXbuffer[1024*768*4];
-Bitu RDOSGFXwidth, RDOSGFXheight;
+Bitu RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch;
 unsigned RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_0RGB1555;
 bool RDOSGFXhaveFrame;
+static Bitu (*getRGB)(Bit8u red, Bit8u green, Bit8u blue);
 
-void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries)
+// Color Getters
+template<int R, int G, int B, int RLOSS, int GLOSS, int BLOSS>
+static Bitu getRGB_t(Bit8u red, Bit8u green, Bit8u blue)
 {
-    // Nothing
+    return ((red >> RLOSS) << R) | ((green >> GLOSS) << G) | ((blue >> BLOSS) << B);
 }
 
+// GFX
 Bitu GFX_GetBestMode(Bitu flags)
 {
     switch(RDOSGFXcolorMode)
     {
-        case RETRO_PIXEL_FORMAT_0RGB1555: return GFX_CAN_15 | GFX_RGBONLY;
-        case RETRO_PIXEL_FORMAT_XRGB8888: return GFX_CAN_32 | GFX_RGBONLY;
-        case RETRO_PIXEL_FORMAT_RGB565: return GFX_CAN_16 | GFX_RGBONLY;
+        case RETRO_PIXEL_FORMAT_0RGB1555: getRGB = &getRGB_t<10, 5, 0, 3, 3, 3>; return GFX_CAN_15 | GFX_RGBONLY;
+        case RETRO_PIXEL_FORMAT_RGB565:   getRGB = &getRGB_t<11, 6, 0, 3, 2, 3>; return GFX_CAN_16 | GFX_RGBONLY;
+        case RETRO_PIXEL_FORMAT_XRGB8888: getRGB = &getRGB_t<16, 8, 0, 0, 0, 0>; return GFX_CAN_32 | GFX_RGBONLY;
     }
     
     return 0;
@@ -33,14 +34,7 @@ Bitu GFX_GetBestMode(Bitu flags)
 
 Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue)
 {
-    switch(RDOSGFXcolorMode)
-    {
-        case RETRO_PIXEL_FORMAT_0RGB1555: return ((red >> 3) << 10) | ((green >> 3) << 5) | (blue >> 3);
-        case RETRO_PIXEL_FORMAT_XRGB8888: return (red << 16) | (green << 8) | (blue);
-        case RETRO_PIXEL_FORMAT_RGB565: return ((red >> 3) << 11) | ((green >> 3) << 6) | (blue >> 3);
-    }
-    
-    return 0xFFFFFF00;
+    return getRGB(red, green, blue);
 }
 
 Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,GFX_CallBack_t cb)
@@ -49,6 +43,7 @@ Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,G
     
     RDOSGFXwidth = width;
     RDOSGFXheight = height;
+    RDOSGFXpitch = width * ((RETRO_PIXEL_FORMAT_XRGB8888 == RDOSGFXcolorMode) ? 4 : 2);
     
     if(RDOSGFXwidth > 1024 || RDOSGFXheight > 768)
     {
@@ -61,7 +56,7 @@ Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,G
 bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch)
 {
     pixels = RDOSGFXbuffer;
-    pitch = RDOSGFXwidth * ((RETRO_PIXEL_FORMAT_XRGB8888 == RDOSGFXcolorMode) ? 4 : 2);
+    pitch = RDOSGFXpitch;
     
     return true;
 }
@@ -71,25 +66,9 @@ void GFX_EndUpdate( const Bit16u *changedLines )
     RDOSGFXhaveFrame = true;
 }
 
-void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused)
-{
-    // Nothing
-}
+// Stubs
+void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused){}
+void GFX_ShowMsg(char const* format,...){}
+void GFX_Events(){}
+void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries){}
 
-
-void GFX_ShowMsg(char const* format,...)
-{
-    // Nothing
-}
-
-void GFX_Events()
-{
-    // Nothing
-}
-
-void GFX_GetSize(int &width, int &height, bool &fullscreen)
-{
-	width = RDOSGFXwidth;
-	height = RDOSGFXheight;
-	fullscreen = false;
-}
