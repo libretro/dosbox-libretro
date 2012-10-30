@@ -15,49 +15,26 @@ endif
 
 ifeq ($(platform), unix)
    TARGET := libretro.so
-   fpic := -fPIC
-   SHARED := -shared -Wl,--version-script=libretro/link.T
+   LDFLAGS += -shared -Wl,--version-script=libretro/link.T
+   
+   fpic = -fPIC
 else ifeq ($(platform), osx)
    TARGET := libretro.dylib
-   fpic := -fPIC
-   SHARED := -dynamiclib
-else ifeq ($(platform), ps3)
-   TARGET := libretro_ps3.a
-   CC = $(CELL_SDK)/host-win32/ppu/bin/ppu-lv2-gcc.exe
-   AR = $(CELL_SDK)/host-win32/ppu/bin/ppu-lv2-ar.exe
-   CFLAGS += -DBLARGG_BIG_ENDIAN=1 -D__ppc__
-else ifeq ($(platform), sncps3)
-   TARGET := libretro_ps3.a
-   CC = $(CELL_SDK)/host-win32/sn/bin/ps3ppusnc.exe
-   AR = $(CELL_SDK)/host-win32/sn/bin/ps3snarl.exe
-   CFLAGS += -DBLARGG_BIG_ENDIAN=1 -D__ppc__
-else ifeq ($(platform), psl1ght)
-   TARGET := libretro_psl1ght.a
-   CC = $(PS3DEV)/ppu/bin/ppu-gcc
-   AR = $(PS3DEV)/ppu/bin/ppu-ar
-   CFLAGS += -DBLARGG_BIG_ENDIAN=1 -D__ppc__
-else ifeq ($(platform), xenon)
-   TARGET := libretro_xenon360.a
-   CC = xenon-gcc
-   AR = xenon-ar
-   CFLAGS += -D__LIBXENON__ -m32 -D__ppc__
-else ifeq ($(platform), wii)
-   TARGET := libretro_wii.a
-   CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc
-   AR = $(DEVKITPPC)/bin/powerpc-eabi-ar
-   CFLAGS += -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -DBLARGG_BIG_ENDIAN=1 -D__ppc__
+   LDFLAGS += -dynamiclib
+   
+   fpic = -fPIC
 else ifeq ($(platform), android)
    TARGET := libretro_dosbox.so
+   CXXFLAGS += -fpermissive 
+   LDFLAGS += -shared -Wl,--version-script=libretro/link.T
+
    CC = arm-linux-androideabi-gcc
    CXX = arm-linux-androideabi-g++
-   fpic := -fPIC
-   SHARED := -shared -Wl,--version-script=libretro/link.T
-   CPPFLAGS += -fpermissive
+   
+   fpic = -fPIC
 else
    TARGET := retro.dll
-   CC = gcc
-   SHARED := -shared -static-libgcc -static-libstdc++ -Wl,--version-script=libretro/link.T
-   LIBS := -lwinmm
+   LDFLAGS += -shared -static-libgcc -static-libstdc++ -Wl,--version-script=libretro/link.T -lwinmm
 endif
 
 ifeq ($(DEBUG), 1)
@@ -177,25 +154,13 @@ SOURCES = \
     libretro/mixer-retro.cpp
 
 OBJECTS    = $(SOURCES:.cpp=.o) libco/libco.o
-LIBS       += -lm
-CPPFLAGS   += -D__LIBRETRO__ -DHAVE_LIBZ $(fpic) -iquote include
+CPPFLAGS   += -D__LIBRETRO__ -iquote include $(fpic)
+LDFLAGS    += -lm $(fpic)
 
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
-ifeq ($(platform), ps3)
-	$(AR) rcs $@ $(OBJECTS)
-else ifeq ($(platform), sncps3)
-	$(AR) rcs $@ $(OBJECTS)
-else ifeq ($(platform), psl1ght)
-	$(AR) rcs $@ $(OBJECTS)
-else ifeq ($(platform), xenon)
-	$(AR) rcs $@ $(OBJECTS)
-else ifeq ($(platform), wii)
-	$(AR) rcs $@ $(OBJECTS)
-else
-	$(CXX) $(fpic) $(SHARED) -o $@ $(OBJECTS) $(LIBS)
-endif
+	$(CXX) -o $@ $(OBJECTS) $(LDFLAGS)
 
 clean:
 	rm -f $(OBJECTS) $(TARGET)
