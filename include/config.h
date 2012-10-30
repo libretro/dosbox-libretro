@@ -25,8 +25,14 @@
 /* #undef AC_APPLE_UNIVERSAL_BUILD */
 /* #undef BSD */
 /* #undef LINUX */
-#define MACOSX 1
+/* #undef MACOSX */
 /* #undef OS2 */
+
+#ifdef __WIN32__
+# define WIN32 1
+#else
+# define MACOSX 1
+#endif
 
 // ----- RECOMPILER ! YOU MUST CHANGE THIS FOR THE BUILD PLATFORM
 /* #undef C_DYNAMIC_X86 */ /* Define to 1 to use x86 dynamic cpu core */
@@ -48,7 +54,6 @@
 #define HAVE_INTTYPES_H 1
 #define HAVE_MEMORY_H 1
 #define HAVE_NETINET_IN_H 1
-#define HAVE_PWD_H 1
 #define HAVE_STDINT_H 1
 #define HAVE_STDLIB_H 1
 #define HAVE_STRINGS_H 1
@@ -58,13 +63,20 @@
 #define HAVE_SYS_TYPES_H 1
 #define HAVE_UNISTD_H 1
 
+#ifndef __WIN32__
+# define HAVE_PWD_H 1
+#endif
+
 // ----- STANDARD LIBRARY FEATURES
 #define DIRENT_HAS_D_TYPE 1 /* struct dirent has d_type */
-#define C_HAVE_MPROTECT 1 /* Define to 1 if you have the mprotect function */
 /* #undef DB_HAVE_NO_POWF */ /* libm doesn't include powf */
 /* #undef TM_IN_SYS_TIME */ /* Define to 1 if your <sys/time.h> declares `struct tm'. */
 /* #undef size_t */ /* Define to `unsigned int' if <sys/types.h> does not define. */
 /* #undef socklen_t */ /* Define to `int` if you don't have socklen_t */
+
+#ifndef __WIN32__
+# define C_HAVE_MPROTECT 1 /* Define to 1 if you have the mprotect function */
+#endif
 
 // ----- COMPILER FEATURES
 #define C_ATTRIBUTE_ALWAYS_INLINE 1

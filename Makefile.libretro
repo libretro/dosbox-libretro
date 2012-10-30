@@ -56,10 +56,8 @@ else ifeq ($(platform), android)
 else
    TARGET := retro.dll
    CC = gcc
-   fpic := -fPIC
-   LD_FLAGS := -fPIC
-   SHARED := -shared -static-libgcc -static-libstdc++ -s -Wl,--version-script=libretro/link.T
-   CFLAGS += -D__WIN32__ -D__WIN32_LIBRETRO__
+   SHARED := -shared -static-libgcc -static-libstdc++ -Wl,--version-script=libretro/link.T
+   LIBS := -lwinmm
 endif
 
 ifeq ($(DEBUG), 1)
@@ -179,7 +177,7 @@ SOURCES = \
     libretro/mixer-retro.cpp
 
 OBJECTS    = $(SOURCES:.cpp=.o) libco/libco.o
-LIBS       += -lz -lm
+LIBS       += -lm
 CPPFLAGS   += -D__LIBRETRO__ -DHAVE_LIBZ $(fpic) -iquote include
 
 all: $(TARGET)
@@ -196,7 +194,7 @@ else ifeq ($(platform), xenon)
 else ifeq ($(platform), wii)
 	$(AR) rcs $@ $(OBJECTS)
 else
-	$(CXX) $(fpic) $(SHARED) $(LIBS) -o $@ $(OBJECTS)
+	$(CXX) $(fpic) $(SHARED) -o $@ $(OBJECTS) $(LIBS)
 endif
 
 clean:
