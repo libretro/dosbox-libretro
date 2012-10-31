@@ -42,9 +42,29 @@ retro_environment_t environ_cb = NULL;
 
 //
 
+// Normalize Path separators based on platform
+#ifndef PATH_SEPARATOR
+# if defined(WINDOWS_PATH_STYLE) || defined(_WIN32)
+#  define PATH_SEPARATOR '\\'
+# else
+#  define PATH_SEPARATOR '/'
+# endif
+#endif
+std::string normalizePath(const std::string& aPath)
+{
+    std::string result = aPath;
+    for(size_t found = result.find_first_of("\\/"); std::string::npos != found; found = result.find_first_of("\\/", found + 1))
+    {
+        result[found] = PATH_SEPARATOR;
+    }
+    
+    return result;
+}
+
+//
+
 cothread_t mainThread;
 cothread_t emuThread;
-
 
 Bit32u MIXER_RETRO_GetFrequency();
 
@@ -256,7 +276,7 @@ bool retro_load_game(const struct retro_game_info *game)
     if(emuThread)
     {    
         // Copy the game path
-        loadPath = game->path;
+        loadPath = normalizePath(game->path);
         const size_t lastDot = loadPath.find_last_of('.');
         
         // Find any config file to load
@@ -275,7 +295,7 @@ bool retro_load_game(const struct retro_game_info *game)
                 const char* systemDir = 0;
                 const bool gotSysDir = environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &systemDir);
             
-                configPath = std::string(gotSysDir ? systemDir : ".") + "/dosbox.conf";
+                configPath = normalizePath(std::string(gotSysDir ? systemDir : ".") + "/dosbox.conf");
             }
         }
         
