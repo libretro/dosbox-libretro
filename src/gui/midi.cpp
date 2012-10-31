@@ -82,6 +82,10 @@ MidiHandler Midi_none;
 
 /* Include different midi drivers, lowest ones get checked first for default */
 
+#if defined(__LIBRETRO__) && defined(C_FLUIDSYNTH) // Add Fluidsynth support
+#include "midi_synth.h"
+#endif
+
 #if !defined(__LIBRETRO__) || defined(RETRO_HWMIDI) // Disable hardware MIDI devices
 #if defined(MACOSX)
 
@@ -214,6 +218,10 @@ public:
 		handler=handler_list;
 		while (handler) {
 			if (!strcasecmp(dev,handler->GetName())) {
+#if defined(__LIBRETRO__) && defined(C_FLUIDSYNTH) // Add Fluidsynth support
+			if(!strcasecmp(dev,"synth"))    // synth device, get sample rate from config
+				synthsamplerate=section->Get_int("samplerate");
+#endif			
 				if (!handler->Open(conf)) {
 					LOG_MSG("MIDI:Can't open device:%s with config:%s.",dev,conf);	
 					goto getdefault;

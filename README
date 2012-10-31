@@ -8,12 +8,16 @@ libretro wrapper for DOSBox
 Unsupported features:
 
 * Physical CD-ROMs, CD images are supported.
-* MIDI, will be added soon via fluidsynth or timidity.
 * The key mapper, key remapping does not work.
 * Joysticks
-  
+
+TODO:
+
+* Explore more modern options for MIDI synth. Fluidsynth past 1.0.9 needs glib which isn't easy to build in non-standard build environments.
+
 Building:
 
+* To enable MIDI you must have fluidsynth 1.09 available. Add WANT_FLUIDSYNTH=1 to the end of the make command.
 * You must edit include/config.h to set options for build platform, the supplied version is for 64-bit OSX with latest xcode and clang.
 * Build with the command 'make -f Makefile.libretro'
   
@@ -22,4 +26,4 @@ Notes:
 * There seems to be no trivial way to have the DOSBox core return periodically, so libco is used to enter/exit the emulator loop. This actually works better than one would expect.
 * There is no serialization support, it's not supported by DOSBox.
 * DOSBox uses 'wall time' for timing, frontend fast forward and slow motion features will have no effect.
- 
+* To use MIDI an SF2 soundfont must be specified in the midi->midiconfig option in the config file.

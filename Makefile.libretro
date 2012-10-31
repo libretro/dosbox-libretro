@@ -157,6 +157,11 @@ OBJECTS    = $(SOURCES:.cpp=.o) libco/libco.o
 CPPFLAGS   += -D__LIBRETRO__ -iquote include $(fpic)
 LDFLAGS    += -lm $(fpic)
 
+ifeq ($(WANT_FLUIDSYNTH), 1)
+    CPPFLAGS += -DC_FLUIDSYNTH
+    LDFLAGS += -lfluidsynth
+endif
+
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
