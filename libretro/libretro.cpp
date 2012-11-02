@@ -38,7 +38,14 @@
 
 static retro_video_refresh_t video_cb = NULL;
 static retro_audio_sample_batch_t audio_batch_cb = NULL;
-retro_environment_t environ_cb = NULL;
+static retro_environment_t environ_cb = NULL;
+
+void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
+void retro_set_audio_sample(retro_audio_sample_t cb) { }
+void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
+void retro_set_environment(retro_environment_t cb) { environ_cb = cb; }
+
+// input_poll and input_state are in libretro/mapper.cpp
 
 //
 
@@ -184,31 +191,11 @@ unsigned retro_api_version(void)
    return RETRO_API_VERSION;
 }
 
-void retro_set_video_refresh(retro_video_refresh_t cb)
-{
-   video_cb = cb;
-}
-
-void retro_set_audio_sample(retro_audio_sample_t cb)
-{}
-
-void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb)
-{
-   audio_batch_cb = cb;
-}
-
-void retro_set_environment(retro_environment_t cb)
-{
-   environ_cb = cb;
-}
-
-// input_poll and input_state are in libretro/mapper.cpp
-
 void retro_get_system_info(struct retro_system_info *info)
 {
    info->library_name = "dosbox";
    info->library_version = "svn";
-   info->valid_extensions = "exe";
+   info->valid_extensions = "exe|com|bat|conf|EXE|COM|BAT|CONF";
    info->need_fullpath = true;
    info->block_extract = false;
 }
@@ -217,9 +204,9 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 {
     // TODO
     info->geometry.base_width = 640;
-    info->geometry.base_height = 480;
-    info->geometry.max_width = 640;
-    info->geometry.max_height = 480;
+    info->geometry.base_height = 400;
+    info->geometry.max_width = 1024;
+    info->geometry.max_height = 768;
     info->geometry.aspect_ratio = 1.333333f;
     info->timing.fps = 60.0;
     info->timing.sample_rate = (double)MIXER_RETRO_GetFrequency();
@@ -313,9 +300,9 @@ bool retro_load_game(const struct retro_game_info *game)
 
 bool retro_load_game_special(unsigned game_type, const struct retro_game_info *info, size_t num_info)
 {
-    if(RETRO_GAME_TYPE_SUPER_GAME_BOY == game_type && 2 == num_info)
+    if(2 == num_info)
     {
-        configPath = info[1].path;
+        configPath = normalizePath(info[1].path);
         return retro_load_game(&info[0]);
     }
     return false;
@@ -348,51 +335,14 @@ void retro_run (void)
 }
 
 // Stubs
-void retro_set_controller_port_device(unsigned in_port, unsigned device)
-{
-    //TODO
-}
-
-void *retro_get_memory_data(unsigned type)
-{
-   return 0;
-}
-
-size_t retro_get_memory_size(unsigned type)
-{
-   return 0;
-}
-
-void retro_reset (void)
-{
-}
-
-size_t retro_serialize_size (void)
-{
-    return 0;
-}
-
-bool retro_serialize(void *data, size_t size)
-{
-    return false;
-}
-
-bool retro_unserialize(const void * data, size_t size)
-{
-    return false;
-}
-
-void retro_cheat_reset(void)
-{}
-
-void retro_cheat_set(unsigned unused, bool unused1, const char* unused2)
-{}
-
-void retro_unload_game (void)
-{
-}
-
-unsigned retro_get_region (void)
-{ 
-   return RETRO_REGION_NTSC; 
-}
+void retro_set_controller_port_device(unsigned in_port, unsigned device) { }
+void *retro_get_memory_data(unsigned type) { return 0; }
+size_t retro_get_memory_size(unsigned type) { return 0; }
+void retro_reset (void) { }
+size_t retro_serialize_size (void) { return 0; }
+bool retro_serialize(void *data, size_t size) { return false; }
+bool retro_unserialize(const void * data, size_t size) { return false; }
+void retro_cheat_reset(void) { }
+void retro_cheat_set(unsigned unused, bool unused1, const char* unused2) { }
+void retro_unload_game (void) { }
+unsigned retro_get_region (void) { return RETRO_REGION_NTSC; }
