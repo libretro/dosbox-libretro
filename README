@@ -9,11 +9,11 @@ Unsupported features:
 
 * Physical CD-ROMs, CD images are supported.
 * The key mapper, key remapping does not work.
-* Joysticks
 
 TODO:
 
 * Explore more modern options for MIDI synth. Fluidsynth past 1.0.9 needs glib which isn't easy to build in non-standard build environments.
+* Joysticks need more testing. Flightsticks types are not implemented yet.
 
 Building:
 

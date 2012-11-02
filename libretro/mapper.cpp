@@ -151,7 +151,7 @@ namespace KEYBOARD
 /////////////
 // JOYSTICK
 /////////////
-/*namespace JOYSTICK
+namespace JOYSTICK
 {
     struct ButtonHandler
     {
@@ -292,7 +292,7 @@ namespace KEYBOARD
     };
     
     static Handler* Joystick;
-}*/
+}
 
 //////////
 // EVENT
@@ -301,73 +301,60 @@ namespace EVENT
 {
     //MapKeys->KBD Map: These are indices into the KEYBOARD::map, if it changes these need to be changed too
     const unsigned mapKeyMap[] = {36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 51, 96, 60, 72, 73, 75};
+    const unsigned MOD1 = 55;
+    const unsigned MOD2 = 53;
 
     struct Handler
     {
         MAPPER_Handler* handler;
         
-        unsigned keys[3];
-        unsigned keyCount;
+        unsigned key;
     
-        bool down;
+        INPUT::Item<Handler> item;
         
-        Handler(MAPPER_Handler* handler,MapKeys key,Bitu mods,char const * const eventname,char const * const buttonname) :
-            handler(handler), keyCount(0), down(false)
-        {
-            keys[keyCount ++] = mapKeyMap[key];
-    
-            if(mods & MMOD1)
-            {
-                keys[keyCount ++] = 55;
-            }
-            
-            if(mods & MMOD2)
-            {
-                keys[keyCount ++] = 53;
-            }
-        }
+        Handler(MAPPER_Handler* handler,MapKeys key) :
+            handler(handler), key(mapKeyMap[key]) { }
         
         void process()
         {
-            // Check keys
-            bool isDownNow = true;
-            
-            for(int i = 0; i != keyCount; i ++)
-            {
-                if(!KEYBOARD::map[keys[i]].item.down)
-                {
-                    isDownNow = false;
-                    break;
-                }
-            }
-            
-            // Update event
-            if(isDownNow && !down)
-            {
-                handler(true);
-            }
-            else if(!isDownNow && down)
-            {
-                handler(false);
-            }
-            
-            down = isDownNow;
+            item.process(*this, KEYBOARD::map[key].item.down);
+        }
+        
+        void press() const
+        {
+            handler(true);
+        }
+        
+        void release() const
+        {
+            handler(false);
         }
     };
     
-    static std::vector<Handler> list;
+    static std::vector<Handler> list[4];
 }
 
 /////
 
 void MAPPER_Init(void)
 {
-    // TODO: Select JS Type
+    // Select joystick type
+    JOYSTICK::Joystick = &JOYSTICK::JSNone;
+    
+    switch(joytype)
+    {
+    	case JOY_AUTO: case JOY_2AXIS: JOYSTICK::Joystick = &JOYSTICK::JS2Axis; break;
+	    case JOY_4AXIS: JOYSTICK::Joystick = &JOYSTICK::JS4Axis; break;
+	    case JOY_4AXIS_2: JOYSTICK::Joystick = &JOYSTICK::JS4Axis2; break;
+	    case JOY_FCS: case JOY_CH: fprintf(stderr, "Joystick type not supported."); break;        
+    }
+
+    JOYSTICK::Joystick->enable();
 }
 
 void MAPPER_AddHandler(MAPPER_Handler * handler,MapKeys key,Bitu mods,char const * const eventname,char const * const buttonname)
 {
-    EVENT::list.push_back(EVENT::Handler(handler, key, mods, eventname, buttonname));
+    EVENT::list[mods].push_back(EVENT::Handler(handler, key));
 }
 
 void MAPPER_Run(bool pressed)
@@ -394,13 +381,17 @@ void MAPPER_Run(bool pressed)
     }
 
     // Joystick
-//    if(JOYSTICK::Joystick) 
-//    {
-//        JOYSTICK::Joystick->process();
-//    }
+    if(JOYSTICK::Joystick) 
+    {
+        JOYSTICK::Joystick->process();
+    }
 
     // Run Events
-    for(std::vector<EVENT::Handler>::iterator i = EVENT::list.begin(); i != EVENT::list.end(); i ++)
+    const bool mod1Down = KEYBOARD::map[EVENT::MOD1].item.down;
+    const bool mod2Down = KEYBOARD::map[EVENT::MOD2].item.down;
+    const uint32_t modList = (mod1Down ? 1 : 0) | (mod2Down ? 2 : 0);
+    
+    for(std::vector<EVENT::Handler>::iterator i = EVENT::list[modList].begin(); i != EVENT::list[modList].end(); i ++)
     {
         i->process();
     }
