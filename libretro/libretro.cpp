@@ -103,7 +103,7 @@ static bool FRONTENDwantsExit;
 extern Bit8u RDOSGFXbuffer[1024*768*4];
 extern Bitu RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch;
 extern unsigned RDOSGFXcolorMode;
-extern bool RDOSGFXhaveFrame;
+extern void* RDOSGFXhaveFrame;
 
 static void retro_leave_thread(Bitu)
 {
@@ -319,11 +319,8 @@ void retro_run (void)
         co_switch(emuThread);
     
         // Upload video: TODO: Check the CANDUPE env value
-        if(RDOSGFXhaveFrame && RDOSGFXwidth && RDOSGFXheight)
-        {
-            video_cb(RDOSGFXbuffer, RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch);
-            RDOSGFXhaveFrame = false;
-        }
+        video_cb(RDOSGFXhaveFrame, RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch);
+        RDOSGFXhaveFrame = 0;
     
         // Upload audio: TODO: Support sample rate control
         audio_batch_cb((int16_t*)audioData, samplesPerFrame);

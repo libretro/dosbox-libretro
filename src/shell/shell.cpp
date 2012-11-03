@@ -27,6 +27,10 @@
 #include "callback.h"
 #include "support.h"
 
+#if defined(__LIBRETRO__) && defined(GEKKO) // No access() support
+# define access(...) 0
+#endif
+
 
 Bitu call_shellstop;
 /* Larger scope so shell_del autoexec can use it to

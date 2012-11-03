@@ -31,14 +31,17 @@
 #ifdef __WIN32__
 # define WIN32 1
 #else
-# define MACOSX 1
+//# define MACOSX 1
 #endif
 
 // ----- RECOMPILER ! YOU MUST CHANGE THIS FOR THE BUILD PLATFORM
+#ifndef __POWERPC__
 /* #undef C_DYNAMIC_X86 */ /* Define to 1 to use x86 dynamic cpu core */
 #define C_DYNREC 1 /* Define to 1 to use recompiling cpu core. Can not be used together with the dynamic-x86 core */
 /* #undef C_FPU_X86 */ /* Define to 1 to use a x86 assembly fpu core */
 #define C_TARGETCPU X86_64 /* The type of cpu this target has */
+#endif
+
 #define C_UNALIGNED_MEMORY 1 /* Define to 1 to use a unaligned memory access */
 
 // ----- DOSBOX CORE FEATURES: Many of these probably won't work even if you enable them
@@ -63,7 +66,7 @@
 #define HAVE_SYS_TYPES_H 1
 #define HAVE_UNISTD_H 1
 
-#ifndef __WIN32__
+#if !defined(__WIN32__) && !defined(__POWERPC__)
 # define HAVE_PWD_H 1
 #endif
 

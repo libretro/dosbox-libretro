@@ -488,6 +488,24 @@ static Bitu INT11_Handler(void) {
 #define DOSBOX_CLOCKSYNC 0
 #endif
 
+#if defined(__LIBRETRO__) && defined(GEKKO) // No ftime support
+struct FAKEtimeb
+{
+    time_t time;
+    unsigned millitm;
+};
+
+void FAKEftime(struct FAKEtimeb* tb)
+{
+    time(&tb->time);
+    tb->millitm = 0;
+}
+
+#define ftime FAKEftime
+#define timeb FAKEtimeb
+
+#endif
+
 static void BIOS_HostTimeSync() {
 	/* Setup time and date */
 	struct timeb timebuffer;

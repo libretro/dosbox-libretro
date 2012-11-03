@@ -9,7 +9,7 @@
 Bit8u RDOSGFXbuffer[1024*768*4];
 Bitu RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch;
 unsigned RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_0RGB1555;
-bool RDOSGFXhaveFrame;
+void* RDOSGFXhaveFrame;
 static Bitu (*getRGB)(Bit8u red, Bit8u green, Bit8u blue);
 
 // Color Getters
@@ -63,7 +63,7 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch)
 
 void GFX_EndUpdate( const Bit16u *changedLines )
 {
-    RDOSGFXhaveFrame = true;
+    RDOSGFXhaveFrame = RDOSGFXbuffer;
 }
 
 // Stubs

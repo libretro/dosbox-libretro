@@ -29,7 +29,9 @@
 
 // disable this to reduce the size of the TLB
 // NOTE: does not work with the dynamic core (dynrec is fine)
+#ifndef GEKKO // __LIBRETRO__: Save 20 MB of bss
 #define USE_FULL_TLB
+#endif
 
 class PageDirectory;
 

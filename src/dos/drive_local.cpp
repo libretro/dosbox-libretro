@@ -30,6 +30,10 @@
 #include "cross.h"
 #include "inout.h"
 
+#if defined(__LIBRETRO__) && defined(GEKKO) // No access() support
+# define access(...) 0
+#endif
+
 class localFile : public DOS_File {
 public:
 	localFile(const char* name, FILE * handle);

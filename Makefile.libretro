@@ -32,6 +32,12 @@ else ifeq ($(platform), android)
    CXX = arm-linux-androideabi-g++
    
    fpic = -fPIC
+else ifeq ($(platform), wii)
+   TARGET := libretro_wii.a
+   CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc
+   CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++
+   AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$
+   CPPFLAGS += -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DWORDS_BIGENDIAN=1
 else
    TARGET := retro.dll
    LDFLAGS += -shared -static-libgcc -static-libstdc++ -Wl,--version-script=libretro/link.T -lwinmm
@@ -165,7 +171,11 @@ endif
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
+ifeq ($(platform), wii)
+	$(AR) rcs $@ $(OBJECTS)
+else
 	$(CXX) -o $@ $(OBJECTS) $(LDFLAGS)
+endif
 
 clean:
 	rm -f $(OBJECTS) $(TARGET)
