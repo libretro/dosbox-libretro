@@ -13,6 +13,17 @@ else ifneq ($(findstring win,$(shell uname -a)),)
 endif
 endif
 
+# system platform
+system_platform = unix
+ifeq ($(shell uname -a),)
+EXE_EXT = .exe
+   system_platform = win
+else ifneq ($(findstring Darwin,$(shell uname -a)),)
+   system_platform = osx
+else ifneq ($(findstring MINGW,$(shell uname -a)),)
+   system_platform = win
+endif
+
 ifeq ($(platform), unix)
    TARGET := libretro.so
    LDFLAGS += -shared -Wl,--version-script=libretro/link.T
@@ -32,11 +43,17 @@ else ifeq ($(platform), android)
    CXX = arm-linux-androideabi-g++
    
    fpic = -fPIC
+else ifeq ($(platform), psp1)
+   TARGET := libretro_psp1.a
+   CC = psp-gcc$(EXE_EXT)
+   CXX = psp-g++$(EXE_EXT)
+   AR = psp-ar$(EXE_EXT)
+   CPPFLAGS += -DPSP
 else ifeq ($(platform), wii)
    TARGET := libretro_wii.a
-   CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc
-   CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++
-   AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$
+   CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
+   CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
+   AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
    CPPFLAGS += -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DWORDS_BIGENDIAN=1
 else
    TARGET := retro.dll
@@ -172,6 +189,8 @@ all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
 ifeq ($(platform), wii)
+	$(AR) rcs $@ $(OBJECTS)
+else ifeq ($(platform), psp1)
 	$(AR) rcs $@ $(OBJECTS)
 else
 	$(CXX) -o $@ $(OBJECTS) $(LDFLAGS)
