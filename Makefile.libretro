@@ -48,7 +48,7 @@ else ifeq ($(platform), psp1)
    CC = psp-gcc$(EXE_EXT)
    CXX = psp-g++$(EXE_EXT)
    AR = psp-ar$(EXE_EXT)
-   CPPFLAGS += -DPSP
+   CPPFLAGS += -DPSP -G0
 else ifeq ($(platform), wii)
    TARGET := libretro_wii.a
    CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
