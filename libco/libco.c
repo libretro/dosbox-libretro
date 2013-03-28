@@ -4,7 +4,11 @@
   license: public domain
 */
 
-#if defined(__GNUC__) && defined(__i386__)
+#if defined(COTHREAD_PTHREAD)
+  // The other libco modes don't work on iOS, so I wrote this one.
+  // It still needs testing and co_delete is incomplete.
+  #include "copthread.c"
+#elif defined(__GNUC__) && defined(__i386__)
   #include "x86.c"
 #elif defined(__GNUC__) && defined(__amd64__)
   #include "amd64.c"
@@ -25,4 +29,3 @@
 #else
   #error "libco: unsupported processor, compiler or operating system"
 #endif
-

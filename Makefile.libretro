@@ -25,17 +25,25 @@ else ifneq ($(findstring MINGW,$(shell uname -a)),)
 endif
 
 ifeq ($(platform), unix)
-   TARGET := libretro.so
+   TARGET := dosbox_libretro.so
    LDFLAGS += -shared -Wl,--version-script=libretro/link.T
    
    fpic = -fPIC
 else ifeq ($(platform), osx)
-   TARGET := libretro.dylib
+   TARGET := dosbox_libretro.dylib
    LDFLAGS += -dynamiclib
    
    fpic = -fPIC
+else ifeq ($(platform), ios)
+   TARGET := dosbox_libretro.dylib
+   CPPFLAGS += -DCOTHREAD_PTHREAD
+   LDFLAGS += -dynamiclib
+   fpic = -fPIC
+
+   CC = clang -arch armv7 -isysroot $(IOSSDK)
+   CXX = clang++ -arch armv7 -isysroot $(IOSSDK)
 else ifeq ($(platform), android)
-   TARGET := libretro_dosbox.so
+   TARGET := dosbox_libretro.so
    CXXFLAGS += -fpermissive 
    LDFLAGS += -shared -Wl,--version-script=libretro/link.T
 
@@ -44,19 +52,19 @@ else ifeq ($(platform), android)
    
    fpic = -fPIC
 else ifeq ($(platform), psp1)
-   TARGET := libretro_psp1.a
+   TARGET := dosbox_libretro_psp1.a
    CC = psp-gcc$(EXE_EXT)
    CXX = psp-g++$(EXE_EXT)
    AR = psp-ar$(EXE_EXT)
    CPPFLAGS += -DPSP -G0
 else ifeq ($(platform), wii)
-   TARGET := libretro_wii.a
+   TARGET := dosbox_libretro_wii.a
    CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
    CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
    AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
    CPPFLAGS += -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DWORDS_BIGENDIAN=1
 else
-   TARGET := retro.dll
+   TARGET := dosbox_retro.dll
    LDFLAGS += -shared -static-libgcc -static-libstdc++ -Wl,--version-script=libretro/link.T -lwinmm
 endif
 
@@ -200,6 +208,4 @@ clean:
 	rm -f $(OBJECTS) $(TARGET)
 
 .PHONY: clean
-
-
 
