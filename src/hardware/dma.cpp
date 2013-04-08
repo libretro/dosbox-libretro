@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2011  The DOSBox Team
+ *  Copyright (C) 2002-2013  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -30,6 +30,8 @@ DmaController *DmaControllers[2];
 
 #define EMM_PAGEFRAME4K	((0xE000*16)/4096)
 Bit32u ems_board_mapping[LINK_START];
+
+static Bit32u dma_wrapping = 0xffff;
 
 static void UpdateEMSMapping(void) {
 	/* if EMS is not present, this will result in a 1:1 mapping */

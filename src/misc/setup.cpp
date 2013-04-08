@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2011  The DOSBox Team
+ *  Copyright (C) 2002-2013  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -288,13 +288,13 @@ bool Prop_string::CheckValue(Value const& in, bool warn){
 			return true;
 		}
 		if((*it).ToString() == "%u") {
-			Bitu value;
+			Bit32u value;
 			if(sscanf(in.ToString().c_str(),"%u",&value) == 1) {
 				return true;
 			}
 		}
 	}
-	if(warn) LOG_MSG("\"%s\" is not a valid value for variable: %s.\nIt might now be reset it to default value: %s",in.ToString().c_str(),propname.c_str(),default_value.ToString().c_str());
+	if(warn) LOG_MSG("\"%s\" is not a valid value for variable: %s.\nIt might now be reset to the default value: %s",in.ToString().c_str(),propname.c_str(),default_value.ToString().c_str());
 	return false;
 }
 
@@ -651,7 +651,7 @@ bool Config::PrintConfig(char const * const configfilename) const {
 			}
 			i=0;
 			char prefix[80];
-			snprintf(prefix,80, "\n# %*s  ", maxwidth, "");
+			snprintf(prefix,80, "\n# %*s  ", (int)maxwidth, "");
 			while ((p = sec->Get_prop(i++))) {		
 				std::string help = p->Get_help();
 				std::string::size_type pos = std::string::npos;
@@ -659,7 +659,7 @@ bool Config::PrintConfig(char const * const configfilename) const {
 					help.replace(pos, 1, prefix);
 				}
 		     
-				fprintf(outfile, "# %*s: %s", maxwidth, p->propname.c_str(), help.c_str());
+				fprintf(outfile, "# %*s: %s", (int)maxwidth, p->propname.c_str(), help.c_str());
 
 				std::vector<Value> values = p->GetValues();
 				if (!values.empty()) {

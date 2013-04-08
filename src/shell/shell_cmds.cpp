@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2011  The DOSBox Team
+ *  Copyright (C) 2002-2013  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 #include "shell.h"
 #include "callback.h"
 #include "regs.h"
+#include "bios.h"
 #include "../dos/drives.h"
 #include "support.h"
 #include "control.h"
@@ -369,8 +370,8 @@ void DOS_Shell::CMD_RMDIR(char * args) {
 	}
 }
 
-static void FormatNumber(Bitu num,char * buf) {
-	Bitu numm,numk,numb,numg;
+static void FormatNumber(Bit32u num,char * buf) {
+	Bit32u numm,numk,numb,numg;
 	numb=num % 1000;
 	num/=1000;
 	numk=num % 1000;
@@ -741,6 +742,8 @@ void DOS_Shell::CMD_COPY(char * args) {
 
 void DOS_Shell::CMD_SET(char * args) {
 	HELP("SET");
+	if (ScanCMDBool(args,"P")) 
+		E_Exit("Set /P is not supported. Use Choice!");
 	StripSpaces(args);
 	std::string line;
 	if (!*args) {
@@ -944,7 +947,7 @@ void DOS_Shell::CMD_CALL(char * args){
 
 void DOS_Shell::CMD_DATE(char * args) {
 	HELP("DATE");	
-	if(ScanCMDBool(args,"h")) {
+	if(ScanCMDBool(args,"H")) {
 		// synchronize date with host parameter
 		time_t curtime;
 		struct tm *loctime;
@@ -960,11 +963,11 @@ void DOS_Shell::CMD_DATE(char * args) {
 		return;
 	}
 	// check if a date was passed in command line
-	Bitu newday,newmonth,newyear;
+	Bit32u newday,newmonth,newyear;
 	if(sscanf(args,"%u-%u-%u",&newmonth,&newday,&newyear)==3) {
-		reg_cx = newyear;
-		reg_dh = newmonth;
-		reg_dl = newday;
+		reg_cx = static_cast<Bit16u>(newyear);
+		reg_dh = static_cast<Bit8u>(newmonth);
+		reg_dl = static_cast<Bit8u>(newday);
 
 		reg_ah=0x2b; // set system date
 		CALLBACK_RunRealInt(0x21);
@@ -976,13 +979,13 @@ void DOS_Shell::CMD_DATE(char * args) {
 	CALLBACK_RunRealInt(0x21);
 
 	const char* datestring = MSG_Get("SHELL_CMD_DATE_DAYS");
-	Bit8u length;
+	Bit32u length;
 	char day[6] = {0};
 	if(sscanf(datestring,"%u",&length) && (length<5) && (strlen(datestring)==(length*7+1))) {
 		// date string appears valid
-		for(int i = 0; i < length; i++) day[i] = datestring[reg_al*length+1+i];
+		for(Bit32u i = 0; i < length; i++) day[i] = datestring[reg_al*length+1+i];
 	}
-	bool dateonly = ScanCMDBool(args,"t");
+	bool dateonly = ScanCMDBool(args,"T");
 	if(!dateonly) WriteOut(MSG_Get("SHELL_CMD_DATE_NOW"));
 
 	const char* formatstring = MSG_Get("SHELL_CMD_DATE_FORMAT");
@@ -994,9 +997,9 @@ void DOS_Shell::CMD_DATE(char * args) {
 			buffer[bufferptr] = formatstring[i];
 			bufferptr++;
 		} else {
-			if(formatstring[i]=='M') bufferptr += sprintf(buffer+bufferptr,"%02u",(Bitu)reg_dh);
-			if(formatstring[i]=='D') bufferptr += sprintf(buffer+bufferptr,"%02u",(Bitu)reg_dl);
-			if(formatstring[i]=='Y') bufferptr += sprintf(buffer+bufferptr,"%04u",(Bitu)reg_cx);
+			if(formatstring[i]=='M') bufferptr += sprintf(buffer+bufferptr,"%02u",(Bit8u) reg_dh);
+			if(formatstring[i]=='D') bufferptr += sprintf(buffer+bufferptr,"%02u",(Bit8u) reg_dl);
+			if(formatstring[i]=='Y') bufferptr += sprintf(buffer+bufferptr,"%04u",(Bit16u) reg_cx);
 		}
 	}
 	WriteOut("%s %s\n",day, buffer);
@@ -1005,7 +1008,7 @@ void DOS_Shell::CMD_DATE(char * args) {
 
 void DOS_Shell::CMD_TIME(char * args) {
 	HELP("TIME");
-	if(ScanCMDBool(args,"h")) {
+	if(ScanCMDBool(args,"H")) {
 		// synchronize time with host parameter
 		time_t curtime;
 		struct tm *loctime;
@@ -1025,7 +1028,7 @@ void DOS_Shell::CMD_TIME(char * args) {
 		mem_writed(BIOS_TIMER,ticks);
 		return;
 	}
-	bool timeonly = ScanCMDBool(args,"t");
+	bool timeonly = ScanCMDBool(args,"T");
 
 	reg_ah=0x2c; // get system time
 	CALLBACK_RunRealInt(0x21);

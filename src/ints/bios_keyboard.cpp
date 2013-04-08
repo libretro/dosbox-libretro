@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2011  The DOSBox Team
+ *  Copyright (C) 2002-2013  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -514,7 +514,7 @@ static Bitu INT16_Handler(void) {
 		break;
 	case 0x01: /* CHECK FOR KEYSTROKE */
 		// enable interrupt-flag after IRET of this int16
-		mem_writew(SegPhys(ss)+reg_sp+4,(mem_readw(SegPhys(ss)+reg_sp+4) | FLAG_IF));
+		CALLBACK_SIF(true);
 		for (;;) {
 			if (check_key(temp)) {
 				if (!IsEnhancedKey(temp)) {
@@ -535,6 +535,8 @@ static Bitu INT16_Handler(void) {
 		}
 		break;
 	case 0x11: /* CHECK FOR KEYSTROKE (enhanced keyboards only) */
+		// enable interrupt-flag after IRET of this int16
+		CALLBACK_SIF(true);
 		if (!check_key(temp)) {
 			CALLBACK_SZF(true);
 		} else {

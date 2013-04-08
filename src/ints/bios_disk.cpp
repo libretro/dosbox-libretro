@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2011  The DOSBox Team
+ *  Copyright (C) 2002-2013  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 #include "dosbox.h"
 #include "callback.h"
 #include "bios.h"
+#include "bios_disk.h"
 #include "regs.h"
 #include "mem.h"
 #include "dos_inc.h" /* for Drives[] */
@@ -333,14 +334,14 @@ static Bitu INT13_DiskHandler(void) {
 				if ((machine==MCH_CGA) || (machine==MCH_PCJR)) {
 					/* those bioses call floppy drive reset for invalid drive values */
 					if (((imageDiskList[0]) && (imageDiskList[0]->active)) || ((imageDiskList[1]) && (imageDiskList[1]->active))) {
-						if (reg_dl<0x80) reg_ip++;
+						if (machine!=MCH_PCJR && reg_dl<0x80) reg_ip++;
 						last_status = 0x00;
 						CALLBACK_SCF(false);
 					}
 				}
 				return CBRET_NONE;
 			}
-			if (reg_dl<0x80) reg_ip++;
+			if (machine!=MCH_PCJR && reg_dl<0x80) reg_ip++;
 			last_status = 0x00;
 			CALLBACK_SCF(false);
 		}

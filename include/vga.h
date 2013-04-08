@@ -1,5 +1,5 @@
  /*
- *  Copyright (C) 2002-2011  The DOSBox Team
+ *  Copyright (C) 2002-2013  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -426,6 +426,10 @@ void VGA_ChangedBank(void);
 void VGA_DAC_CombineColor(Bit8u attr,Bit8u pal);
 void VGA_DAC_SetEntry(Bitu entry,Bit8u red,Bit8u green,Bit8u blue);
 void VGA_ATTR_SetPalette(Bit8u index,Bit8u val);
+
+typedef enum {CGA, EGA, MONO} EGAMonitorMode;
+
+void VGA_ATTR_SetEGAMonitorPalette(EGAMonitorMode m);
 
 /* The VGA Subfunction startups */
 void VGA_SetupAttr(void);

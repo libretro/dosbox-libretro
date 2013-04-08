@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2011  The DOSBox Team
+ *  Copyright (C) 2002-2013  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -1365,7 +1365,7 @@ public:
 			emm_segmentmappings[i].handle=NULL_HANDLE;
 		}
 
-		EMM_AllocateSystemHandle(8);	// allocate OS-dedicated handle (ems handle zero, 128kb)
+		EMM_AllocateSystemHandle(24);	// allocate OS-dedicated handle (ems handle zero, 384kb)
 
 		if (ems_type==3) {
 			DMA_SetWrapping(0xffffffff);	// emm386-bug that disables dma wrapping

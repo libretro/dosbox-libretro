@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2011  The DOSBox Team
+ *  Copyright (C) 2002-2013  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -327,7 +327,7 @@ bool isoDrive::GetFileAttr(char *name, Bit16u *attr) {
 bool isoDrive::AllocationInfo(Bit16u *bytes_sector, Bit8u *sectors_cluster, Bit16u *total_clusters, Bit16u *free_clusters) {
 	*bytes_sector = 2048;
 	*sectors_cluster = 1; // cluster size for cdroms ?
-	*total_clusters = 60000;
+	*total_clusters = 65535;
 	*free_clusters = 0;
 	return true;
 }
