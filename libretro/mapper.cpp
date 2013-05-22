@@ -344,10 +344,10 @@ void MAPPER_Init(void)
     
     switch(joytype)
     {
-    	case JOY_AUTO: case JOY_2AXIS: JOYSTICK::Joystick = &JOYSTICK::JS2Axis; break;
-	    case JOY_4AXIS: JOYSTICK::Joystick = &JOYSTICK::JS4Axis; break;
-	    case JOY_4AXIS_2: JOYSTICK::Joystick = &JOYSTICK::JS4Axis2; break;
-	    case JOY_FCS: case JOY_CH: fprintf(stderr, "Joystick type not supported."); break;        
+    	  case JOY_AUTO: case JOY_2AXIS: JOYSTICK::Joystick = &JOYSTICK::JS2Axis; break;
+        case JOY_4AXIS: JOYSTICK::Joystick = &JOYSTICK::JS4Axis; break;
+        case JOY_4AXIS_2: JOYSTICK::Joystick = &JOYSTICK::JS4Axis2; break;
+	     case JOY_FCS: case JOY_CH: fprintf(stderr, "Joystick type not supported."); break;        
     }
 
     JOYSTICK::Joystick->enable();

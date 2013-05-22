@@ -229,7 +229,7 @@ void retro_init (void)
     if(!emuThread && !mainThread)
     {
         mainThread = co_active();
-        emuThread = co_create(65536*sizeof(void*), retro_wrap_emulator);
+        emuThread = co_create(65536*sizeof(void*)*16, retro_wrap_emulator);
     }
     else
     {
