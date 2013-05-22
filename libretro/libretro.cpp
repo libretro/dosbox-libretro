@@ -43,7 +43,14 @@ static retro_environment_t environ_cb = NULL;
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
-void retro_set_environment(retro_environment_t cb) { environ_cb = cb; }
+
+void retro_set_environment(retro_environment_t cb)
+{
+    environ_cb = cb;
+
+    bool allow_no_game = true;
+    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
+}
 
 // input_poll and input_state are in libretro/mapper.cpp
 
@@ -261,28 +268,31 @@ void retro_deinit(void)
 bool retro_load_game(const struct retro_game_info *game)
 {
     if(emuThread)
-    {    
-        // Copy the game path
-        loadPath = normalizePath(game->path);
-        const size_t lastDot = loadPath.find_last_of('.');
-        
-        // Find any config file to load
-        if(std::string::npos != lastDot)
+    {
+        if(game)
         {
-            std::string extension = loadPath.substr(lastDot + 1);
-            std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-            
-            if((extension == "conf"))
+            // Copy the game path
+            loadPath = normalizePath(game->path);
+            const size_t lastDot = loadPath.find_last_of('.');
+        
+            // Find any config file to load
+            if(std::string::npos != lastDot)
             {
-                configPath = loadPath;
-                loadPath.clear();
-            }
-            else if(configPath.empty())
-            {
-                const char* systemDir = 0;
-                const bool gotSysDir = environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &systemDir);
+                std::string extension = loadPath.substr(lastDot + 1);
+                std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
             
-                configPath = normalizePath(std::string(gotSysDir ? systemDir : ".") + "/dosbox.conf");
+                if((extension == "conf"))
+                {
+                    configPath = loadPath;
+                    loadPath.clear();
+                }
+                else if(configPath.empty())
+                {
+                    const char* systemDir = 0;
+                    const bool gotSysDir = environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &systemDir);
+            
+                    configPath = normalizePath(std::string(gotSysDir ? systemDir : ".") + "/dosbox.conf");
+                }
             }
         }
         
