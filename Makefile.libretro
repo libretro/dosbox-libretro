@@ -38,7 +38,7 @@ else ifeq ($(platform), osx)
    fpic = -fPIC
 else ifeq ($(platform), ios)
    TARGET := $(TARGET_NAME)_libretro_ios.dylib
-   CPPFLAGS += -DCOTHREAD_PTHREAD
+   CPPFLAGS += -DHAVE_POSIX_MEMALIGN=1 -marm
    LDFLAGS += -dynamiclib
    fpic = -fPIC
 
