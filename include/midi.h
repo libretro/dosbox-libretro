@@ -17,20 +17,44 @@
  */
 
 
+#ifndef DOSBOX_MIDI_H
+#define DOSBOX_MIDI_H
 
-/* ARMv4/ARMv7 (little endian) backend (switcher) by M-HT */
+#ifndef DOSBOX_PROGRAMS_H
+#include "programs.h"
+#endif
 
-#include "risc_armv4le-common.h"
+class MidiHandler {
+public:
+	MidiHandler();
+	virtual bool Open(const char * /*conf*/) { return true; };
+	virtual void Close(void) {};
+	virtual void PlayMsg(Bit8u * /*msg*/) {};
+	virtual void PlaySysex(Bit8u * /*sysex*/,Bitu /*len*/) {};
+	virtual const char * GetName(void) { return "none"; };
+	virtual void ListAll(Program * base) {};
+	virtual ~MidiHandler() { };
+	MidiHandler * next;
+};
 
-// choose your destiny:
-#if C_TARGETCPU == ARMV7LE
-	#include "risc_armv4le-o3.h"
-#else
-	#if defined(__THUMB_INTERWORK__)
-		#include "risc_armv4le-thumb-iw.h"
-	#else
-		#include "risc_armv4le-o3.h"
-//		#include "risc_armv4le-thumb-niw.h"
-//		#include "risc_armv4le-thumb.h"
-	#endif
+
+#define SYSEX_SIZE 1024
+struct DB_Midi {
+	Bitu status;
+	Bitu cmd_len;
+	Bitu cmd_pos;
+	Bit8u cmd_buf[8];
+	Bit8u rt_buf[8];
+	struct {
+		Bit8u buf[SYSEX_SIZE];
+		Bitu used;
+		Bitu delay;
+		Bit32u start;
+	} sysex;
+	bool available;
+	MidiHandler * handler;
+};
+
+extern DB_Midi midi;
+
 #endif

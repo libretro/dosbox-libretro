@@ -9,7 +9,7 @@ AC_CANONICAL_BUILD
 
 dnl Setup for automake
 AM_INIT_AUTOMAKE
-AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADER(config.h)
 
 dnl Checks for programs.
 AC_PROG_MAKE_SET
@@ -320,7 +320,7 @@ if test x$enable_fpu_x86 = xno ; then
    AC_MSG_RESULT(no)
 else
   if test x$enable_fpu = xyes; then
-    if test x$c_targetcpu = xx86 ; then
+    if test x$c_targetcpu = xx86 -o x$c_targetcpu = xx86_64; then
         AC_DEFINE(C_FPU_X86,1)
         AC_MSG_RESULT(yes)
     else
