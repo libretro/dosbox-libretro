@@ -37,9 +37,9 @@
 // ----- RECOMPILER ! YOU MUST CHANGE THIS FOR THE BUILD PLATFORM
 #ifndef __POWERPC__
 /* #undef C_DYNAMIC_X86 */ /* Define to 1 to use x86 dynamic cpu core */
-#define C_DYNREC 1 /* Define to 1 to use recompiling cpu core. Can not be used together with the dynamic-x86 core */
+/* #undef C_DYNREC */ /* Define to 1 to use recompiling cpu core. Can not be used together with the dynamic-x86 core */
 /* #undef C_FPU_X86 */ /* Define to 1 to use a x86 assembly fpu core */
-#define C_TARGETCPU X86_64 /* The type of cpu this target has */
+/* #undef C_TARGETCPU */ /* The type of cpu this target has */
 #endif
 
 #define C_UNALIGNED_MEMORY 1 /* Define to 1 to use a unaligned memory access */
