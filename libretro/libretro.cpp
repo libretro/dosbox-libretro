@@ -19,30 +19,28 @@
 #include <algorithm>
 #include <string> 
 
-
 #include "../libco/libco.h"
 #include "libretro.h"
+#include "retrodos.h"
 
 #include "dosbox.h"
 #include "mapper.h"
 #include "control.h"
 #include "pic.h"
 
-#if 0
-# define LOG(msg) fprintf(stderr, "%s\n", msg)
-#else
-# define LOG(msg)
-#endif
-
 //
 
-static retro_video_refresh_t video_cb = NULL;
-static retro_audio_sample_batch_t audio_batch_cb = NULL;
-static retro_environment_t environ_cb = NULL;
+retro_video_refresh_t video_cb;
+retro_audio_sample_batch_t audio_batch_cb;
+retro_input_poll_t poll_cb;
+retro_input_state_t input_cb;
+retro_environment_t environ_cb;
 
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
+void retro_set_input_poll(retro_input_poll_t cb) { poll_cb = cb; }
+void retro_set_input_state(retro_input_state_t cb) { input_cb = cb; }
 
 void retro_set_environment(retro_environment_t cb)
 {
@@ -94,7 +92,7 @@ void Mouse_AutoLock(bool enable)
 void restart_program(std::vector<std::string> & parameters)
 {
     // Not supported; this is used by the CONFIG -r command.
-    LOG("Program restart not supported.");
+    RETROLOG("Program restart not supported.");
 }
 
 // Events
@@ -162,11 +160,11 @@ static void retro_start_emulator()
     }
     catch(int)
     {
-        LOG("Frontend said to quit.");
+        RETROLOG("Frontend said to quit.");
         return;
     }
     
-    LOG("DOSBox said to quit.");
+    RETROLOG("DOSBox said to quit.");
     DOSBOXwantsExit = true;
 }
 
@@ -186,7 +184,7 @@ static void retro_wrap_emulator()
     // Dead emulator, but libco says not to return
     while(true)
     {
-        LOG("Running a dead emulator.");
+        RETROLOG("Running a dead emulator.");
         co_switch(mainThread);
     }
 }
@@ -240,7 +238,7 @@ void retro_init (void)
     }
     else
     {
-        LOG("retro_init called more than once.");
+        RETROLOG("retro_init called more than once.");
     }
 }
 
@@ -261,7 +259,7 @@ void retro_deinit(void)
     }
     else
     {
-        LOG("retro_deinit called when there is no emulator thread.");
+        RETROLOG("retro_deinit called when there is no emulator thread.");
     }
 }
 
@@ -303,7 +301,7 @@ bool retro_load_game(const struct retro_game_info *game)
     }
     else
     {
-        LOG("retro_load_game called when there is no emulator thread.");
+        RETROLOG("retro_load_game called when there is no emulator thread.");
         return false;
     }
 }
@@ -337,7 +335,7 @@ void retro_run (void)
     }
     else
     {
-        LOG("retro_run called when there is no emulator thread.");
+        RETROLOG("retro_run called when there is no emulator thread.");
     }
 }
 
