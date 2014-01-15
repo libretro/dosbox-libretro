@@ -110,7 +110,7 @@ namespace KEYBOARD
             KEYBOARD_AddKey(dosboxID, false);
         }
     };
-    
+
     static Handler map[] =
     {
         {RETROK_1, KBD_1}, {RETROK_2, KBD_2}, {RETROK_3, KBD_3}, {RETROK_4, KBD_4},
@@ -143,7 +143,8 @@ namespace KEYBOARD
         {RETROK_KP5, KBD_kp5}, {RETROK_KP6, KBD_kp6}, {RETROK_KP7, KBD_kp7}, {RETROK_KP8, KBD_kp8}, 
         {RETROK_KP9, KBD_kp9}, {RETROK_KP0, KBD_kp0}, {RETROK_KP_DIVIDE, KBD_kpdivide},
         {RETROK_KP_MULTIPLY, KBD_kpmultiply}, {RETROK_KP_MINUS, KBD_kpminus},
-        {RETROK_KP_PLUS, KBD_kpplus}, {RETROK_KP_ENTER, KBD_kpenter}, {RETROK_KP_PERIOD, KBD_kpperiod}
+        {RETROK_KP_PLUS, KBD_kpplus}, {RETROK_KP_ENTER, KBD_kpenter}, {RETROK_KP_PERIOD, KBD_kpperiod},
+        {RETROK_BACKQUOTE, KBD_grave}, /* KBD_extra_lt_gt */
     };
     
     static const unsigned count = sizeof(map) / sizeof(map[0]);
