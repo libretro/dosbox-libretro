@@ -200,7 +200,7 @@ void retro_get_system_info(struct retro_system_info *info)
 {
    info->library_name = "dosbox";
    info->library_version = "svn";
-   info->valid_extensions = "exe|com|bat|conf|EXE|COM|BAT|CONF";
+   info->valid_extensions = "exe|com|bat|conf";
    info->need_fullpath = true;
    info->block_extract = false;
 }
