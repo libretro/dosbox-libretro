@@ -182,10 +182,7 @@ bool RENDER_StartUpdate(void) {
 			render.fullFrame = true;
 		} else {
 			RENDER_DrawLine = RENDER_StartLineHandler;
-			if (GCC_UNLIKELY(CaptureState & (CAPTURE_IMAGE|CAPTURE_VIDEO))) 
-				render.fullFrame = true;
-			else
-				render.fullFrame = false;
+         render.fullFrame = false;
 		}
 	}
 	render.updating = true;
@@ -204,20 +201,6 @@ void RENDER_EndUpdate( bool abort ) {
 	if (GCC_UNLIKELY(!render.updating))
 		return;
 	RENDER_DrawLine = RENDER_EmptyLineHandler;
-	if (GCC_UNLIKELY(CaptureState & (CAPTURE_IMAGE|CAPTURE_VIDEO))) {
-		Bitu pitch, flags;
-		flags = 0;
-		if (render.src.dblw != render.src.dblh) {
-			if (render.src.dblw) flags|=CAPTURE_FLAG_DBLW;
-			if (render.src.dblh) flags|=CAPTURE_FLAG_DBLH;
-		}
-		float fps = render.src.fps;
-		pitch = render.scale.cachePitch;
-		if (render.frameskip.max)
-			fps /= 1+render.frameskip.max;
-		CAPTURE_AddImage( render.src.width, render.src.height, render.src.bpp, pitch,
-			flags, fps, (Bit8u *)&scalerSourceCache, (Bit8u*)&render.pal.rgb );
-	}
 	if ( render.scale.outWrite ) {
 		GFX_EndUpdate( abort? NULL : Scaler_ChangedLines );
 		render.frameskip.hadSkip[render.frameskip.index] = 0;
