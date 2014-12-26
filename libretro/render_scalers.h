@@ -76,7 +76,5 @@ typedef struct {
 extern ScalerSimpleBlock_t ScaleNormal1x;
 extern ScalerSimpleBlock_t ScaleNormalDw;
 extern ScalerSimpleBlock_t ScaleNormalDh;
-extern ScalerSimpleBlock_t ScaleNormal2x;
-extern ScalerSimpleBlock_t ScaleNormal3x;
 /* Complex scalers */
 #endif

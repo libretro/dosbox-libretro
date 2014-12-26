@@ -283,12 +283,7 @@ static void RENDER_Reset( void ) {
 	}
 	if ((dblh && dblw) || (render.scale.forced && !dblh && !dblw)) {
 		/* Initialize always working defaults */
-		if (render.scale.size == 2)
-			simpleBlock = &ScaleNormal2x;
-		else if (render.scale.size == 3)
-			simpleBlock = &ScaleNormal3x;
-		else
-			simpleBlock = &ScaleNormal1x;
+      simpleBlock = &ScaleNormal1x;
 		/* Maybe override them */
 	} else if (dblw) {
 		simpleBlock = &ScaleNormalDw;
@@ -506,9 +501,7 @@ void RENDER_Init(Section * sec) {
 	render.scale.forced = false;
 	if(f == "forced") render.scale.forced = true;
    
-	if (scaler == "none") { render.scale.op = scalerOpNormal;render.scale.size = 1; }
-	else if (scaler == "normal2x") { render.scale.op = scalerOpNormal;render.scale.size = 2; }
-	else if (scaler == "normal3x") { render.scale.op = scalerOpNormal;render.scale.size = 3; }
+   render.scale.op = scalerOpNormal;render.scale.size = 1;
 
 	//If something changed that needs a ReInit
 	// Only ReInit when there is a src.bpp (fixes crashes on startup and directly changing the scaler without a screen specified yet)
