@@ -1,4 +1,4 @@
-INCFLAGS += -Ilibco -iquote include
+INCFLAGS += -I$(CORE_DIR)/libco -I$(CORE_DIR)/src -iquote $(CORE_DIR)/include
 
 SOURCES_CXX += \
 	$(CORE_DIR)/src/cpu/callback.cpp \
@@ -100,7 +100,7 @@ SOURCES_CXX += \
 	$(CORE_DIR)/src/hardware/serialport/softmodem.cpp \
 	$(CORE_DIR)/src/hardware/serialport/misc_util.cpp \
 	$(CORE_DIR)/src/hardware/serialport/nullmodem.cpp \
-	$(CORE_DIR)/src/dosbox.cpp \
+	$(CORE_DIR)/libretro/dosbox.cpp \
 	$(CORE_DIR)/libretro/render.cpp \
 	$(CORE_DIR)/libretro/render_scalers.cpp \
 	$(CORE_DIR)/src/gui/midi.cpp \
