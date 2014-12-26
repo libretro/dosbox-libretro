@@ -229,7 +229,6 @@ increaseticks:
 			}
 		} else {
 			ticksAdded = 0;
-			SDL_Delay(1);
 			ticksDone -= GetTicks() - ticksNew;
 			if (ticksDone < 0)
 				ticksDone = 0;
