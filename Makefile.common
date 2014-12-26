@@ -101,8 +101,8 @@ SOURCES_CXX += \
 	$(CORE_DIR)/src/hardware/serialport/misc_util.cpp \
 	$(CORE_DIR)/src/hardware/serialport/nullmodem.cpp \
 	$(CORE_DIR)/src/dosbox.cpp \
-	$(CORE_DIR)/src/gui/render.cpp \
-	$(CORE_DIR)/src/gui/render_scalers.cpp \
+	$(CORE_DIR)/libretro/render.cpp \
+	$(CORE_DIR)/libretro/render_scalers.cpp \
 	$(CORE_DIR)/src/gui/midi.cpp \
 	$(CORE_DIR)/libretro/libretro.cpp \
 	$(CORE_DIR)/libretro/dos_gfx.cpp \
