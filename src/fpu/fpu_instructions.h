@@ -41,17 +41,17 @@ static void FPU_FNOP(void){
 	return;
 }
 
+static void FPU_PREP_PUSH(void){
+	TOP = (TOP - 1) &7;
+   if (GCC_UNLIKELY(fpu.tags[TOP] != TAG_Empty)) E_Exit("FPU stack overflow");
+	fpu.tags[TOP] = TAG_Valid;
+}
+
 static void FPU_PUSH(double in){
    FPU_PREP_PUSH();
 	fpu.regs[TOP].d = in;
 //	LOG(LOG_FPU,LOG_ERROR)("Pushed at %d  %g to the stack",newtop,in);
 	return;
-}
-
-static void FPU_PREP_PUSH(void){
-	TOP = (TOP - 1) &7;
-   if (GCC_UNLIKELY(fpu.tags[TOP] != TAG_Empty)) E_Exit("FPU stack overflow");
-	fpu.tags[TOP] = TAG_Valid;
 }
 
 static void FPU_FPOP(void){
