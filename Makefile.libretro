@@ -1,18 +1,22 @@
 DEBUG=0
 
+UNAME=$(shell uname -a)
+
 ifeq ($(platform),)
 platform = unix
 ifeq ($(shell uname -a),)
    platform = win
-else ifneq ($(findstring MINGW,$(shell uname -a)),)
+else ifneq ($(findstring MINGW,$(UNAME)),)
    platform = win
-else ifneq ($(findstring Darwin,$(shell uname -a)),)
+else ifneq ($(findstring Darwin,$(UNAME)),)
    platform = osx
-else ifneq ($(findstring win,$(shell uname -a)),)
+else ifneq ($(findstring win,$(UNAME)),)
    platform = win
 endif
 endif
 
+WITH_DYNAREC :=
+DYNAFLAGS :=
 TARGET_NAME := dosbox
 
 # system platform
@@ -24,6 +28,14 @@ else ifneq ($(findstring Darwin,$(shell uname -a)),)
    system_platform = osx
 else ifneq ($(findstring MINGW,$(shell uname -a)),)
    system_platform = win
+endif
+
+ifeq ($(firstword $(filter x86_64,$(UNAME))),x86_64)
+	WITH_DYNAREC=x86_64
+else ifeq ($(firstword $(filter amd64,$(UNAME))),amd64)
+	WITH_DYNAREC=x86_64
+else ifeq ($(firstword $(filter amd64,$(UNAME))),x86)
+	WITH_DYNAREC=x86
 endif
 
 ifeq ($(platform), unix)
@@ -38,7 +50,7 @@ else ifeq ($(platform), osx)
    fpic = -fPIC -mmacosx-version-min=10.6
 else ifeq ($(platform), ios)
    TARGET := $(TARGET_NAME)_libretro_ios.dylib
-   CPPFLAGS += -DHAVE_POSIX_MEMALIGN=1 -marm
+   COMMONFLAGS += -DHAVE_POSIX_MEMALIGN=1 -marm
    LDFLAGS += -dynamiclib
    fpic = -fPIC
 
@@ -46,7 +58,7 @@ else ifeq ($(platform), ios)
    CXX = clang++ -arch armv7 -isysroot $(IOSSDK)
 else ifeq ($(platform), android)
    TARGET := $(TARGET_NAME)_libretro.so
-   CXXFLAGS += -fpermissive 
+   COMMONFLAGS += -fpermissive 
    LDFLAGS += -shared -Wl,--version-script=libretro/link.T
 
    CC = arm-linux-androideabi-gcc
@@ -58,14 +70,14 @@ else ifeq ($(platform), psp1)
    CC = psp-gcc$(EXE_EXT)
    CXX = psp-g++$(EXE_EXT)
    AR = psp-ar$(EXE_EXT)
-   CPPFLAGS += -DPSP -G0
+   COMMONFLAGS += -DPSP -G0
 	STATIC_LINKING = 1
 else ifeq ($(platform), wii)
    TARGET := $(TARGET_NAME)_libretro_wii.a
    CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
    CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
    AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
-   CPPFLAGS += -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DWORDS_BIGENDIAN=1
+   COMMONFLAGS += -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DWORDS_BIGENDIAN=1
 	STATIC_LINKING = 1
 else
    TARGET := $(TARGET_NAME)_libretro.dll
@@ -73,129 +85,148 @@ else
 endif
 
 ifeq ($(DEBUG), 1)
-CPPFLAGS += -O0 -g
+COMMONFLAGS += -O0 -g
 else
-CPPFLAGS += -O3
+COMMONFLAGS += -O3 -DNDEBUG
 endif
 
+CORE_DIR := .
+INCFLAGS := -iquote include
 
-SOURCES = \
-    src/cpu/callback.cpp \
-    src/cpu/cpu.cpp \
-    src/cpu/flags.cpp \
-    src/cpu/modrm.cpp \
-    src/cpu/core_full.cpp \
-	src/cpu/paging.cpp \
-	src/cpu/core_normal.cpp \
-	src/cpu/core_simple.cpp \
-	src/cpu/core_prefetch.cpp \
-	src/cpu/core_dyn_x86.cpp \
-	src/cpu/core_dynrec.cpp \
-	src/dos/dos.cpp \
-	src/dos/dos_devices.cpp \
-	src/dos/dos_execute.cpp \
-	src/dos/dos_files.cpp \
-	src/dos/dos_ioctl.cpp \
-	src/dos/dos_memory.cpp \
-    src/dos/dos_misc.cpp \
-    src/dos/dos_classes.cpp \
-    src/dos/dos_programs.cpp \
-    src/dos/dos_tables.cpp \
-	src/dos/drives.cpp \
-	src/dos/drive_virtual.cpp \
-	src/dos/drive_local.cpp \
-	src/dos/drive_cache.cpp \
-	src/dos/drive_fat.cpp \
-	src/dos/drive_iso.cpp \
-	src/dos/dos_mscdex.cpp \
-	src/dos/dos_keyboard_layout.cpp \
-	src/dos/cdrom.cpp \
-	src/dos/cdrom_image.cpp \
-    src/fpu/fpu.cpp \
-    src/hardware/adlib.cpp \
-    src/hardware/dma.cpp \
-    src/hardware/gameblaster.cpp \
-    src/hardware/hardware.cpp \
-    src/hardware/iohandler.cpp \
-    src/hardware/joystick.cpp \
-    src/hardware/keyboard.cpp \
-    src/hardware/memory.cpp \
-    src/hardware/pcspeaker.cpp \
-    src/hardware/pci_bus.cpp \
-    src/hardware/pic.cpp \
-    src/hardware/sblaster.cpp \
-    src/hardware/tandy_sound.cpp \
-    src/hardware/timer.cpp \
-    src/hardware/vga.cpp \
-	src/hardware/vga_attr.cpp \
-	src/hardware/vga_crtc.cpp \
-	src/hardware/vga_dac.cpp \
-	src/hardware/vga_draw.cpp \
-	src/hardware/vga_gfx.cpp \
-	src/hardware/vga_other.cpp \
-	src/hardware/vga_memory.cpp \
-	src/hardware/vga_misc.cpp \
-	src/hardware/vga_seq.cpp \
-	src/hardware/vga_xga.cpp \
-	src/hardware/vga_s3.cpp \
-	src/hardware/vga_tseng.cpp \
-	src/hardware/vga_paradise.cpp \
-	src/hardware/cmos.cpp \
-	src/hardware/disney.cpp \
-	src/hardware/gus.cpp \
-	src/hardware/mpu401.cpp \
-	src/hardware/ipx.cpp \
-	src/hardware/ipxserver.cpp \
-	src/hardware/dbopl.cpp \
-	src/ints/mouse.cpp \
-	src/ints/xms.cpp \
-	src/ints/ems.cpp \
-    src/ints/int10.cpp \
-    src/ints/int10_char.cpp \
-    src/ints/int10_memory.cpp \
-    src/ints/int10_misc.cpp \
-    src/ints/int10_modes.cpp \
-    src/ints/int10_vesa.cpp \
-    src/ints/int10_pal.cpp \
-    src/ints/int10_put_pixel.cpp \
-    src/ints/int10_video_state.cpp \
-    src/ints/int10_vptable.cpp \
-    src/ints/bios.cpp \
-    src/ints/bios_disk.cpp \
-    src/ints/bios_keyboard.cpp \
-    src/misc/cross.cpp \
-    src/misc/messages.cpp \
-    src/misc/programs.cpp \
-    src/misc/setup.cpp \
-    src/misc/support.cpp \
-    src/shell/shell.cpp \
-    src/shell/shell_batch.cpp \
-    src/shell/shell_cmds.cpp \
-    src/shell/shell_misc.cpp \
-    src/hardware/serialport/directserial.cpp \
-	src/hardware/serialport/libserial.cpp \
-	src/hardware/serialport/serialdummy.cpp \
-	src/hardware/serialport/serialport.cpp \
-	src/hardware/serialport/softmodem.cpp \
-	src/hardware/serialport/misc_util.cpp \
-    src/hardware/serialport/nullmodem.cpp \
-    src/dosbox.cpp \
-    src/gui/render.cpp \
-    src/gui/render_scalers.cpp \
-    src/gui/midi.cpp \
-    libretro/libretro.cpp \
-    libretro/dos_gfx.cpp \
-    libretro/mapper.cpp \
-    libretro/mixer-retro.cpp
+SOURCES_CXX := \
+	$(CORE_DIR)/src/cpu/callback.cpp \
+	$(CORE_DIR)/src/cpu/cpu.cpp \
+	$(CORE_DIR)/src/cpu/flags.cpp \
+	$(CORE_DIR)/src/cpu/modrm.cpp \
+	$(CORE_DIR)/src/cpu/core_full.cpp \
+	$(CORE_DIR)/src/cpu/paging.cpp \
+	$(CORE_DIR)/src/cpu/core_normal.cpp \
+	$(CORE_DIR)/src/cpu/core_simple.cpp \
+	$(CORE_DIR)/src/cpu/core_prefetch.cpp \
+	$(CORE_DIR)/src/cpu/core_dyn_x86.cpp \
+	$(CORE_DIR)/src/cpu/core_dynrec.cpp \
+	$(CORE_DIR)/src/dos/dos.cpp \
+	$(CORE_DIR)/src/dos/dos_devices.cpp \
+	$(CORE_DIR)/src/dos/dos_execute.cpp \
+	$(CORE_DIR)/src/dos/dos_files.cpp \
+	$(CORE_DIR)/src/dos/dos_ioctl.cpp \
+	$(CORE_DIR)/src/dos/dos_memory.cpp \
+	$(CORE_DIR)/src/dos/dos_misc.cpp \
+	$(CORE_DIR)/src/dos/dos_classes.cpp \
+	$(CORE_DIR)/src/dos/dos_programs.cpp \
+	$(CORE_DIR)/src/dos/dos_tables.cpp \
+	$(CORE_DIR)/src/dos/drives.cpp \
+	$(CORE_DIR)/src/dos/drive_virtual.cpp \
+	$(CORE_DIR)/src/dos/drive_local.cpp \
+	$(CORE_DIR)/src/dos/drive_cache.cpp \
+	$(CORE_DIR)/src/dos/drive_fat.cpp \
+	$(CORE_DIR)/src/dos/drive_iso.cpp \
+	$(CORE_DIR)/src/dos/dos_mscdex.cpp \
+	$(CORE_DIR)/src/dos/dos_keyboard_layout.cpp \
+	$(CORE_DIR)/src/dos/cdrom.cpp \
+	$(CORE_DIR)/src/dos/cdrom_image.cpp \
+	$(CORE_DIR)/src/fpu/fpu.cpp \
+	$(CORE_DIR)/src/hardware/adlib.cpp \
+	$(CORE_DIR)/src/hardware/dma.cpp \
+	$(CORE_DIR)/src/hardware/gameblaster.cpp \
+	$(CORE_DIR)/src/hardware/hardware.cpp \
+	$(CORE_DIR)/src/hardware/iohandler.cpp \
+	$(CORE_DIR)/src/hardware/joystick.cpp \
+	$(CORE_DIR)/src/hardware/keyboard.cpp \
+	$(CORE_DIR)/src/hardware/memory.cpp \
+	$(CORE_DIR)/src/hardware/pcspeaker.cpp \
+	$(CORE_DIR)/src/hardware/pci_bus.cpp \
+	$(CORE_DIR)/src/hardware/pic.cpp \
+	$(CORE_DIR)/src/hardware/sblaster.cpp \
+	$(CORE_DIR)/src/hardware/tandy_sound.cpp \
+	$(CORE_DIR)/src/hardware/timer.cpp \
+	$(CORE_DIR)/src/hardware/vga.cpp \
+	$(CORE_DIR)/src/hardware/vga_attr.cpp \
+	$(CORE_DIR)/src/hardware/vga_crtc.cpp \
+	$(CORE_DIR)/src/hardware/vga_dac.cpp \
+	$(CORE_DIR)/src/hardware/vga_draw.cpp \
+	$(CORE_DIR)/src/hardware/vga_gfx.cpp \
+	$(CORE_DIR)/src/hardware/vga_other.cpp \
+	$(CORE_DIR)/src/hardware/vga_memory.cpp \
+	$(CORE_DIR)/src/hardware/vga_misc.cpp \
+	$(CORE_DIR)/src/hardware/vga_seq.cpp \
+	$(CORE_DIR)/src/hardware/vga_xga.cpp \
+	$(CORE_DIR)/src/hardware/vga_s3.cpp \
+	$(CORE_DIR)/src/hardware/vga_tseng.cpp \
+	$(CORE_DIR)/src/hardware/vga_paradise.cpp \
+	$(CORE_DIR)/src/hardware/cmos.cpp \
+	$(CORE_DIR)/src/hardware/disney.cpp \
+	$(CORE_DIR)/src/hardware/gus.cpp \
+	$(CORE_DIR)/src/hardware/mpu401.cpp \
+	$(CORE_DIR)/src/hardware/ipx.cpp \
+	$(CORE_DIR)/src/hardware/ipxserver.cpp \
+	$(CORE_DIR)/src/hardware/dbopl.cpp \
+	$(CORE_DIR)/src/ints/mouse.cpp \
+	$(CORE_DIR)/src/ints/xms.cpp \
+	$(CORE_DIR)/src/ints/ems.cpp \
+	$(CORE_DIR)/src/ints/int10.cpp \
+	$(CORE_DIR)/src/ints/int10_char.cpp \
+	$(CORE_DIR)/src/ints/int10_memory.cpp \
+	$(CORE_DIR)/src/ints/int10_misc.cpp \
+	$(CORE_DIR)/src/ints/int10_modes.cpp \
+	$(CORE_DIR)/src/ints/int10_vesa.cpp \
+	$(CORE_DIR)/src/ints/int10_pal.cpp \
+	$(CORE_DIR)/src/ints/int10_put_pixel.cpp \
+	$(CORE_DIR)/src/ints/int10_video_state.cpp \
+	$(CORE_DIR)/src/ints/int10_vptable.cpp \
+	$(CORE_DIR)/src/ints/bios.cpp \
+	$(CORE_DIR)/src/ints/bios_disk.cpp \
+	$(CORE_DIR)/src/ints/bios_keyboard.cpp \
+	$(CORE_DIR)/src/misc/cross.cpp \
+	$(CORE_DIR)/src/misc/messages.cpp \
+	$(CORE_DIR)/src/misc/programs.cpp \
+	$(CORE_DIR)/src/misc/setup.cpp \
+	$(CORE_DIR)/src/misc/support.cpp \
+	$(CORE_DIR)/src/shell/shell.cpp \
+	$(CORE_DIR)/src/shell/shell_batch.cpp \
+	$(CORE_DIR)/src/shell/shell_cmds.cpp \
+	$(CORE_DIR)/src/shell/shell_misc.cpp \
+	$(CORE_DIR)/src/hardware/serialport/directserial.cpp \
+	$(CORE_DIR)/src/hardware/serialport/libserial.cpp \
+	$(CORE_DIR)/src/hardware/serialport/serialdummy.cpp \
+	$(CORE_DIR)/src/hardware/serialport/serialport.cpp \
+	$(CORE_DIR)/src/hardware/serialport/softmodem.cpp \
+	$(CORE_DIR)/src/hardware/serialport/misc_util.cpp \
+	$(CORE_DIR)/src/hardware/serialport/nullmodem.cpp \
+	$(CORE_DIR)/src/dosbox.cpp \
+	$(CORE_DIR)/src/gui/render.cpp \
+	$(CORE_DIR)/src/gui/render_scalers.cpp \
+	$(CORE_DIR)/src/gui/midi.cpp \
+	$(CORE_DIR)/libretro/libretro.cpp \
+	$(CORE_DIR)/libretro/dos_gfx.cpp \
+	$(CORE_DIR)/libretro/mapper.cpp \
+	$(CORE_DIR)/libretro/mixer-retro.cpp
 
-OBJECTS    = $(SOURCES:.cpp=.o) libco/libco.o
-CPPFLAGS   += -D__LIBRETRO__ -iquote include $(fpic)
-LDFLAGS    += -lm $(fpic)
+SOURCES_C := $(CORE_DIR)/libco/libco.c
+
+ifeq ($(WITH_DYNAREC), arm)
+	#COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="ARMV7LE"
+else ifeq ($(WITH_DYNAREC), x86_64)
+	#COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="X86_64" -DC_HAVE_MPROTECT
+else ifeq ($(WITH_DYNAREC), x86)
+	#COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="X86"
+endif
 
 ifeq ($(WANT_FLUIDSYNTH), 1)
-    CPPFLAGS += -DC_FLUIDSYNTH
+    COMMONFLAGS += -DC_FLUIDSYNTH
     LDFLAGS += -lfluidsynth
 endif
+
+OBJECTS  = $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o)
+CXXFLAGS += -D__LIBRETRO__ $(fpic) $(INCFLAGS) $(COMMONFLAGS)
+CFLAGS   += -D__LIBRETRO__ $(fpic) $(INCFLAGS) $(COMMONFLAGS)
+LDFLAGS  += -lm $(fpic)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 all: $(TARGET)
 
