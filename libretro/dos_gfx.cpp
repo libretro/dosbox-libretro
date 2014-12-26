@@ -22,14 +22,8 @@ static Bitu getRGB_t(Bit8u red, Bit8u green, Bit8u blue)
 // GFX
 Bitu GFX_GetBestMode(Bitu flags)
 {
-    switch(RDOSGFXcolorMode)
-    {
-        case RETRO_PIXEL_FORMAT_0RGB1555: getRGB = &getRGB_t<10, 5, 0, 3, 3, 3>; return GFX_CAN_15 | GFX_RGBONLY;
-        case RETRO_PIXEL_FORMAT_RGB565:   getRGB = &getRGB_t<11, 6, 0, 3, 2, 3>; return GFX_CAN_16 | GFX_RGBONLY;
-        case RETRO_PIXEL_FORMAT_XRGB8888: getRGB = &getRGB_t<16, 8, 0, 0, 0, 0>; return GFX_CAN_32 | GFX_RGBONLY;
-    }
-    
-    return 0;
+   getRGB = &getRGB_t<16, 8, 0, 0, 0, 0>;
+   return GFX_CAN_32 | GFX_RGBONLY;
 }
 
 Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue)
@@ -43,12 +37,10 @@ Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,G
     
     RDOSGFXwidth = width;
     RDOSGFXheight = height;
-    RDOSGFXpitch = width * ((RETRO_PIXEL_FORMAT_XRGB8888 == RDOSGFXcolorMode) ? 4 : 2);
+    RDOSGFXpitch = width * 4;
     
     if(RDOSGFXwidth > 1024 || RDOSGFXheight > 768)
-    {
         return 0;
-    }
     
     return GFX_GetBestMode(0);
 }
