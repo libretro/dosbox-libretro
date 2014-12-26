@@ -126,7 +126,7 @@ static void retro_leave_thread(Bitu)
     PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
 }
 
-static void retro_start_emulator()
+static void retro_start_emulator(void)
 {
     const char* const argv[2] = {"dosbox", loadPath.c_str()};
 	CommandLine com_line(loadPath.empty() ? 1 : 2, argv);
@@ -168,7 +168,7 @@ static void retro_start_emulator()
     DOSBOXwantsExit = true;
 }
 
-static void retro_wrap_emulator()
+static void retro_wrap_emulator(void)
 {
     retro_start_emulator();
     
