@@ -350,6 +350,7 @@ void retro_run (void)
     bool updated = false;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
     {
+        //ToDo: make sure the values are updated only when changed
         check_variables();
         Section* cpu = control->GetSection("cpu");
         Prop_multival_remain* prop = ((Section_prop*)cpu)->Get_multivalremain("cycles");
