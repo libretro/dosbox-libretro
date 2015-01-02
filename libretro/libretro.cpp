@@ -28,9 +28,17 @@
 #include "mapper.h"
 #include "control.h"
 #include "pic.h"
+#include "joystick.h"
+
+#define RETRO_DEVICE_2AXIS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
+#define RETRO_DEVICE_4AXIS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 1)
 
 
 char cycles[]="auto";
+extern Config * control;
+
+extern JoystickType p1_joystick_type;
+extern JoystickType p2_joystick_type;
 
 retro_video_refresh_t video_cb;
 retro_audio_sample_batch_t audio_batch_cb;
@@ -58,7 +66,37 @@ void retro_set_environment(retro_environment_t cb)
         { NULL, NULL },
     };
 
-    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);	
+    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
+
+    static const struct retro_controller_description pads[] = {
+        { "2axis + 2button joystick", RETRO_DEVICE_2AXIS },
+        { "4axis + 4button joystick", RETRO_DEVICE_4AXIS },
+    };
+
+    static const struct retro_controller_info ports[] = {
+        { pads, 2 },
+        { pads, 2 },
+        { 0 },
+    };
+
+    environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
+
+}
+
+void retro_set_controller_port_device(unsigned port, unsigned device)
+{
+    switch (device)
+    {
+        case RETRO_DEVICE_4AXIS:
+            !port ? p1_joystick_type = JOY_4AXIS : p2_joystick_type = JOY_4AXIS_2;
+            break;
+        case RETRO_DEVICE_2AXIS: case RETRO_DEVICE_JOYPAD:
+            !port ? p1_joystick_type = JOY_2AXIS : p2_joystick_type = JOY_2AXIS;
+            break;
+        default:
+            !port ? p1_joystick_type = JOY_NONE : p2_joystick_type = JOY_NONE;
+    }
+    MAPPER_Init();
 
 }
 
@@ -133,8 +171,6 @@ extern Bit8u RDOSGFXbuffer[1024*768*4];
 extern Bitu RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch;
 extern unsigned RDOSGFXcolorMode;
 extern void* RDOSGFXhaveFrame;
-
-extern Config * control;
 
 static void retro_leave_thread(Bitu)
 {
@@ -347,6 +383,7 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 void retro_run (void)
 {
 
+
     bool updated = false;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
     {
@@ -355,6 +392,7 @@ void retro_run (void)
         Section* cpu = control->GetSection("cpu");
         Prop_multival_remain* prop = ((Section_prop*)cpu)->Get_multivalremain("cycles");
         prop->SetValue(cycles);
+
     }
 
 
@@ -380,7 +418,6 @@ void retro_run (void)
 }
 
 // Stubs
-void retro_set_controller_port_device(unsigned in_port, unsigned device) { }
 void *retro_get_memory_data(unsigned type) { return 0; }
 size_t retro_get_memory_size(unsigned type) { return 0; }
 void retro_reset (void) { }

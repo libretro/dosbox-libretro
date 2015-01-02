@@ -626,7 +626,7 @@ void DOSBOX_Init(void) {
 	Pbool = secprop->Add_bool("swap34",Property::Changeable::WhenIdle,false);
 	Pbool->Set_help("swap the 3rd and the 4th axis. can be useful for certain joysticks.");
 
-	Pbool = secprop->Add_bool("buttonwrap",Property::Changeable::WhenIdle,false);
+	Pbool = secprop->Add_bool("buttonwrap",Property::Changeable::WhenIdle,true);
 	Pbool->Set_help("enable button wrapping at the number of emulated buttons.");
 
 	secprop=control->AddSection_prop("serial",&SERIAL_Init,true);

@@ -19,6 +19,9 @@ static std::vector<Processable*> inputList;
 
 extern retro_log_printf_t log_cb;
 
+JoystickType p1_joystick_type;
+JoystickType p2_joystick_type;
+
 static bool keyboardState[KBD_LAST];
 
 static const struct { unsigned retroID; KBD_KEYS dosboxID; } keyMap[] =
@@ -172,8 +175,6 @@ void keyboard_event(bool down, unsigned keycode, uint32_t character, uint16_t ke
     {
         if (keyMap[i].retroID == keycode)
         {
-            if(log_cb)
-                log_cb(RETRO_LOG_INFO, "Key: %d \n",keyMap[i].retroID);
             keyboardState[keyMap[i].dosboxID] = down;
             KEYBOARD_AddKey(keyMap[i].dosboxID, down);
             return;
@@ -186,37 +187,59 @@ void MAPPER_Init(void)
     struct retro_keyboard_callback callback = { keyboard_event };
     environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &callback);
 
+    inputList.clear();
+
     inputList.push_back(new MouseButton(RDID(MOUSE_LEFT), 0));
     inputList.push_back(new MouseButton(RDID(MOUSE_RIGHT), 1));
     
+    if(log_cb)
+        log_cb(RETRO_LOG_INFO, "Joystick Type: %d %d \n",p1_joystick_type,p2_joystick_type);
+ 
+    if(p1_joystick_type != JOY_NONE && p2_joystick_type != JOY_NONE)
+    {
+        joytype=JOY_2AXIS;
+    }
+    else
+    {
+        p1_joystick_type != JOY_NONE ? joytype=p1_joystick_type : joytype=p2_joystick_type;
+    }
+
     switch(joytype)
     {
         case JOY_AUTO: case JOY_2AXIS:
         {
-            inputList.push_back(new JoystickButton(0, RDID(JOYPAD_Y), 0, 0));
-            inputList.push_back(new JoystickButton(0, RDID(JOYPAD_X), 0, 1));
-            inputList.push_back(new JoystickButton(0, RDID(JOYPAD_B), 1, 0));
-            inputList.push_back(new JoystickButton(0, RDID(JOYPAD_A), 1, 1));
-            inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 0, 0));
-            inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 0, 1));
-            inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 1, 0));
-            inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 1, 1));
-            JOYSTICK_Enable(0, true);
-            JOYSTICK_Enable(1, true);            
+            if(p1_joystick_type != JOY_NONE)
+            {
+                inputList.push_back(new JoystickButton(0, RDID(JOYPAD_Y), 0, 0));
+                inputList.push_back(new JoystickButton(0, RDID(JOYPAD_B), 0, 1));
+                inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 0, 0));
+                inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 0, 1));
+                JOYSTICK_Enable(0, true);
+            }
+            if(p2_joystick_type != JOY_NONE)
+            {
+                inputList.push_back(new JoystickButton(1, RDID(JOYPAD_Y), 1, 0));
+                inputList.push_back(new JoystickButton(1, RDID(JOYPAD_B), 1, 1));
+                inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 1, 0));
+                inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 1, 1));
+                JOYSTICK_Enable(1, true);
+            }
             break;
         }
         case JOY_4AXIS: case JOY_4AXIS_2:
         {
+
             unsigned p = (joytype == JOY_4AXIS) ? 0 : 1;
-            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_X), 0, 0));
-            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_Y), 0, 1));
-            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_A), 1, 0));
-            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_B), 1, 1));
+            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_Y), 0, 0));
+            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_X), 0, 1));
+            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_B), 1, 0));
+            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_A), 1, 1));
             inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_LEFT),  RDID(ANALOG_X), 0, 0));
             inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_LEFT),  RDID(ANALOG_Y), 0, 1));
             inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_RIGHT), RDID(ANALOG_X), 1, 0));
             inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_RIGHT), RDID(ANALOG_Y), 1, 1));
             JOYSTICK_Enable(p, true);
+            JOYSTICK_Enable(!p, true);
             break;
         }
     }
