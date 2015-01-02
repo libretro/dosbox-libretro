@@ -17,6 +17,8 @@
 struct Processable;
 static std::vector<Processable*> inputList;
 
+extern retro_log_printf_t log_cb;
+
 static bool keyboardState[KBD_LAST];
 
 static const struct { unsigned retroID; KBD_KEYS dosboxID; } keyMap[] =
@@ -29,14 +31,14 @@ static const struct { unsigned retroID; KBD_KEYS dosboxID; } keyMap[] =
     {RETROK_k, KBD_k}, {RETROK_l, KBD_l}, {RETROK_m, KBD_m}, {RETROK_n, KBD_n},
     {RETROK_o, KBD_o}, {RETROK_p, KBD_p}, {RETROK_q, KBD_q}, {RETROK_r, KBD_r},
     {RETROK_s, KBD_s}, {RETROK_t, KBD_t}, {RETROK_u, KBD_u}, {RETROK_v, KBD_v},
-    {RETROK_w, KBD_w}, {RETROK_x, KBD_x}, {RETROK_y, KBD_y}, {RETROK_z, KBD_z},
+    {RETROK_w, KBD_w}, {RETROK_x, KBD_x}, {RETROK_y, KBD_y}, {RETROK_z, KBD_z}, //35
     {RETROK_F1, KBD_f1}, {RETROK_F2, KBD_f2}, {RETROK_F3, KBD_f3}, 
     {RETROK_F4, KBD_f4}, {RETROK_F5, KBD_f5}, {RETROK_F6, KBD_f6}, 
-    {RETROK_F7, KBD_f7}, {RETROK_F8, KBD_f8}, {RETROK_F9, KBD_f9}, 
+    {RETROK_F7, KBD_f7}, {RETROK_F8, KBD_f8}, {RETROK_F9, KBD_f9}, //44
     {RETROK_F10, KBD_f10}, {RETROK_F11, KBD_f11}, {RETROK_F12, KBD_f12}, 
     {RETROK_ESCAPE, KBD_esc}, {RETROK_TAB, KBD_tab}, {RETROK_BACKSPACE, KBD_backspace},
-    {RETROK_RETURN, KBD_enter}, {RETROK_SPACE, KBD_space}, {RETROK_LALT, KBD_leftalt},
-    {RETROK_RALT, KBD_rightalt}, {RETROK_LCTRL, KBD_leftctrl}, {RETROK_RCTRL, KBD_rightctrl},
+    {RETROK_RETURN, KBD_enter}, {RETROK_SPACE, KBD_space}, {RETROK_LALT, KBD_leftalt}, //53 
+    {RETROK_RALT, KBD_rightalt}, {RETROK_LCTRL, KBD_leftctrl}, {RETROK_RCTRL, KBD_rightctrl}, //55
     {RETROK_LSHIFT, KBD_leftshift}, {RETROK_RSHIFT, KBD_rightshift},
     {RETROK_CAPSLOCK, KBD_capslock}, {RETROK_SCROLLOCK, KBD_scrolllock},
     {RETROK_NUMLOCK, KBD_numlock}, {RETROK_MINUS, KBD_minus}, {RETROK_EQUALS, KBD_equals},
@@ -62,7 +64,7 @@ static const unsigned eventKeyMap[] =
     KBD_enter,KBD_kpminus,KBD_scrolllock,KBD_printscreen,KBD_pause,KBD_home
 };
 static const unsigned eventMOD1 = 55;
-static const unsigned eventMOD2 = 53;    
+static const unsigned eventMOD2 = 53;
 
 ///
 
@@ -88,6 +90,7 @@ struct Processable
 
 struct EventHandler : public Processable
 {
+
     MAPPER_Handler* handler;        
     unsigned key;
     unsigned mods;
@@ -100,7 +103,7 @@ struct EventHandler : public Processable
     void process()
     {
         const uint32_t modsList = keyboardState[eventMOD1] ? 1 : 0 |
-                                  keyboardState[eventMOD2] ? 2 : 0;
+                                  keyboardState[eventMOD2] ? 1 : 0;
         item.process(*this, (mods == modsList) && keyboardState[key]);
     }
 
@@ -164,10 +167,13 @@ struct JoystickAxis : public Processable
 
 void keyboard_event(bool down, unsigned keycode, uint32_t character, uint16_t key_modifiers)
 {
+    
     for (int i = 0; keyMap[i].retroID; i ++)
     {
         if (keyMap[i].retroID == keycode)
         {
+            if(log_cb)
+                log_cb(RETRO_LOG_INFO, "Key: %d \n",keyMap[i].retroID);
             keyboardState[keyMap[i].dosboxID] = down;
             KEYBOARD_AddKey(keyMap[i].dosboxID, down);
             return;
@@ -188,9 +194,9 @@ void MAPPER_Init(void)
         case JOY_AUTO: case JOY_2AXIS:
         {
             inputList.push_back(new JoystickButton(0, RDID(JOYPAD_Y), 0, 0));
-            inputList.push_back(new JoystickButton(0, RDID(JOYPAD_B), 0, 1));
-            inputList.push_back(new JoystickButton(1, RDID(JOYPAD_Y), 1, 0));
-            inputList.push_back(new JoystickButton(1, RDID(JOYPAD_B), 1, 1));
+            inputList.push_back(new JoystickButton(0, RDID(JOYPAD_X), 0, 1));
+            inputList.push_back(new JoystickButton(0, RDID(JOYPAD_B), 1, 0));
+            inputList.push_back(new JoystickButton(0, RDID(JOYPAD_A), 1, 1));
             inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 0, 0));
             inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 0, 1));
             inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 1, 0));
@@ -202,10 +208,10 @@ void MAPPER_Init(void)
         case JOY_4AXIS: case JOY_4AXIS_2:
         {
             unsigned p = (joytype == JOY_4AXIS) ? 0 : 1;
-            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_Y), 0, 0));
-            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_B), 0, 1));
-            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_X), 1, 0));
-            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_A), 1, 1));
+            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_X), 0, 0));
+            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_Y), 0, 1));
+            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_A), 1, 0));
+            inputList.push_back(new JoystickButton(p, RDID(JOYPAD_B), 1, 1));
             inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_LEFT),  RDID(ANALOG_X), 0, 0));
             inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_LEFT),  RDID(ANALOG_Y), 0, 1));
             inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_RIGHT), RDID(ANALOG_X), 1, 0));

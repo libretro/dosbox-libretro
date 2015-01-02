@@ -23,18 +23,22 @@
 #include "libretro.h"
 #include "retrodos.h"
 
+#include "setup.h"
 #include "dosbox.h"
 #include "mapper.h"
 #include "control.h"
 #include "pic.h"
 
-//
+
+char cycles[]="auto";
 
 retro_video_refresh_t video_cb;
 retro_audio_sample_batch_t audio_batch_cb;
 retro_input_poll_t poll_cb;
 retro_input_state_t input_cb;
 retro_environment_t environ_cb;
+
+retro_log_printf_t log_cb;
 
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { }
@@ -48,7 +52,27 @@ void retro_set_environment(retro_environment_t cb)
 
     bool allow_no_game = true;
     environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
+    
+     static const struct retro_variable vars[] = {
+        { "dosbox_cpu_cycles", "CPU Cycles; auto|max" },
+        { NULL, NULL },
+    };
+
+    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);	
+
 }
+
+void check_variables(void)
+{
+    struct retro_variable var = {0};
+    var.key = "dosbox_cpu_cycles";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        sprintf(cycles,"%s",var.value);
+    }
+}
+
 
 // input_poll and input_state are in libretro/mapper.cpp
 
@@ -109,6 +133,8 @@ extern Bit8u RDOSGFXbuffer[1024*768*4];
 extern Bitu RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch;
 extern unsigned RDOSGFXcolorMode;
 extern void* RDOSGFXhaveFrame;
+
+extern Config * control;
 
 static void retro_leave_thread(Bitu)
 {
@@ -219,6 +245,17 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 
 void retro_init (void)
 {
+
+    // initialize logger interface
+    struct retro_log_callback log;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
+        log_cb = log.log;
+    else
+        log_cb = NULL;
+
+    if (log_cb)
+        log_cb(RETRO_LOG_INFO, "Logger interface initialized... \n");    
+
     RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_XRGB8888;
     environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &RDOSGFXcolorMode);
 
@@ -309,6 +346,18 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 
 void retro_run (void)
 {
+
+    bool updated = false;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
+    {
+        //ToDo: make sure the values are updated only when changed
+        check_variables();
+        Section* cpu = control->GetSection("cpu");
+        Prop_multival_remain* prop = ((Section_prop*)cpu)->Get_multivalremain("cycles");
+        prop->SetValue(cycles);
+    }
+
+
     if(emuThread)
     {       
         // Keys
