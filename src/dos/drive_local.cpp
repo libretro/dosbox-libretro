@@ -294,7 +294,7 @@ again:
 
 	find_size=(Bit32u) stat_block.st_size;
 	struct tm *time;
-	if((time=localtime(&stat_block.st_mtime))!=0){
+	if((time=localtime((const time_t*)&stat_block.st_mtime))!=0){
 		find_date=DOS_PackDate((Bit16u)(time->tm_year+1900),(Bit16u)(time->tm_mon+1),(Bit16u)time->tm_mday);
 		find_time=DOS_PackTime((Bit16u)time->tm_hour,(Bit16u)time->tm_min,(Bit16u)time->tm_sec);
 	} else {
@@ -412,7 +412,7 @@ bool localDrive::FileStat(const char* name, FileStat_Block * const stat_block) {
 	if(stat(newname,&temp_stat)!=0) return false;
 	/* Convert the stat to a FileStat */
 	struct tm *time;
-	if((time=localtime(&temp_stat.st_mtime))!=0) {
+	if((time=localtime((const time_t*)&temp_stat.st_mtime))!=0) {
 		stat_block->time=DOS_PackTime((Bit16u)time->tm_hour,(Bit16u)time->tm_min,(Bit16u)time->tm_sec);
 		stat_block->date=DOS_PackDate((Bit16u)(time->tm_year+1900),(Bit16u)(time->tm_mon+1),(Bit16u)time->tm_mday);
 	} else {
@@ -551,7 +551,7 @@ bool localFile::UpdateDateTimeFromHost(void) {
 	struct stat temp_stat;
 	fstat(fileno(fhandle),&temp_stat);
 	struct tm * ltime;
-	if((ltime=localtime(&temp_stat.st_mtime))!=0) {
+	if((ltime=localtime((const time_t*)&temp_stat.st_mtime))!=0) {
 		time=DOS_PackTime((Bit16u)ltime->tm_hour,(Bit16u)ltime->tm_min,(Bit16u)ltime->tm_sec);
 		date=DOS_PackDate((Bit16u)(ltime->tm_year+1900),(Bit16u)(ltime->tm_mon+1),(Bit16u)ltime->tm_mday);
 	} else {
