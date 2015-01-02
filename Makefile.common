@@ -1,6 +1,6 @@
 INCFLAGS += -I$(CORE_DIR)/libco -I$(CORE_DIR)/src -I$(CORE_DIR)/include
 
-SOURCES_CXX += \
+SOURCES_CXX := \
 	$(CORE_DIR)/src/cpu/callback.cpp \
 	$(CORE_DIR)/src/cpu/cpu.cpp \
 	$(CORE_DIR)/src/cpu/flags.cpp \
@@ -109,7 +109,7 @@ SOURCES_CXX += \
 	$(CORE_DIR)/libretro/mapper.cpp \
 	$(CORE_DIR)/libretro/mixer-retro.cpp
 
-SOURCES_C += $(CORE_DIR)/libco/libco.c
+SOURCES_C := $(CORE_DIR)/libco/libco.c
 
 ifeq ($(WITH_DYNAREC), arm)
 	#COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="ARMV7LE"
