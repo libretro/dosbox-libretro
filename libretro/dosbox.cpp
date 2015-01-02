@@ -42,6 +42,9 @@
 #include "ints/int10.h"
 #include "render.h"
 #include "pci_bus.h"
+#include "libretro.h"
+
+extern retro_log_printf_t log_cb;
 
 Config * control;
 MachineType machine;
