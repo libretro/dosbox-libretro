@@ -1,4 +1,4 @@
-INCFLAGS += -I$(CORE_DIR)/libco -I$(CORE_DIR)/src -iquote $(CORE_DIR)/include
+INCFLAGS += -I$(CORE_DIR)/libco -I$(CORE_DIR)/src -I$(CORE_DIR)/include
 
 SOURCES_CXX += \
 	$(CORE_DIR)/src/cpu/callback.cpp \
