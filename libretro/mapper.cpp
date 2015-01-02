@@ -18,6 +18,8 @@ struct Processable;
 static std::vector<Processable*> inputList;
 
 extern retro_log_printf_t log_cb;
+extern bool p1_is_gamepad;
+extern bool p2_is_gamepad;
 
 JoystickType p1_joystick_type;
 JoystickType p2_joystick_type;
@@ -160,13 +162,54 @@ struct JoystickAxis : public Processable
     void process()
     {
         const float value = (float)input_cb(retroPort, RDEV(ANALOG), retroSide, retroAxis);        
-    
+
         if(dosboxAxis == 0) JOYSTICK_Move_X(dosboxPort, value / 32768.0f);
         else                JOYSTICK_Move_Y(dosboxPort, value / 32768.0f);
     }
 };
 
-//////
+struct JoystickHat : public Processable
+{
+    unsigned retroPort;
+    unsigned retroID;
+    unsigned dosboxPort;
+    unsigned dosboxAxis;    
+    
+    InputItem<JoystickHat> item;
+    
+    JoystickHat(unsigned rP, unsigned rID, unsigned dP, unsigned dA) :
+        retroPort(rP), retroID(rID), dosboxPort(dP), dosboxAxis(dA) { }
+    
+    void process()       { item.process(*this, input_cb(retroPort, RDEV(JOYPAD), 0, retroID)); }
+    void press() const   
+    {   
+        if(dosboxAxis==0)
+        {
+        }
+        else
+        {  
+            if(retroID==4);
+            {   
+                JOYSTICK_Move_Y(dosboxPort, -32767.0f/32768.0f); 
+            }
+        }
+        
+    }
+    void release() const 
+    {
+        if(dosboxAxis==0)
+        {
+        }
+        else
+        {  
+            if(retroID==4);
+            {   
+                JOYSTICK_Move_Y(dosboxPort, 0/32768.0f); 
+            }
+        }
+    }
+};
+
 
 void keyboard_event(bool down, unsigned keycode, uint32_t character, uint16_t key_modifiers)
 {
@@ -212,8 +255,18 @@ void MAPPER_Init(void)
             {
                 inputList.push_back(new JoystickButton(0, RDID(JOYPAD_Y), 0, 0));
                 inputList.push_back(new JoystickButton(0, RDID(JOYPAD_B), 0, 1));
-                inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 0, 0));
-                inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 0, 1));
+                if(p1_is_gamepad)
+                {                
+                    inputList.push_back(new JoystickHat(0, RDID(JOYPAD_LEFT), 0, 0));
+                    inputList.push_back(new JoystickHat(0, RDID(JOYPAD_RIGHT), 0, 1));
+                    inputList.push_back(new JoystickHat(0, RDID(JOYPAD_UP), 0, 1));
+                    inputList.push_back(new JoystickHat(0, RDID(JOYPAD_DOWN), 0, 1));
+                }
+                else
+                {
+                    inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 0, 0));
+                    inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 0, 1));
+                }
                 JOYSTICK_Enable(0, true);
             }
             if(p2_joystick_type != JOY_NONE)
