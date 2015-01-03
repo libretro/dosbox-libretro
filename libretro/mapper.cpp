@@ -281,8 +281,18 @@ void MAPPER_Init(void)
             {
                 inputList.push_back(new JoystickButton(1, RDID(JOYPAD_Y), 1, 0));
                 inputList.push_back(new JoystickButton(1, RDID(JOYPAD_B), 1, 1));
-                inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 1, 0));
-                inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 1, 1));
+                if(p2_is_gamepad)
+                {                
+                    inputList.push_back(new JoystickHat(1, RDID(JOYPAD_LEFT), 1, 0));
+                    inputList.push_back(new JoystickHat(1, RDID(JOYPAD_RIGHT), 1, 0));
+                    inputList.push_back(new JoystickHat(1, RDID(JOYPAD_UP), 1, 1));
+                    inputList.push_back(new JoystickHat(1, RDID(JOYPAD_DOWN), 1, 1));
+                }
+                else
+                {
+                    inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 0, 0));
+                    inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 0, 1));
+                }
                 JOYSTICK_Enable(1, true);
             }
             break;
