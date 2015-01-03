@@ -93,33 +93,21 @@ void retro_set_environment(retro_environment_t cb)
 
     const char *system_dir = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) && system_dir)
-    {
-        // if defined, use the system directory
         retro_system_directory=system_dir;
-    }
     if (log_cb)
         log_cb(RETRO_LOG_INFO, "SYSTEM_DIRECTORY: %s\n", retro_system_directory.c_str());
     
     const char *save_dir = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir) && save_dir)
-    {
-        // If save directory is defined use it, otherwise use system directory
         retro_save_directory = save_dir;
-    }
     else
-    {
-        // make retro_save_directory the same in case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY is not implemented by the frontend
         retro_save_directory=retro_system_directory;
-    }
     if (log_cb)
         log_cb(RETRO_LOG_INFO, "SAVE_DIRECTORY: %s\n", retro_save_directory.c_str());    
     
     const char *content_dir = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY, &content_dir) && content_dir)
-    {
-        // if defined, use the system directory
         retro_content_directory=content_dir;
-    }
     if (log_cb)
         log_cb(RETRO_LOG_INFO, "CONTENT_DIRECTORY: %s\n", retro_content_directory.c_str());
         
