@@ -41,6 +41,10 @@ extern Config * control;
 extern JoystickType p1_joystick_type;
 extern JoystickType p2_joystick_type;
 
+std::string retro_base_directory;
+std::string retro_base_name;
+std::string retro_save_directory;
+
 bool p1_is_gamepad = false;
 bool p2_is_gamepad = false;
 
@@ -64,7 +68,7 @@ void retro_set_environment(retro_environment_t cb)
 {
     environ_cb = cb;
 
-    bool allow_no_game = true;
+    bool allow_no_game = false;
     environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
     
      static const struct retro_variable vars[] = {
@@ -86,9 +90,37 @@ void retro_set_environment(retro_environment_t cb)
         { pads, 4 },
         { 0 },
     };
-
     environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 
+    const char *dir = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir) && dir)
+    {
+        retro_base_directory = dir;
+        size_t last = retro_base_directory.find_last_not_of("/\\");
+        if (last != std::string::npos)
+            last++;
+        retro_base_directory = retro_base_directory.substr(0, last);
+    }
+    else
+    {
+        if (log_cb)
+            log_cb(RETRO_LOG_ERROR, "System directory is not defined.\n");
+    }
+    if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &dir) && dir)
+    {
+        retro_save_directory = *dir ? dir : retro_base_directory;
+        size_t last = retro_save_directory.find_last_not_of("/\\");
+        if (last != std::string::npos)
+            last++;
+        retro_save_directory = retro_save_directory.substr(0, last);
+    }
+    else
+    {
+        if (log_cb)
+            log_cb(RETRO_LOG_WARN, "Save directory is not defined. Fallback on using SYSTEM directory ...\n");
+        retro_save_directory = retro_base_directory;
+    }     
+    
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
