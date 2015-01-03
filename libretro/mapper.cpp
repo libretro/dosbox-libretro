@@ -185,13 +185,17 @@ struct JoystickHat : public Processable
     {   
         if(dosboxAxis==0)
         {
+            if(retroID==RETRO_DEVICE_ID_JOYPAD_LEFT)
+                JOYSTICK_Move_X(dosboxPort, -32767.0f/32768.0f); 
+            if(retroID==RETRO_DEVICE_ID_JOYPAD_RIGHT)
+                JOYSTICK_Move_X(dosboxPort, 32767.0f/32768.0f);         
         }
         else
         {  
-            if(retroID==4);
-            {   
+            if(retroID==RETRO_DEVICE_ID_JOYPAD_UP)
                 JOYSTICK_Move_Y(dosboxPort, -32767.0f/32768.0f); 
-            }
+            if(retroID==RETRO_DEVICE_ID_JOYPAD_DOWN)
+                JOYSTICK_Move_Y(dosboxPort, 32767.0f/32768.0f);                 
         }
         
     }
@@ -199,13 +203,17 @@ struct JoystickHat : public Processable
     {
         if(dosboxAxis==0)
         {
+            if(retroID==RETRO_DEVICE_ID_JOYPAD_LEFT)
+                JOYSTICK_Move_X(dosboxPort, -0.0f/32768.0f); 
+            if(retroID==RETRO_DEVICE_ID_JOYPAD_RIGHT)
+                JOYSTICK_Move_X(dosboxPort, 0.0f/32768.0f);            
         }
         else
         {  
-            if(retroID==4);
-            {   
-                JOYSTICK_Move_Y(dosboxPort, 0/32768.0f); 
-            }
+            if(retroID==RETRO_DEVICE_ID_JOYPAD_UP)
+                JOYSTICK_Move_Y(dosboxPort, -0.0f/32768.0f); 
+            if(retroID==RETRO_DEVICE_ID_JOYPAD_DOWN)
+                JOYSTICK_Move_Y(dosboxPort, 0.0f/32768.0f);              
         }
     }
 };
@@ -258,7 +266,7 @@ void MAPPER_Init(void)
                 if(p1_is_gamepad)
                 {                
                     inputList.push_back(new JoystickHat(0, RDID(JOYPAD_LEFT), 0, 0));
-                    inputList.push_back(new JoystickHat(0, RDID(JOYPAD_RIGHT), 0, 1));
+                    inputList.push_back(new JoystickHat(0, RDID(JOYPAD_RIGHT), 0, 0));
                     inputList.push_back(new JoystickHat(0, RDID(JOYPAD_UP), 0, 1));
                     inputList.push_back(new JoystickHat(0, RDID(JOYPAD_DOWN), 0, 1));
                 }
