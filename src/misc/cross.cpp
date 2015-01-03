@@ -16,7 +16,7 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-
+#include "../../libretro/libretro.h"
 #include "dosbox.h"
 #include "cross.h"
 #include "support.h"
@@ -35,7 +35,9 @@
 #include <pwd.h>
 #endif
 
-#ifdef WIN32
+extern std::string retro_system_directory;
+
+#if defined(WIN32) && !defined(__LIBRETRO__)
 static void W32_ConfDir(std::string& in,bool create) {
 	int c = create?1:0;
 	char result[MAX_PATH] = { 0 };
@@ -55,9 +57,13 @@ static void W32_ConfDir(std::string& in,bool create) {
 #endif
 
 void Cross::GetPlatformConfigDir(std::string& in) {
-#ifdef WIN32
+#if defined(WIN32) && !defined(__LIBRETRO__)
 	W32_ConfDir(in,false);
 	in += "\\DOSBox";
+#elif defined(WIN32) && defined(__LIBRETRO__)
+	in += retro_system_directory + "\\DOSBox";
+#elif defined(__LIBRETRO__)
+	in += retro_system_directory + "/DOSBox";
 #elif defined(MACOSX)
 	in = "~/Library/Preferences";
 	ResolveHomedir(in);
@@ -69,8 +75,10 @@ void Cross::GetPlatformConfigDir(std::string& in) {
 }
 
 void Cross::GetPlatformConfigName(std::string& in) {
-#ifdef WIN32
+#if defined(WIN32) && !defined(__LIBRETRO__)
 #define DEFAULT_CONFIG_FILE "dosbox-" VERSION ".conf"
+#elif __LIBRETRO__
+#define DEFAULT_CONFIG_FILE "dosbox-libretro.conf"
 #elif defined(MACOSX)
 #define DEFAULT_CONFIG_FILE "DOSBox " VERSION " Preferences"
 #else /*linux freebsd*/
@@ -80,10 +88,14 @@ void Cross::GetPlatformConfigName(std::string& in) {
 }
 
 void Cross::CreatePlatformConfigDir(std::string& in) {
-#ifdef WIN32
+#if defined(WIN32) && !defined(__LIBRETRO__)
 	W32_ConfDir(in,true);
 	in += "\\DOSBox";
 	mkdir(in.c_str());
+#elif defined(WIN32) && defined(__LIBRETRO__)
+	in += retro_system_directory + "\\DOSBox";
+#elif defined(__LIBRETRO__)
+	in += retro_system_directory + "/DOSBox";
 #elif defined(MACOSX)
 	in = "~/Library/Preferences/";
 	ResolveHomedir(in);
@@ -123,7 +135,7 @@ void Cross::CreateDir(std::string const& in) {
 
 bool Cross::IsPathAbsolute(std::string const& in) {
 	// Absolute paths
-#if defined (WIN32) || defined(OS2)
+#if defined (WIN32) || defined(OS2) && !defined __LIBRETRO__
 	// drive letter
 	if (in.size() > 2 && in[1] == ':' ) return true;
 	// UNC path
