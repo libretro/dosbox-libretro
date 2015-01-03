@@ -35,15 +35,16 @@
 #define RETRO_DEVICE_2BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0)
 #define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
 
+
 char cycles[]="auto";
 extern Config * control;
 
 extern JoystickType p1_joystick_type;
 extern JoystickType p2_joystick_type;
 
-std::string retro_base_directory;
-std::string retro_base_name;
 std::string retro_save_directory;
+std::string retro_system_directory;
+std::string retro_content_directory;
 
 bool p1_is_gamepad = false;
 bool p2_is_gamepad = false;
@@ -61,8 +62,6 @@ void retro_set_audio_sample(retro_audio_sample_t cb) { }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
 void retro_set_input_poll(retro_input_poll_t cb) { poll_cb = cb; }
 void retro_set_input_state(retro_input_state_t cb) { input_cb = cb; }
-
-
 
 void retro_set_environment(retro_environment_t cb)
 {
@@ -92,34 +91,38 @@ void retro_set_environment(retro_environment_t cb)
     };
     environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 
-    const char *dir = NULL;
-    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir) && dir)
+    const char *system_dir = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) && system_dir)
     {
-        retro_base_directory = dir;
-        size_t last = retro_base_directory.find_last_not_of("/\\");
-        if (last != std::string::npos)
-            last++;
-        retro_base_directory = retro_base_directory.substr(0, last);
+        // if defined, use the system directory
+        retro_system_directory=system_dir;
+    }
+    if (log_cb)
+        log_cb(RETRO_LOG_INFO, "SYSTEM_DIRECTORY: %s\n", retro_system_directory.c_str());
+    
+    const char *save_dir = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir) && save_dir)
+    {
+        // If save directory is defined use it, otherwise use system directory
+        retro_save_directory = save_dir;
     }
     else
     {
-        if (log_cb)
-            log_cb(RETRO_LOG_ERROR, "System directory is not defined.\n");
+        // make retro_save_directory the same in case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY is not implemented by the frontend
+        retro_save_directory=retro_system_directory;
     }
-    if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &dir) && dir)
+    if (log_cb)
+        log_cb(RETRO_LOG_INFO, "SAVE_DIRECTORY: %s\n", retro_save_directory.c_str());    
+    
+    const char *content_dir = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY, &content_dir) && content_dir)
     {
-        retro_save_directory = *dir ? dir : retro_base_directory;
-        size_t last = retro_save_directory.find_last_not_of("/\\");
-        if (last != std::string::npos)
-            last++;
-        retro_save_directory = retro_save_directory.substr(0, last);
+        // if defined, use the system directory
+        retro_content_directory=content_dir;
     }
-    else
-    {
-        if (log_cb)
-            log_cb(RETRO_LOG_WARN, "Save directory is not defined. Fallback on using SYSTEM directory ...\n");
-        retro_save_directory = retro_base_directory;
-    }     
+    if (log_cb)
+        log_cb(RETRO_LOG_INFO, "CONTENT_DIRECTORY: %s\n", retro_content_directory.c_str());
+        
     
 }
 
@@ -249,8 +252,9 @@ static void retro_start_emulator(void)
 	DOSBOX_Init();
 
     /* Load config */
+    log_cb(RETRO_LOG_INFO,"Config path: %s\n",configPath.c_str());
     if(!configPath.empty())
-    {
+    {        
         control->ParseConfigFile(configPath.c_str());
     }
 	
@@ -379,6 +383,13 @@ void retro_deinit(void)
 
 bool retro_load_game(const struct retro_game_info *game)
 {
+char slash;
+    #ifdef _WIN32
+    slash = '\\';
+    #else
+    slash = '/';
+    #endif
+
     if(emuThread)
     {
         if(game)
@@ -401,9 +412,7 @@ bool retro_load_game(const struct retro_game_info *game)
                 else if(configPath.empty())
                 {
                     const char* systemDir = 0;
-                    const bool gotSysDir = environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &systemDir);
-            
-                    configPath = normalizePath(std::string(gotSysDir ? systemDir : ".") + "/dosbox.conf");
+                    configPath = normalizePath(retro_system_directory + slash + "DOSbox" + slash + "dosbox-libretro.conf");
                 }
             }
         }
