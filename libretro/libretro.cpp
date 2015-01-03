@@ -220,10 +220,10 @@ static void retro_leave_thread(Bitu)
     co_switch(mainThread);
     
     // If the frontend said to exit, throw an int to be caught in retro_start_emulator.
-    if(FRONTENDwantsExit)
+    /*if(FRONTENDwantsExit)
     {
         throw 1;
-    }
+    }*/
     
     // Schedule the next frontend interrupt 
     PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
