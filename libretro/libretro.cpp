@@ -35,11 +35,16 @@
 #define RETRO_DEVICE_2BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0)
 #define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
 
+
 char cycles[]="auto";
 extern Config * control;
 
 extern JoystickType p1_joystick_type;
 extern JoystickType p2_joystick_type;
+
+std::string retro_save_directory;
+std::string retro_system_directory;
+std::string retro_content_directory;
 
 bool p1_is_gamepad = false;
 bool p2_is_gamepad = false;
@@ -58,13 +63,11 @@ void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_c
 void retro_set_input_poll(retro_input_poll_t cb) { poll_cb = cb; }
 void retro_set_input_state(retro_input_state_t cb) { input_cb = cb; }
 
-
-
 void retro_set_environment(retro_environment_t cb)
 {
     environ_cb = cb;
 
-    bool allow_no_game = true;
+    bool allow_no_game = false;
     environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
     
      static const struct retro_variable vars[] = {
@@ -86,9 +89,29 @@ void retro_set_environment(retro_environment_t cb)
         { pads, 4 },
         { 0 },
     };
-
     environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 
+    const char *system_dir = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) && system_dir)
+        retro_system_directory=system_dir;
+    if (log_cb)
+        log_cb(RETRO_LOG_INFO, "SYSTEM_DIRECTORY: %s\n", retro_system_directory.c_str());
+    
+    const char *save_dir = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir) && save_dir)
+        retro_save_directory = save_dir;
+    else
+        retro_save_directory=retro_system_directory;
+    if (log_cb)
+        log_cb(RETRO_LOG_INFO, "SAVE_DIRECTORY: %s\n", retro_save_directory.c_str());    
+    
+    const char *content_dir = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY, &content_dir) && content_dir)
+        retro_content_directory=content_dir;
+    if (log_cb)
+        log_cb(RETRO_LOG_INFO, "CONTENT_DIRECTORY: %s\n", retro_content_directory.c_str());
+        
+    
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
@@ -197,10 +220,10 @@ static void retro_leave_thread(Bitu)
     co_switch(mainThread);
     
     // If the frontend said to exit, throw an int to be caught in retro_start_emulator.
-    if(FRONTENDwantsExit)
+    /*if(FRONTENDwantsExit)
     {
         throw 1;
-    }
+    }*/
     
     // Schedule the next frontend interrupt 
     PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
@@ -217,8 +240,9 @@ static void retro_start_emulator(void)
 	DOSBOX_Init();
 
     /* Load config */
+    log_cb(RETRO_LOG_INFO,"Config path: %s\n",configPath.c_str());
     if(!configPath.empty())
-    {
+    {        
         control->ParseConfigFile(configPath.c_str());
     }
 	
@@ -347,6 +371,13 @@ void retro_deinit(void)
 
 bool retro_load_game(const struct retro_game_info *game)
 {
+char slash;
+    #ifdef _WIN32
+    slash = '\\';
+    #else
+    slash = '/';
+    #endif
+
     if(emuThread)
     {
         if(game)
@@ -369,9 +400,7 @@ bool retro_load_game(const struct retro_game_info *game)
                 else if(configPath.empty())
                 {
                     const char* systemDir = 0;
-                    const bool gotSysDir = environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &systemDir);
-            
-                    configPath = normalizePath(std::string(gotSysDir ? systemDir : ".") + "/dosbox.conf");
+                    configPath = normalizePath(retro_system_directory + slash + "DOSbox" + slash + "dosbox-libretro.conf");
                 }
             }
         }
