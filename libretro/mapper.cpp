@@ -305,10 +305,20 @@ void MAPPER_Init(void)
             inputList.push_back(new JoystickButton(p, RDID(JOYPAD_X), 0, 1));
             inputList.push_back(new JoystickButton(p, RDID(JOYPAD_B), 1, 0));
             inputList.push_back(new JoystickButton(p, RDID(JOYPAD_A), 1, 1));
-            inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_LEFT),  RDID(ANALOG_X), 0, 0));
-            inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_LEFT),  RDID(ANALOG_Y), 0, 1));
-            inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_RIGHT), RDID(ANALOG_X), 1, 0));
-            inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_RIGHT), RDID(ANALOG_Y), 1, 1));
+            if(p1_is_gamepad || p2_is_gamepad)
+            {
+                inputList.push_back(new JoystickHat(p, RDID(JOYPAD_LEFT), p, 0));
+                inputList.push_back(new JoystickHat(p, RDID(JOYPAD_RIGHT), p, 0));
+                inputList.push_back(new JoystickHat(p, RDID(JOYPAD_UP), p, 1));
+                inputList.push_back(new JoystickHat(p, RDID(JOYPAD_DOWN), p, 1));            
+            }
+            else
+            {
+                inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_LEFT),  RDID(ANALOG_X), 0, 0));
+                inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_LEFT),  RDID(ANALOG_Y), 0, 1));
+                inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_RIGHT), RDID(ANALOG_X), 1, 0));
+                inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_RIGHT), RDID(ANALOG_Y), 1, 1));
+            }
             JOYSTICK_Enable(p, true);
             JOYSTICK_Enable(!p, true);
             break;
