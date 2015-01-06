@@ -270,19 +270,25 @@ void DOS_Shell::ParseLine(char * line) {
 
 void DOS_Shell::RunInternal(void)
 {
-	char input_line[CMD_MAXLINE] = {0};
-	while(bf && bf->ReadLine(input_line)) 
-	{
-		if (echo) {
-				if (input_line[0] != '@') {
-					ShowPrompt();
-					WriteOut_NoParsing(input_line);
-					WriteOut_NoParsing("\n");
-				};
-			};
-		ParseLine(input_line);
-	}
-	return;
+   char input_line[CMD_MAXLINE] = {0};
+   while (bf)
+   {
+      if (bf->ReadLine(input_line))
+      {
+         if (echo)
+         {
+            if (input_line[0] != '@')
+            {
+               ShowPrompt();
+               WriteOut_NoParsing(input_line);
+               WriteOut_NoParsing("\n");
+            }
+         }
+         ParseLine(input_line);
+         if (echo)
+            WriteOut_NoParsing("\n");
+      }
+   }
 }
 
 void DOS_Shell::Run(void) {
