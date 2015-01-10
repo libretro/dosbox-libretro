@@ -84,7 +84,7 @@ void retro_set_environment(retro_environment_t cb)
     
      static const struct retro_variable vars[] = {
         { "dosbox_options_on_boot", "Enable core options on boot; enabled|disabled" },
-        { "dosbox_cpu_cycles_auto", "CPU Cycles auto; enabled|disabled" },
+        /*{ "dosbox_cpu_cycles_auto", "CPU Cycles auto; enabled|disabled" },*/
         { "dosbox_cpu_cycles_0", "CPU Cycles coarser; 0|100000|200000|300000|400000|500000|600000|700000|800000|900000" },
         { "dosbox_cpu_cycles_1", "CPU Cycles coarse; 0|10000|20000|30000|40000|50000|60000|70000|80000|90000" },
         { "dosbox_cpu_cycles_2", "CPU Cycles fine; 1000|2000|3000|4000|5000|6000|7000|8000|9000|0" },
@@ -210,7 +210,7 @@ void check_variables(void)
     }
 
     //not working will keep this disabled for the time being
-    var.key = "dosbox_cpu_cycles_auto";
+    /*var.key = "dosbox_cpu_cycles_auto";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
@@ -227,7 +227,7 @@ void check_variables(void)
             CPU_CycleLimit = -1;
         }
         
-    }
+    }*/
 
 }
 
