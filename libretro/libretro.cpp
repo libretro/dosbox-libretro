@@ -36,9 +36,9 @@
 #define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
 
 
-char cycles_1[] = "0";
-char cycles_2[] = "1000";
-char cycles_3[] = "0";
+int cycles_1 = 0;
+int cycles_2 = 1000;
+int cycles_3 = 0;
 bool cycles_flag = false;
 
 bool options_boot = true;
@@ -81,7 +81,7 @@ void retro_set_environment(retro_environment_t cb)
         { "dosbox_options_on_boot", "Enable core options on boot; enabled|disabled" },
         { "dosbox_cpu_cycles_1", "CPU Cycles coarse; 0|10000|20000|30000|40000|50000|60000|70000|80000|90000" },
         { "dosbox_cpu_cycles_2", "CPU Cycles fine; 1000|2000|3000|4000|5000|6000|7000|8000|9000|0" },
-        { "dosbox_cpu_cycles_3", "CPU Cycles finer; 100|200|300|400|500|600|700|800|900|0" },
+        { "dosbox_cpu_cycles_3", "CPU Cycles finer; 0|100|200|300|400|500|600|700|800|900" },
         { NULL, NULL },
     };
 
@@ -158,7 +158,7 @@ void check_variables(void)
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
-        sprintf(cycles_1,"%s",var.value);
+        cycles_1 = atoi(var.value);
         cycles_flag = true;
         
     }
@@ -167,7 +167,7 @@ void check_variables(void)
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
-        sprintf(cycles_2,"%s",var.value);
+        cycles_2 = atoi(var.value);
         cycles_flag = true;
         
     }    
@@ -176,7 +176,7 @@ void check_variables(void)
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
-        sprintf(cycles_3,"%s",var.value);
+        cycles_3 = atoi(var.value);
         cycles_flag = true;
         
     }    
@@ -472,7 +472,7 @@ void update_cpu_cycles()
 {
     if(cycles_flag)
     {
-        int cycles = atoi(cycles_1) + atoi(cycles_2) + atoi(cycles_3);
+        int cycles = cycles_1 + cycles_2 + cycles_3;
         CPU_CycleMax=cycles;
         
         //update dosbox config value in case the user wants to export a config file
