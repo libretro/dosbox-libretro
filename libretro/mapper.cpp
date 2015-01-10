@@ -186,16 +186,16 @@ struct JoystickHat : public Processable
         if(dosboxAxis==0)
         {
             if(retroID==RETRO_DEVICE_ID_JOYPAD_LEFT)
-                JOYSTICK_Move_X(dosboxPort, -32767.0f/32768.0f); 
+                JOYSTICK_Move_X(dosboxPort, -0.70f); 
             if(retroID==RETRO_DEVICE_ID_JOYPAD_RIGHT)
-                JOYSTICK_Move_X(dosboxPort, 32767.0f/32768.0f);         
+                JOYSTICK_Move_X(dosboxPort, 0.70f);         
         }
         else
         {  
             if(retroID==RETRO_DEVICE_ID_JOYPAD_UP)
-                JOYSTICK_Move_Y(dosboxPort, -32767.0f/32768.0f); 
+                JOYSTICK_Move_Y(dosboxPort, -0.70f); 
             if(retroID==RETRO_DEVICE_ID_JOYPAD_DOWN)
-                JOYSTICK_Move_Y(dosboxPort, 32767.0f/32768.0f);                 
+                JOYSTICK_Move_Y(dosboxPort, 0.70f);                 
         }
         
     }

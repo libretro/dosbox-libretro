@@ -36,8 +36,15 @@
 #define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
 
 
-char cycles[]="auto";
+int cycles_1 = 0;
+int cycles_2 = 1000;
+int cycles_3 = 0;
+bool cycles_flag = false;
+
+bool options_boot = true;
+
 extern Config * control;
+extern Bit32s CPU_CycleMax;
 
 extern JoystickType p1_joystick_type;
 extern JoystickType p2_joystick_type;
@@ -71,7 +78,10 @@ void retro_set_environment(retro_environment_t cb)
     environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
     
      static const struct retro_variable vars[] = {
-        { "dosbox_cpu_cycles", "CPU Cycles; auto|max" },
+        { "dosbox_options_on_boot", "Enable core options on boot; enabled|disabled" },
+        { "dosbox_cpu_cycles_1", "CPU Cycles coarse; 0|10000|20000|30000|40000|50000|60000|70000|80000|90000" },
+        { "dosbox_cpu_cycles_2", "CPU Cycles fine; 1000|2000|3000|4000|5000|6000|7000|8000|9000|0" },
+        { "dosbox_cpu_cycles_3", "CPU Cycles finer; 0|100|200|300|400|500|600|700|800|900" },
         { NULL, NULL },
     };
 
@@ -144,12 +154,43 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 void check_variables(void)
 {
     struct retro_variable var = {0};
-    var.key = "dosbox_cpu_cycles";
+    var.key = "dosbox_cpu_cycles_1";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
-        sprintf(cycles,"%s",var.value);
+        cycles_1 = atoi(var.value);
+        cycles_flag = true;
+        
     }
+    
+    var.key = "dosbox_cpu_cycles_2";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        cycles_2 = atoi(var.value);
+        cycles_flag = true;
+        
+    }    
+
+    var.key = "dosbox_cpu_cycles_3";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        cycles_3 = atoi(var.value);
+        cycles_flag = true;
+        
+    }    
+    
+    var.key = "dosbox_options_on_boot";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        if (strcmp(var.value, "enabled") == 0)
+            options_boot = true;
+        if (strcmp(var.value, "disabled") == 0)
+            options_boot = false;
+        
+    }        
 }
 
 
@@ -230,14 +271,15 @@ static void retro_leave_thread(Bitu)
 }
 
 static void retro_start_emulator(void)
-{
-    const char* const argv[2] = {"dosbox", loadPath.c_str()};
-	CommandLine com_line(loadPath.empty() ? 1 : 2, argv);
-	Config myconf(&com_line);
-	control=&myconf;
+{  
 
-	/* Init the configuration system and add default values */
-	DOSBOX_Init();
+    const char* const argv[2] = {"dosbox", loadPath.c_str()};
+    CommandLine com_line(loadPath.empty() ? 1 : 2, argv);
+    Config myconf(&com_line);
+    control=&myconf;
+
+    /* Init the configuration system and add default values */
+    DOSBOX_Init();
 
     /* Load config */
     log_cb(RETRO_LOG_INFO,"Config path: %s\n",configPath.c_str());
@@ -245,13 +287,12 @@ static void retro_start_emulator(void)
     {        
         control->ParseConfigFile(configPath.c_str());
     }
-	
     /* Init all the sections */
     control->Init();
 
     /* Init the keyMapper */
     MAPPER_Init();
-
+   
     /* Init done, go back to the main thread */
     co_switch(mainThread);
 
@@ -427,19 +468,44 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
     return false;
 }
 
+void update_cpu_cycles()
+{
+    if(cycles_flag)
+    {
+        int cycles = cycles_1 + cycles_2 + cycles_3;
+        CPU_CycleMax=cycles;
+        
+        //update dosbox config value in case the user wants to export a config file
+        char cycles_val[16];
+        sprintf(cycles_val,"%d",cycles);
+        Section* cpu = control->GetSection("cpu");
+        Prop_multival_remain* prop = ((Section_prop*)cpu)->Get_multivalremain("cycles");
+        prop->SetValue(cycles_val);
+    }
+    
+    cycles_flag = false;
+
+}
+
+int frame = 0;
+
 void retro_run (void)
 {
-
-
+    if(frame==0)
+    {
+        check_variables();        
+        if(options_boot)
+        {
+            cycles_flag = true;
+            update_cpu_cycles();
+        }
+    }
+    
     bool updated = false;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
     {
-        //ToDo: make sure the values are updated only when changed
         check_variables();
-        Section* cpu = control->GetSection("cpu");
-        Prop_multival_remain* prop = ((Section_prop*)cpu)->Get_multivalremain("cycles");
-        prop->SetValue(cycles);
-
+        update_cpu_cycles();
     }
 
 
@@ -462,6 +528,8 @@ void retro_run (void)
     {
         RETROLOG("retro_run called when there is no emulator thread.");
     }
+    
+    frame++;
 }
 
 // Stubs
