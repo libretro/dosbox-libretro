@@ -36,6 +36,7 @@
 #define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
 
 
+int cycles_0 = 0;
 int cycles_1 = 0;
 int cycles_2 = 1000;
 int cycles_3 = 0;
@@ -45,6 +46,10 @@ bool options_boot = true;
 
 extern Config * control;
 extern Bit32s CPU_CycleMax;
+extern Bit32s CPU_CycleLimit;
+extern bool CPU_CycleAutoAdjust;
+extern bool CPU_SkipCycleAutoAdjust;
+
 
 extern JoystickType p1_joystick_type;
 extern JoystickType p2_joystick_type;
@@ -79,6 +84,8 @@ void retro_set_environment(retro_environment_t cb)
     
      static const struct retro_variable vars[] = {
         { "dosbox_options_on_boot", "Enable core options on boot; enabled|disabled" },
+        /*{ "dosbox_cpu_cycles_auto", "CPU Cycles auto; enabled|disabled" },*/
+        { "dosbox_cpu_cycles_0", "CPU Cycles coarser; 0|100000|200000|300000|400000|500000|600000|700000|800000|900000" },
         { "dosbox_cpu_cycles_1", "CPU Cycles coarse; 0|10000|20000|30000|40000|50000|60000|70000|80000|90000" },
         { "dosbox_cpu_cycles_2", "CPU Cycles fine; 1000|2000|3000|4000|5000|6000|7000|8000|9000|0" },
         { "dosbox_cpu_cycles_3", "CPU Cycles finer; 0|100|200|300|400|500|600|700|800|900" },
@@ -153,7 +160,17 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 
 void check_variables(void)
 {
+
     struct retro_variable var = {0};
+    var.key = "dosbox_cpu_cycles_0";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        cycles_0 = atoi(var.value);
+        cycles_flag = true;
+        
+    }
+
     var.key = "dosbox_cpu_cycles_1";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -190,7 +207,28 @@ void check_variables(void)
         if (strcmp(var.value, "disabled") == 0)
             options_boot = false;
         
-    }        
+    }
+
+    //not working will keep this disabled for the time being
+    /*var.key = "dosbox_cpu_cycles_auto";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        if (strcmp(var.value, "enabled") == 0)
+        {
+            CPU_CycleAutoAdjust = true;
+            CPU_SkipCycleAutoAdjust = false;
+            CPU_CycleLimit = 90;
+        }
+        if (strcmp(var.value, "disabled") == 0)
+        {
+            CPU_CycleAutoAdjust = false;
+            CPU_SkipCycleAutoAdjust = true;
+            CPU_CycleLimit = -1;
+        }
+        
+    }*/
+
 }
 
 
@@ -472,7 +510,7 @@ void update_cpu_cycles()
 {
     if(cycles_flag)
     {
-        int cycles = cycles_1 + cycles_2 + cycles_3;
+        int cycles = cycles_0 + cycles_1 + cycles_2 + cycles_3;
         CPU_CycleMax=cycles;
         
         //update dosbox config value in case the user wants to export a config file
@@ -491,6 +529,7 @@ int frame = 0;
 
 void retro_run (void)
 {
+        
     if(frame==0)
     {
         check_variables();        

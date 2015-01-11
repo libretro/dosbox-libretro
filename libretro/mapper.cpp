@@ -9,6 +9,8 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "joystick.h"
+#include <string.h> // memcpy
+#include <stdlib.h> // memcpy
 
 #define RDEV(x) RETRO_DEVICE_##x
 #define RDIX(x) RETRO_DEVICE_INDEX_##x
@@ -37,12 +39,12 @@ static const struct { unsigned retroID; KBD_KEYS dosboxID; } keyMap[] =
     {RETROK_o, KBD_o}, {RETROK_p, KBD_p}, {RETROK_q, KBD_q}, {RETROK_r, KBD_r},
     {RETROK_s, KBD_s}, {RETROK_t, KBD_t}, {RETROK_u, KBD_u}, {RETROK_v, KBD_v},
     {RETROK_w, KBD_w}, {RETROK_x, KBD_x}, {RETROK_y, KBD_y}, {RETROK_z, KBD_z}, //35
-    {RETROK_F1, KBD_f1}, {RETROK_F2, KBD_f2}, {RETROK_F3, KBD_f3}, 
-    {RETROK_F4, KBD_f4}, {RETROK_F5, KBD_f5}, {RETROK_F6, KBD_f6}, 
+    {RETROK_F1, KBD_f1}, {RETROK_F2, KBD_f2}, {RETROK_F3, KBD_f3},
+    {RETROK_F4, KBD_f4}, {RETROK_F5, KBD_f5}, {RETROK_F6, KBD_f6},
     {RETROK_F7, KBD_f7}, {RETROK_F8, KBD_f8}, {RETROK_F9, KBD_f9}, //44
-    {RETROK_F10, KBD_f10}, {RETROK_F11, KBD_f11}, {RETROK_F12, KBD_f12}, 
+    {RETROK_F10, KBD_f10}, {RETROK_F11, KBD_f11}, {RETROK_F12, KBD_f12},
     {RETROK_ESCAPE, KBD_esc}, {RETROK_TAB, KBD_tab}, {RETROK_BACKSPACE, KBD_backspace},
-    {RETROK_RETURN, KBD_enter}, {RETROK_SPACE, KBD_space}, {RETROK_LALT, KBD_leftalt}, //53 
+    {RETROK_RETURN, KBD_enter}, {RETROK_SPACE, KBD_space}, {RETROK_LALT, KBD_leftalt}, //53
     {RETROK_RALT, KBD_rightalt}, {RETROK_LCTRL, KBD_leftctrl}, {RETROK_RCTRL, KBD_rightctrl}, //55
     {RETROK_LSHIFT, KBD_leftshift}, {RETROK_RSHIFT, KBD_rightshift},
     {RETROK_CAPSLOCK, KBD_capslock}, {RETROK_SCROLLOCK, KBD_scrolllock},
@@ -54,8 +56,8 @@ static const struct { unsigned retroID; KBD_KEYS dosboxID; } keyMap[] =
     {RETROK_INSERT, KBD_insert}, {RETROK_HOME, KBD_home}, {RETROK_PAGEUP, KBD_pageup},
     {RETROK_PAGEDOWN, KBD_pagedown}, {RETROK_DELETE, KBD_delete}, {RETROK_END, KBD_end},
     {RETROK_LEFT, KBD_left}, {RETROK_UP, KBD_up}, {RETROK_DOWN, KBD_down}, {RETROK_RIGHT, KBD_right},
-    {RETROK_KP1, KBD_kp1}, {RETROK_KP2, KBD_kp2}, {RETROK_KP3, KBD_kp3}, {RETROK_KP4, KBD_kp4}, 
-    {RETROK_KP5, KBD_kp5}, {RETROK_KP6, KBD_kp6}, {RETROK_KP7, KBD_kp7}, {RETROK_KP8, KBD_kp8}, 
+    {RETROK_KP1, KBD_kp1}, {RETROK_KP2, KBD_kp2}, {RETROK_KP3, KBD_kp3}, {RETROK_KP4, KBD_kp4},
+    {RETROK_KP5, KBD_kp5}, {RETROK_KP6, KBD_kp6}, {RETROK_KP7, KBD_kp7}, {RETROK_KP8, KBD_kp8},
     {RETROK_KP9, KBD_kp9}, {RETROK_KP0, KBD_kp0}, {RETROK_KP_DIVIDE, KBD_kpdivide},
     {RETROK_KP_MULTIPLY, KBD_kpmultiply}, {RETROK_KP_MINUS, KBD_kpminus},
     {RETROK_KP_PLUS, KBD_kpplus}, {RETROK_KP_ENTER, KBD_kpenter}, {RETROK_KP_PERIOD, KBD_kpperiod},
@@ -77,9 +79,9 @@ template<typename T>
 struct InputItem
 {
     bool down;
-    
+
     InputItem() : down(false) {}
-    
+
     void process(const T& aItem, bool aDownNow)
     {
         if(aDownNow && !down)          aItem.press();
@@ -96,15 +98,15 @@ struct Processable
 struct EventHandler : public Processable
 {
 
-    MAPPER_Handler* handler;        
+    MAPPER_Handler* handler;
     unsigned key;
     unsigned mods;
 
     InputItem<EventHandler> item;
-    
+
     EventHandler(MAPPER_Handler* handler, MapKeys key, unsigned mods) :
         handler(handler), key(eventKeyMap[key]), mods(mods) { }
-    
+
     void process()
     {
         const uint32_t modsList = keyboardState[eventMOD1] ? 1 : 0 |
@@ -136,12 +138,12 @@ struct JoystickButton : public Processable
     unsigned retroID;
     unsigned dosboxPort;
     unsigned dosboxID;
-    
+
     InputItem<JoystickButton> item;
-    
+
     JoystickButton(unsigned rP, unsigned rID, unsigned dP, unsigned dID) :
         retroPort(rP), retroID(rID), dosboxPort(dP), dosboxID(dID) { }
-    
+
     void process()       { item.process(*this, input_cb(retroPort, RDEV(JOYPAD), 0, retroID)); }
     void press() const   { JOYSTICK_Button(dosboxPort, dosboxID & 1, true);  }
     void release() const { JOYSTICK_Button(dosboxPort, dosboxID & 1, false); }
@@ -152,16 +154,16 @@ struct JoystickAxis : public Processable
     unsigned retroPort;
     unsigned retroSide;
     unsigned retroAxis;
-    
+
     unsigned dosboxPort;
     unsigned dosboxAxis;
-    
+
     JoystickAxis(unsigned rP, unsigned rS, unsigned rA, unsigned dP, unsigned dA) :
-        retroPort(rP), retroSide(rS), retroAxis(rA), dosboxPort(dP), dosboxAxis(dA) { }    
-    
+        retroPort(rP), retroSide(rS), retroAxis(rA), dosboxPort(dP), dosboxAxis(dA) { }
+
     void process()
     {
-        const float value = (float)input_cb(retroPort, RDEV(ANALOG), retroSide, retroAxis);        
+        const float value = (float)input_cb(retroPort, RDEV(ANALOG), retroSide, retroAxis);
 
         if(dosboxAxis == 0) JOYSTICK_Move_X(dosboxPort, value / 32768.0f);
         else                JOYSTICK_Move_Y(dosboxPort, value / 32768.0f);
@@ -173,47 +175,47 @@ struct JoystickHat : public Processable
     unsigned retroPort;
     unsigned retroID;
     unsigned dosboxPort;
-    unsigned dosboxAxis;    
-    
+    unsigned dosboxAxis;
+
     InputItem<JoystickHat> item;
-    
+
     JoystickHat(unsigned rP, unsigned rID, unsigned dP, unsigned dA) :
         retroPort(rP), retroID(rID), dosboxPort(dP), dosboxAxis(dA) { }
-    
+
     void process()       { item.process(*this, input_cb(retroPort, RDEV(JOYPAD), 0, retroID)); }
-    void press() const   
-    {   
+    void press() const
+    { 
         if(dosboxAxis==0)
         {
             if(retroID==RETRO_DEVICE_ID_JOYPAD_LEFT)
-                JOYSTICK_Move_X(dosboxPort, -0.70f); 
+                JOYSTICK_Move_X(dosboxPort, -0.70f);
             if(retroID==RETRO_DEVICE_ID_JOYPAD_RIGHT)
-                JOYSTICK_Move_X(dosboxPort, 0.70f);         
+                JOYSTICK_Move_X(dosboxPort, 0.70f);
         }
         else
-        {  
+        {
             if(retroID==RETRO_DEVICE_ID_JOYPAD_UP)
-                JOYSTICK_Move_Y(dosboxPort, -0.70f); 
+                JOYSTICK_Move_Y(dosboxPort, -0.70f);
             if(retroID==RETRO_DEVICE_ID_JOYPAD_DOWN)
-                JOYSTICK_Move_Y(dosboxPort, 0.70f);                 
+                JOYSTICK_Move_Y(dosboxPort, 0.70f);
         }
-        
     }
-    void release() const 
+
+    void release() const
     {
         if(dosboxAxis==0)
         {
             if(retroID==RETRO_DEVICE_ID_JOYPAD_LEFT)
-                JOYSTICK_Move_X(dosboxPort, -0.0f/32768.0f); 
+                JOYSTICK_Move_X(dosboxPort, -0.0f/32768.0f);
             if(retroID==RETRO_DEVICE_ID_JOYPAD_RIGHT)
-                JOYSTICK_Move_X(dosboxPort, 0.0f/32768.0f);            
+                JOYSTICK_Move_X(dosboxPort, 0.0f/32768.0f);
         }
         else
-        {  
+        {
             if(retroID==RETRO_DEVICE_ID_JOYPAD_UP)
-                JOYSTICK_Move_Y(dosboxPort, -0.0f/32768.0f); 
+                JOYSTICK_Move_Y(dosboxPort, -0.0f/32768.0f);
             if(retroID==RETRO_DEVICE_ID_JOYPAD_DOWN)
-                JOYSTICK_Move_Y(dosboxPort, 0.0f/32768.0f);              
+                JOYSTICK_Move_Y(dosboxPort, 0.0f/32768.0f);
         }
     }
 };
@@ -221,7 +223,6 @@ struct JoystickHat : public Processable
 
 void keyboard_event(bool down, unsigned keycode, uint32_t character, uint16_t key_modifiers)
 {
-    
     for (int i = 0; keyMap[i].retroID; i ++)
     {
         if (keyMap[i].retroID == keycode)
@@ -235,6 +236,79 @@ void keyboard_event(bool down, unsigned keycode, uint32_t character, uint16_t ke
 
 void MAPPER_Init(void)
 {
+    struct retro_input_descriptor desc[64];
+    struct retro_input_descriptor desc_p1[32];
+    struct retro_input_descriptor desc_p2[32];
+
+    struct retro_input_descriptor desc_2button_gamepad[] = {
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "D-Pad Left" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "D-Pad Up" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "D-Pad Down" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 2" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "D-Pad Left" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "D-Pad Up" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "D-Pad Down" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 2" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+        { 0 },
+    };
+
+    struct retro_input_descriptor desc_2button_joystick[] = {
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 2" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Analog X" },
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Analog Y" },
+
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 2" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+        { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Analog X" },
+        { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Analog Y" },
+
+        { 0 },
+    };
+
+    struct retro_input_descriptor desc_4button_gamepad[] = {
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "D-Pad Left" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "D-Pad Up" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "D-Pad Down" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X, "Button 2" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 3" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Button 4" },
+
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "D-Pad Left" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "D-Pad Up" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "D-Pad Down" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X, "Button 2" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 3" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Button 4" },
+        { 0 },
+    };
+
+    struct retro_input_descriptor desc_4button_joystick[] = {
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Analog X" },
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Analog Y" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X, "Button 2" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 3" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Button 4" },
+
+        { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Analog X" },
+        { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Analog Y" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X, "Button 2" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 3" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Button 4" },
+        { 0 },
+    };
+
     struct retro_keyboard_callback callback = { keyboard_event };
     environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &callback);
 
@@ -242,10 +316,10 @@ void MAPPER_Init(void)
 
     inputList.push_back(new MouseButton(RDID(MOUSE_LEFT), 0));
     inputList.push_back(new MouseButton(RDID(MOUSE_RIGHT), 1));
-    
+
     if(log_cb)
         log_cb(RETRO_LOG_INFO, "Joystick Type: %d %d \n",p1_joystick_type,p2_joystick_type);
- 
+
     if(p1_joystick_type != JOY_NONE && p2_joystick_type != JOY_NONE)
     {
         joytype=JOY_2AXIS;
@@ -255,8 +329,13 @@ void MAPPER_Init(void)
         p1_joystick_type != JOY_NONE ? joytype=p1_joystick_type : joytype=p2_joystick_type;
     }
 
+    int i=0;
+    int j=0;
+    log_cb(RETRO_LOG_INFO, "i=%d j=%d \n",i,j);
+
     switch(joytype)
     {
+
         case JOY_AUTO: case JOY_2AXIS:
         {
             if(p1_joystick_type != JOY_NONE)
@@ -264,16 +343,23 @@ void MAPPER_Init(void)
                 inputList.push_back(new JoystickButton(0, RDID(JOYPAD_Y), 0, 0));
                 inputList.push_back(new JoystickButton(0, RDID(JOYPAD_B), 0, 1));
                 if(p1_is_gamepad)
-                {                
+                {
                     inputList.push_back(new JoystickHat(0, RDID(JOYPAD_LEFT), 0, 0));
                     inputList.push_back(new JoystickHat(0, RDID(JOYPAD_RIGHT), 0, 0));
                     inputList.push_back(new JoystickHat(0, RDID(JOYPAD_UP), 0, 1));
                     inputList.push_back(new JoystickHat(0, RDID(JOYPAD_DOWN), 0, 1));
+
+                    for(i=0;desc_2button_gamepad[i].port == 0;i++)
+                        desc[i] = desc_2button_gamepad[i];
+
                 }
                 else
                 {
                     inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 0, 0));
                     inputList.push_back(new JoystickAxis(0, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 0, 1));
+
+                    for(i=0;desc_2button_joystick[i].port == 0;i++)
+                        desc[i] = desc_2button_joystick[i];
                 }
                 JOYSTICK_Enable(0, true);
             }
@@ -282,16 +368,30 @@ void MAPPER_Init(void)
                 inputList.push_back(new JoystickButton(1, RDID(JOYPAD_Y), 1, 0));
                 inputList.push_back(new JoystickButton(1, RDID(JOYPAD_B), 1, 1));
                 if(p2_is_gamepad)
-                {                
+                {
                     inputList.push_back(new JoystickHat(1, RDID(JOYPAD_LEFT), 1, 0));
                     inputList.push_back(new JoystickHat(1, RDID(JOYPAD_RIGHT), 1, 0));
                     inputList.push_back(new JoystickHat(1, RDID(JOYPAD_UP), 1, 1));
                     inputList.push_back(new JoystickHat(1, RDID(JOYPAD_DOWN), 1, 1));
+
+                    for(j=0;desc_2button_gamepad[j].port != 1;j++);
+                    for(;desc_2button_gamepad[j].port == 1;j++)
+                    {
+                        i++;
+                        desc[i] = desc_2button_gamepad[j];
+                    }
                 }
                 else
                 {
                     inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_X), 0, 0));
                     inputList.push_back(new JoystickAxis(1, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), 0, 1));
+
+                    for(j=0;desc_2button_joystick[j].port != 1;j++);
+                    for(;desc_2button_joystick[j].port == 1;j++)
+                    {
+                        i++;
+                        desc[i] = desc_2button_joystick[j];
+                    }
                 }
                 JOYSTICK_Enable(1, true);
             }
@@ -310,7 +410,22 @@ void MAPPER_Init(void)
                 inputList.push_back(new JoystickHat(p, RDID(JOYPAD_LEFT), p, 0));
                 inputList.push_back(new JoystickHat(p, RDID(JOYPAD_RIGHT), p, 0));
                 inputList.push_back(new JoystickHat(p, RDID(JOYPAD_UP), p, 1));
-                inputList.push_back(new JoystickHat(p, RDID(JOYPAD_DOWN), p, 1));            
+                inputList.push_back(new JoystickHat(p, RDID(JOYPAD_DOWN), p, 1));
+
+                if(joytype == JOY_4AXIS)
+                {
+                    for(i=0;desc_4button_gamepad[i].port == 0;i++)
+                        desc[i] = desc_4button_gamepad[i];
+                }
+                else
+                {
+                    for(j=0;desc_4button_gamepad[j].port != 1;j++);
+                    for(;desc_4button_gamepad[j].port == 1;j++)
+                    {
+                        i++;
+                        desc[i] = desc_4button_gamepad[j];
+                    }
+                }
             }
             else
             {
@@ -318,12 +433,30 @@ void MAPPER_Init(void)
                 inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_LEFT),  RDID(ANALOG_Y), 0, 1));
                 inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_RIGHT), RDID(ANALOG_X), 1, 0));
                 inputList.push_back(new JoystickAxis(p, RDIX(ANALOG_RIGHT), RDID(ANALOG_Y), 1, 1));
+               
+                if(joytype == JOY_4AXIS)
+                {
+                    for(i=0;desc_4button_joystick[i].port == 0;i++)
+                        desc[i] = desc_4button_joystick[i];
+                }
+                else
+                {
+                    for(j=0;desc_4button_joystick[j].port != 1;j++);
+                    for(;desc_4button_joystick[j].port == 1;j++)
+                    {  
+                        i++;
+                        desc[i] = desc_4button_joystick[j];                       
+                    }               
+                }               
+                               
             }
             JOYSTICK_Enable(p, true);
             JOYSTICK_Enable(!p, true);
             break;
         }
     }
+  
+    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 }
 
 void MAPPER_AddHandler(MAPPER_Handler * handler,MapKeys key,Bitu mods,char const * const eventname,char const * const buttonname)
