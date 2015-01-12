@@ -17,7 +17,7 @@
  */
 
 #include <algorithm>
-#include <string> 
+#include <string>
 
 #include "../libco/libco.h"
 #include "libretro.h"
@@ -30,10 +30,12 @@
 #include "pic.h"
 #include "joystick.h"
 
-#define RETRO_DEVICE_2BUTTON_GAMEPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
-#define RETRO_DEVICE_4BUTTON_GAMEPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 1)
-#define RETRO_DEVICE_2BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0)
-#define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
+#define RETRO_DEVICE_2BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0)                     //2 buttons, 2 axes
+#define RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)       //2 buttons, 2 axes, dpad (emulated joystick)
+#define RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 2)         //2 buttons, 2 axes, dpad (emulated keystrokes)
+#define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 3)                     //4 buttons, 4 axes
+#define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 4)       //4 buttons, 4 axes, dpad (emulated joystick)
+#define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 5)         //4 buttons, 4 axes, dpad (emulated keystrokes)*/
 
 
 int cycles_0 = 0;
@@ -50,16 +52,16 @@ extern Bit32s CPU_CycleLimit;
 extern bool CPU_CycleAutoAdjust;
 extern bool CPU_SkipCycleAutoAdjust;
 
+int current_port;
 
-extern JoystickType p1_joystick_type;
-extern JoystickType p2_joystick_type;
+extern JoystickType joystick_type[16];
+bool dpad[16];
+bool connected[16];
+bool emulated_kbd[16];
 
 std::string retro_save_directory;
 std::string retro_system_directory;
 std::string retro_content_directory;
-
-bool p1_is_gamepad = false;
-bool p2_is_gamepad = false;
 
 retro_video_refresh_t video_cb;
 retro_audio_sample_batch_t audio_batch_cb;
@@ -81,7 +83,7 @@ void retro_set_environment(retro_environment_t cb)
 
     bool allow_no_game = false;
     environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
-    
+
      static const struct retro_variable vars[] = {
         { "dosbox_options_on_boot", "Enable core options on boot; enabled|disabled" },
         /*{ "dosbox_cpu_cycles_auto", "CPU Cycles auto; enabled|disabled" },*/
@@ -94,16 +96,25 @@ void retro_set_environment(retro_environment_t cb)
 
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
-    static const struct retro_controller_description pads[] = {
-        { "2button gamepad", RETRO_DEVICE_2BUTTON_GAMEPAD },
-        { "4button gamepad", RETRO_DEVICE_4BUTTON_GAMEPAD },    
-        { "2axis/2button joystick", RETRO_DEVICE_2BUTTON_JOYSTICK },
-        { "4axis/4button joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },
+    static const struct retro_controller_description pads_p1[] = {
+        { "2+2 joystick", RETRO_DEVICE_2BUTTON_JOYSTICK },
+        { "2+2 gamepad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
+        { "2+2 joystick + arrows", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS },
+        { "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },
+        { "4+4 gamepad", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD },
+        { "4+4 joystick + arrows", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS }
+    };
+
+    static const struct retro_controller_description pads_p2[] = {
+        { "2+2 joystick", RETRO_DEVICE_2BUTTON_JOYSTICK },
+        { "2+2 gamepad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
+        { "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },
+        { "4+4 gamepad", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD }
     };
 
     static const struct retro_controller_info ports[] = {
-        { pads, 4 },
-        { pads, 4 },
+        { pads_p1, 6 },
+        { pads_p2, 4 },
         { 0 },
     };
     environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
@@ -113,47 +124,78 @@ void retro_set_environment(retro_environment_t cb)
         retro_system_directory=system_dir;
     if (log_cb)
         log_cb(RETRO_LOG_INFO, "SYSTEM_DIRECTORY: %s\n", retro_system_directory.c_str());
-    
+
     const char *save_dir = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir) && save_dir)
         retro_save_directory = save_dir;
     else
         retro_save_directory=retro_system_directory;
     if (log_cb)
-        log_cb(RETRO_LOG_INFO, "SAVE_DIRECTORY: %s\n", retro_save_directory.c_str());    
-    
+        log_cb(RETRO_LOG_INFO, "SAVE_DIRECTORY: %s\n", retro_save_directory.c_str());
+
     const char *content_dir = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY, &content_dir) && content_dir)
         retro_content_directory=content_dir;
     if (log_cb)
         log_cb(RETRO_LOG_INFO, "CONTENT_DIRECTORY: %s\n", retro_content_directory.c_str());
-        
-    
+
+
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
 {
+               joystick_type[port] = JOY_NONE;
+            connected[port] = false;
+            dpad[port] = false;
+            emulated_kbd[port] = false;
     switch (device)
     {
-        case RETRO_DEVICE_4BUTTON_GAMEPAD:
-            !port ? p1_joystick_type = JOY_4AXIS : p2_joystick_type = JOY_4AXIS_2;
-            !port ? p1_is_gamepad = true : p2_is_gamepad = true;
-            break;
-        case RETRO_DEVICE_2BUTTON_GAMEPAD: case RETRO_DEVICE_JOYPAD:
-            !port ? p1_joystick_type = JOY_2AXIS : p2_joystick_type = JOY_2AXIS;
-            !port ? p1_is_gamepad = true : p2_is_gamepad = true;
-            break;    
-        case RETRO_DEVICE_4BUTTON_JOYSTICK:
-            !port ? p1_joystick_type = JOY_4AXIS : p2_joystick_type = JOY_4AXIS_2;
-            !port ? p1_is_gamepad = false : p2_is_gamepad = false;
-            break;
         case RETRO_DEVICE_2BUTTON_JOYSTICK:
-            !port ? p1_joystick_type = JOY_2AXIS : p2_joystick_type = JOY_2AXIS;            
-            !port ? p1_is_gamepad = false : p2_is_gamepad = false;
+        case RETRO_DEVICE_ANALOG:
+        case RETRO_DEVICE_JOYPAD:
+            joystick_type[port] = JOY_2AXIS;
+            connected[port] = true;
+            dpad[port] = false;
+            emulated_kbd[port] = false;
+            break;
+        case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS:
+            joystick_type[port] = JOY_2AXIS;
+            connected[port] = true;
+            dpad[port] = false;
+            emulated_kbd[port] = true;
+            break;
+        case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD:
+            joystick_type[port] = JOY_2AXIS;
+            connected[port] = true;
+            dpad[port] = true;
+            emulated_kbd[port] = false;
+            break;
+        case RETRO_DEVICE_4BUTTON_JOYSTICK:
+            joystick_type[port] = JOY_4AXIS;
+            connected[port] = true;
+            dpad[port] = false;
+            emulated_kbd[port] = false;
+            break;
+        case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS:
+            joystick_type[port] = JOY_4AXIS;
+            connected[port] = true;
+            dpad[port] = false;
+            emulated_kbd[port] = true;
+            break;
+        case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD:
+            joystick_type[port] = JOY_4AXIS;
+            connected[port] = true;
+            dpad[port] = true;
+            emulated_kbd[port] = false;
             break;
         default:
-            !port ? p1_joystick_type = JOY_NONE : p2_joystick_type = JOY_NONE;
+            joystick_type[port] = JOY_NONE;
+            connected[port] = false;
+            dpad[port] = false;
+            emulated_kbd[port] = false;
+            break;
     }
+    log_cb(RETRO_LOG_INFO,"%d\n",joystick_type[port]);
     MAPPER_Init();
 
 }
@@ -168,7 +210,7 @@ void check_variables(void)
     {
         cycles_0 = atoi(var.value);
         cycles_flag = true;
-        
+
     }
 
     var.key = "dosbox_cpu_cycles_1";
@@ -177,17 +219,17 @@ void check_variables(void)
     {
         cycles_1 = atoi(var.value);
         cycles_flag = true;
-        
+
     }
-    
+
     var.key = "dosbox_cpu_cycles_2";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
         cycles_2 = atoi(var.value);
         cycles_flag = true;
-        
-    }    
+
+    }
 
     var.key = "dosbox_cpu_cycles_3";
     var.value = NULL;
@@ -195,9 +237,9 @@ void check_variables(void)
     {
         cycles_3 = atoi(var.value);
         cycles_flag = true;
-        
-    }    
-    
+
+    }
+
     var.key = "dosbox_options_on_boot";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -206,7 +248,7 @@ void check_variables(void)
             options_boot = true;
         if (strcmp(var.value, "disabled") == 0)
             options_boot = false;
-        
+
     }
 
     //not working will keep this disabled for the time being
@@ -226,7 +268,7 @@ void check_variables(void)
             CPU_SkipCycleAutoAdjust = true;
             CPU_CycleLimit = -1;
         }
-        
+
     }*/
 
 }
@@ -251,7 +293,7 @@ std::string normalizePath(const std::string& aPath)
     {
         result[found] = PATH_SEPARATOR;
     }
-    
+
     return result;
 }
 
@@ -295,21 +337,21 @@ extern void* RDOSGFXhaveFrame;
 static void retro_leave_thread(Bitu)
 {
     MIXER_CallBack(0, audioData, samplesPerFrame * 4);
-    
+
     co_switch(mainThread);
-    
+
     // If the frontend said to exit, throw an int to be caught in retro_start_emulator.
     /*if(FRONTENDwantsExit)
     {
         throw 1;
     }*/
-    
-    // Schedule the next frontend interrupt 
+
+    // Schedule the next frontend interrupt
     PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
 }
 
 static void retro_start_emulator(void)
-{  
+{
 
     const char* const argv[2] = {"dosbox", loadPath.c_str()};
     CommandLine com_line(loadPath.empty() ? 1 : 2, argv);
@@ -322,7 +364,7 @@ static void retro_start_emulator(void)
     /* Load config */
     log_cb(RETRO_LOG_INFO,"Config path: %s\n",configPath.c_str());
     if(!configPath.empty())
-    {        
+    {
         control->ParseConfigFile(configPath.c_str());
     }
     /* Init all the sections */
@@ -330,13 +372,13 @@ static void retro_start_emulator(void)
 
     /* Init the keyMapper */
     MAPPER_Init();
-   
+
     /* Init done, go back to the main thread */
     co_switch(mainThread);
 
     // Schedule an interrupt time to return to the frontend
     PIC_AddEvent(retro_leave_thread, 1000.0f / 60.0f, 0);
-    
+
     try
     {
         control->StartUp();
@@ -346,7 +388,7 @@ static void retro_start_emulator(void)
         RETROLOG("Frontend said to quit.");
         return;
     }
-    
+
     RETROLOG("DOSBox said to quit.");
     DOSBOXwantsExit = true;
 }
@@ -354,16 +396,16 @@ static void retro_start_emulator(void)
 static void retro_wrap_emulator(void)
 {
     retro_start_emulator();
-    
+
     // Exit comes from DOSBox, tell the frontend
     if(DOSBOXwantsExit)
     {
-        environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);    
+        environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
     }
-        
+
     // Were done here
     co_switch(mainThread);
-        
+
     // Dead emulator, but libco says not to return
     while(true)
     {
@@ -411,7 +453,7 @@ void retro_init (void)
         log_cb = NULL;
 
     if (log_cb)
-        log_cb(RETRO_LOG_INFO, "Logger interface initialized... \n");    
+        log_cb(RETRO_LOG_INFO, "Logger interface initialized... \n");
 
     RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_XRGB8888;
     environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &RDOSGFXcolorMode);
@@ -430,7 +472,7 @@ void retro_init (void)
 void retro_deinit(void)
 {
     FRONTENDwantsExit = !DOSBOXwantsExit;
-    
+
     if(emuThread)
     {
         // If the frontend says to exit we need to let the emulator run to finish its job.
@@ -438,7 +480,7 @@ void retro_deinit(void)
         {
             co_switch(emuThread);
         }
-        
+
         co_delete(emuThread);
         emuThread = 0;
     }
@@ -464,13 +506,13 @@ char slash;
             // Copy the game path
             loadPath = normalizePath(game->path);
             const size_t lastDot = loadPath.find_last_of('.');
-        
+
             // Find any config file to load
             if(std::string::npos != lastDot)
             {
                 std::string extension = loadPath.substr(lastDot + 1);
                 std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-            
+
                 if((extension == "conf"))
                 {
                     configPath = loadPath;
@@ -483,10 +525,10 @@ char slash;
                 }
             }
         }
-        
+
         co_switch(emuThread);
         samplesPerFrame = MIXER_RETRO_GetFrequency() / 60;
-        
+
         return true;
     }
     else
@@ -512,7 +554,7 @@ void update_cpu_cycles()
     {
         int cycles = cycles_0 + cycles_1 + cycles_2 + cycles_3;
         CPU_CycleMax=cycles;
-        
+
         //update dosbox config value in case the user wants to export a config file
         char cycles_val[16];
         sprintf(cycles_val,"%d",cycles);
@@ -520,7 +562,7 @@ void update_cpu_cycles()
         Prop_multival_remain* prop = ((Section_prop*)cpu)->Get_multivalremain("cycles");
         prop->SetValue(cycles_val);
     }
-    
+
     cycles_flag = false;
 
 }
@@ -529,17 +571,17 @@ int frame = 0;
 
 void retro_run (void)
 {
-        
+
     if(frame==0)
     {
-        check_variables();        
+        check_variables();
         if(options_boot)
         {
             cycles_flag = true;
             update_cpu_cycles();
         }
     }
-    
+
     bool updated = false;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
     {
@@ -549,17 +591,17 @@ void retro_run (void)
 
 
     if(emuThread)
-    {       
+    {
         // Keys
         MAPPER_Run(false);
-        
+
         // Run emu
         co_switch(emuThread);
-    
+
         // Upload video: TODO: Check the CANDUPE env value
         video_cb(RDOSGFXhaveFrame, RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch);
         RDOSGFXhaveFrame = 0;
-    
+
         // Upload audio: TODO: Support sample rate control
         audio_batch_cb((int16_t*)audioData, samplesPerFrame);
     }
@@ -567,7 +609,7 @@ void retro_run (void)
     {
         RETROLOG("retro_run called when there is no emulator thread.");
     }
-    
+
     frame++;
 }
 
