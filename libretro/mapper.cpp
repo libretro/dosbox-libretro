@@ -274,9 +274,18 @@ void MAPPER_Init()
     {
         joystick_type[0] = JOY_2AXIS;
         joystick_type[1] = JOY_2AXIS;
-
+        joytype = JOY_2AXIS;
+        //ToDO: print messages using OSD
         if(log_cb)
             log_cb(RETRO_LOG_INFO, "Two joysticks connected, forcing to two button joysticks\n");
+        
+            
+    }
+    else
+    {
+        joystick_type[0] == JOY_4AXIS ? joytype = JOY_4AXIS : JOY_4AXIS_2;
+        if(log_cb)
+            log_cb(RETRO_LOG_INFO, "One joystick connected, can use 4 button modes %d\n",joytype);
     }
     
     struct retro_input_descriptor desc_dpad[] = {
@@ -291,7 +300,7 @@ void MAPPER_Init()
         { 255, 255, 255, 255, "" },
     };
     
-    struct retro_input_descriptor desc_analogs[] = {
+    struct retro_input_descriptor desc_2axis[] = {
         { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Analog X" },
         { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Analog Y" },
         { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Analog X" },
@@ -299,6 +308,19 @@ void MAPPER_Init()
         { 255, 255, 255, 255, "" },
         
     };    
+    
+    struct retro_input_descriptor desc_4axis[] = {
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Left Analog X" },
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Left Analog Y" },
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, "Right Analog X" },
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, "Right Analog Y" },        
+        { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Left Analog X" },
+        { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Left Analog Y" },
+        { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, "Right Analog X" },
+        { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, "Right Analog Y" },                
+        { 255, 255, 255, 255, "" },
+        
+    };        
 
     struct retro_input_descriptor desc_kbd[] = {
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "Kbd Left" },
@@ -317,6 +339,18 @@ void MAPPER_Init()
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
         { 255, 255, 255, 255, "" },
     };
+    
+    struct retro_input_descriptor desc_4button[] = {
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X, "Button 2" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 3" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Button 4" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X, "Button 2" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 3" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Button 4" },
+        { 255, 255, 255, 255, "" },
+    };   
 
     struct retro_input_descriptor empty = { 255, 255, 255, 255, "" };
 
@@ -366,10 +400,10 @@ void MAPPER_Init()
                     inputList.push_back(new JoystickAxis(port, RDIX(ANALOG_LEFT), RDID(ANALOG_X), port, 0));
                     inputList.push_back(new JoystickAxis(port, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), port, 1));
                     
-                    for(j=0;desc_analogs[j].port!=port;j++);
-                    for(;desc_analogs[j].port == port;j++)
+                    for(j=0;desc_2axis[j].port!=port;j++);
+                    for(;desc_2axis[j].port == port;j++)
                     {                        
-                        desc[i] = desc_analogs[j];                        
+                        desc[i] = desc_2axis[j];                        
                         i++;
                     }
                 }
@@ -393,6 +427,73 @@ void MAPPER_Init()
                 
                 JOYSTICK_Enable(port, true);
                 break;
+            case JOY_4AXIS:
+                //buttons
+                unsigned p;
+                p = (joystick_type[port] == JOY_4AXIS) ? 0 : 1;
+                
+                inputList.push_back(new JoystickButton(p, RDID(JOYPAD_Y), 0, 0));
+                inputList.push_back(new JoystickButton(p, RDID(JOYPAD_X), 0, 1));
+                inputList.push_back(new JoystickButton(p, RDID(JOYPAD_B), 1, 0));
+                inputList.push_back(new JoystickButton(p, RDID(JOYPAD_A), 1, 1));
+              
+                for(j=0;desc_2button[j].port!=port;j++);
+                for(;desc_2button[j].port == port;j++)
+                {
+                    desc[i] = desc_2button[j];
+                    i++;
+                }
+                
+                //axes
+                if(dpad[port])
+                {
+                    inputList.push_back(new JoystickHat(port, RDID(JOYPAD_LEFT), port, 0));
+                    inputList.push_back(new JoystickHat(port, RDID(JOYPAD_RIGHT), port, 0));
+                    inputList.push_back(new JoystickHat(port, RDID(JOYPAD_UP), port, 1));
+                    inputList.push_back(new JoystickHat(port, RDID(JOYPAD_DOWN), port, 1));
+                    
+                    for(j=0;desc_dpad[j].port!=port;j++);
+                    for(;desc_dpad[j].port == port;j++)
+                    {                        
+                        desc[i] = desc_dpad[j];
+                        i++;
+                    }
+                }
+                else
+                {
+                    inputList.push_back(new JoystickAxis(port, RDIX(ANALOG_LEFT), RDID(ANALOG_X), port, 0));
+                    inputList.push_back(new JoystickAxis(port, RDIX(ANALOG_LEFT), RDID(ANALOG_Y), port, 1));
+                    
+                    for(j=0;desc_2axis[j].port!=port;j++);
+                    for(;desc_2axis[j].port == port;j++)
+                    {                        
+                        desc[i] = desc_2axis[j];                        
+                        i++;
+                    }
+                }
+                
+                if(emulated_kbd[port] && port == 0)
+                {
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_LEFT),80));
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_RIGHT),83));
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_UP),81));
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_DOWN),82));            
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),48));
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT),51));
+                    
+                    for(j=0;desc_kbd[j].port!=port;j++);
+                    for(;desc_kbd[j].port == port;j++)
+                    {                        
+                        desc[i] = desc_kbd[j];
+                        i++;
+                    }
+                }                
+                
+                JOYSTICK_Enable(p, true);
+                JOYSTICK_Enable(!p, true);
+                break;
+            
+
             default:
                 JOYSTICK_Enable(port, false);
             break;

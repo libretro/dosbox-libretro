@@ -31,14 +31,11 @@
 #include "joystick.h"
 
 #define RETRO_DEVICE_2BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0)                     //2 buttons, 2 axes
-#define RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_EMULATED RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)       //2 buttons, 2 axes, dpad (emulated joystick)
+#define RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)       //2 buttons, 2 axes, dpad (emulated joystick)
 #define RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 2)         //2 buttons, 2 axes, dpad (emulated keystrokes)
-
-/*#define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)                     //4 buttons, 4 axes
-
-#define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_EMULATED RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 5)       //4 buttons, 4 axes, dpad (emulated joystick)
-
-#define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 3)         //4 buttons, 4 axes, dpad (emulated keystrokes)*/
+#define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 3)                     //4 buttons, 4 axes
+#define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 4)       //4 buttons, 4 axes, dpad (emulated joystick)
+#define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 5)         //4 buttons, 4 axes, dpad (emulated keystrokes)*/
 
 
 int cycles_0 = 0;
@@ -101,23 +98,23 @@ void retro_set_environment(retro_environment_t cb)
 
     static const struct retro_controller_description pads_p1[] = { 
         { "2+2 joystick", RETRO_DEVICE_2BUTTON_JOYSTICK },
-        { "2+2 gamepad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_EMULATED },
-        { "2+2 joystick + emulated Kbd", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS },
-        /*{ "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },*/
-        /*{ "4+4 joystick + emulated D-Pad", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_EMULATED },*/        
-        /*{ "4+4 joystick + emulated Kbd", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS },*/
+        { "2+2 gamepad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
+        { "2+2 joystick + arrows", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS },
+        { "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },
+        { "4+4 gamepad", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD },
+        { "4+4 joystick + arrows", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS }
     };
 
     static const struct retro_controller_description pads_p2[] = { 
-        { "2+2 joystick", RETRO_DEVICE_2BUTTON_JOYSTICK },
-        /*{ "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },*/
-        { "2+2 joystick + D-Pad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_EMULATED },
-        /*{ "4+4 joystick + D-Pad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_EMULATED },*/
+        { "2+2 joystick", RETRO_DEVICE_2BUTTON_JOYSTICK },        
+        { "2+2 gamepad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
+        { "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },
+        { "4+4 gamepad", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD }
     };
 
     static const struct retro_controller_info ports[] = {
-        { pads_p1, 3 },
-        { pads_p2, 2 },
+        { pads_p1, 6 },
+        { pads_p2, 4 },
         { 0 },
     };
     environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
@@ -153,19 +150,39 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
         case RETRO_DEVICE_2BUTTON_JOYSTICK: case RETRO_DEVICE_JOYPAD:
             joystick_type[port] = JOY_2AXIS;
             connected[port] = true;
+            dpad[port] = false;
             emulated_kbd[port] = false;
             break;
         case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS:
             joystick_type[port] = JOY_2AXIS;
-            emulated_kbd[port] = true;
             connected[port] = true;
+            dpad[port] = false;
+            emulated_kbd[port] = true;
             break;
-        case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_EMULATED:
+        case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD:
             joystick_type[port] = JOY_2AXIS;
             connected[port] = true;
             dpad[port] = true;
             emulated_kbd[port] = false;
             break;
+        case RETRO_DEVICE_4BUTTON_JOYSTICK:
+            joystick_type[port] = JOY_4AXIS;
+            connected[port] = true;
+            dpad[port] = false;
+            emulated_kbd[port] = false;
+            break;
+        case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS:
+            joystick_type[port] = JOY_4AXIS;
+            connected[port] = true;
+            dpad[port] = false;
+            emulated_kbd[port] = true;
+            break;
+        case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD:
+            joystick_type[port] = JOY_4AXIS;
+            connected[port] = true;
+            dpad[port] = true;
+            emulated_kbd[port] = false;
+            break;            
         default:
             joystick_type[port] = JOY_NONE;
             connected[port] = false;
