@@ -60,7 +60,7 @@ int current_port;
 JoystickType joystick_type[16];
 bool dpad[16];
 bool connected[16];
-bool emulated_kbd;
+bool emulated_kbd[16];
 
 std::string retro_save_directory;
 std::string retro_system_directory;
@@ -101,10 +101,10 @@ void retro_set_environment(retro_environment_t cb)
 
     static const struct retro_controller_description pads_p1[] = { 
         { "2+2 joystick", RETRO_DEVICE_2BUTTON_JOYSTICK },
-        /*{ "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },*/
-        { "2+2 joystick + emulated D-Pad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_EMULATED },
-        /*{ "4+4 joystick + emulated D-Pad", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_EMULATED },*/
+        { "2+2 gamepad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_EMULATED },
         { "2+2 joystick + emulated Kbd", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS },
+        /*{ "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },*/
+        /*{ "4+4 joystick + emulated D-Pad", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_EMULATED },*/        
         /*{ "4+4 joystick + emulated Kbd", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS },*/
     };
 
@@ -153,22 +153,25 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
         case RETRO_DEVICE_2BUTTON_JOYSTICK: case RETRO_DEVICE_JOYPAD:
             joystick_type[port] = JOY_2AXIS;
             connected[port] = true;
+            emulated_kbd[port] = false;
             break;
         case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS:
             joystick_type[port] = JOY_2AXIS;
-            emulated_kbd = true;
+            emulated_kbd[port] = true;
             connected[port] = true;
             break;
         case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_EMULATED:
             joystick_type[port] = JOY_2AXIS;
             connected[port] = true;
             dpad[port] = true;
+            emulated_kbd[port] = false;
             break;
-
         default:
             joystick_type[port] = JOY_NONE;
             connected[port] = false;
             dpad[port] = false;
+            emulated_kbd[port] = false;
+            break;
     }
 
     MAPPER_Init();
