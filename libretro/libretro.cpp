@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <string>
+#include <stdlib.h>
 
 #include "../libco/libco.h"
 #include "libretro.h"
