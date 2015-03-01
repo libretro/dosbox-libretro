@@ -24,6 +24,8 @@
 #include "inout.h"
 #include "mem.h"
 #include <cstdlib>
+#include <stdlib.h>
+
 // Tseng ET4K data
 typedef struct {
 	Bit8u extensionsEnabled;

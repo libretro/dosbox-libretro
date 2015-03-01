@@ -200,6 +200,7 @@ void close_directory(dir_information* dirp) {
 }
 
 #else
+#include <dirent.h>
 
 dir_information* open_directory(const char* dirname) {
 	static dir_information dir;

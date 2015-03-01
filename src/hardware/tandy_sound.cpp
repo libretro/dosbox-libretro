@@ -29,6 +29,7 @@
 #include "dma.h"
 #include "hardware.h"
 #include <cstring>
+#include <string.h>
 #include <math.h>
 
 #define MAX_OUTPUT 0x7fff

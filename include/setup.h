@@ -46,6 +46,8 @@
 #include <cstdio>
 #endif
 
+#include <stdio.h>
+
 
 class Hex {
 private:

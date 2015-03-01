@@ -31,6 +31,7 @@
 #include <vector>
 #include <string>
 #include <time.h>
+#include <stdlib.h>
 
 static SHELL_Cmd cmd_list[]={
 {	"DIR",		0,			&DOS_Shell::CMD_DIR,		"SHELL_CMD_DIR_HELP"},

@@ -71,7 +71,9 @@
 #endif
 
 // ----- STANDARD LIBRARY FEATURES
+#ifndef __QNX__
 #define DIRENT_HAS_D_TYPE 1 /* struct dirent has d_type */
+#endif
 /* #undef DB_HAVE_NO_POWF */ /* libm doesn't include powf */
 /* #undef TM_IN_SYS_TIME */ /* Define to 1 if your <sys/time.h> declares `struct tm'. */
 /* #undef size_t */ /* Define to `unsigned int' if <sys/types.h> does not define. */
