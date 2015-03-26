@@ -282,7 +282,7 @@ static void DOSBOX_RealInit(Section * sec) {
 
 	ticksRemain=0;
 	ticksLast=GetTicks();
-	ticksLocked = false;
+	ticksLocked = true;
 	DOSBOX_SetLoop(&Normal_Loop);
 	MSG_Init(section);
 
