@@ -330,20 +330,20 @@ void MAPPER_Init()
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "Kbd Up" },
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "Kbd Down" },
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "Kbd Right" },
-        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Esc" },
-        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Enter" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Enter" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Esc" },
         { 255, 255, 255, 255, "" },
     };
 
     struct retro_input_descriptor desc_2button[] = {
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 2" },
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
-        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Esc" },
-        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Enter" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Enter" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Esc" },
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 2" },
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Button 1" },
-        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Esc" },
-        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Enter" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Enter" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Esc" },
         { 255, 255, 255, 255, "" },
     };
 
@@ -358,8 +358,8 @@ void MAPPER_Init()
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X, "Button 2" },
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 3" },
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Button 4" },
-        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Esc" },
-        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Enter" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Enter" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Esc" },
         { 255, 255, 255, 255, "" },
     };
 
@@ -383,8 +383,8 @@ void MAPPER_Init()
                 //buttons
                 inputList.push_back(new JoystickButton(port, RDID(JOYPAD_Y), port, 0));
                 inputList.push_back(new JoystickButton(port, RDID(JOYPAD_B), port, 1));
-                inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),48));
-                inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT),51));
+                inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),51));
+                inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT),48));
 
                 for(j=0;desc_2button[j].port!=port;j++);
                 for(;desc_2button[j].port == port;j++)
@@ -427,8 +427,8 @@ void MAPPER_Init()
                     inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_RIGHT),83));
                     inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_UP),81));
                     inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_DOWN),82));
-                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),48));
-                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT),51));
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),51));
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT),48));
 
                     for(j=0;desc_kbd[j].port!=port;j++);
                     for(;desc_kbd[j].port == port;j++)
@@ -446,8 +446,8 @@ void MAPPER_Init()
                 inputList.push_back(new JoystickButton(port, RDID(JOYPAD_X), 0, 1));
                 inputList.push_back(new JoystickButton(port, RDID(JOYPAD_B), 1, 0));
                 inputList.push_back(new JoystickButton(port, RDID(JOYPAD_A), 1, 1));
-                inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),48));
-                inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT),51));
+                inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),51));
+                inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT),48));
 
                 for(j=0;desc_4button[j].port!=port;j++);
                 for(;desc_4button[j].port == port;j++)
@@ -491,8 +491,8 @@ void MAPPER_Init()
                     inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_RIGHT),83));
                     inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_UP),81));
                     inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_DOWN),82));
-                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),48));
-                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT),51));
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),51));
+                    inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT),48));
 
                     for(j=0;desc_kbd[j].port!=port;j++);
                     for(;desc_kbd[j].port == port;j++)

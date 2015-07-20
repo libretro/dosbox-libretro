@@ -98,19 +98,20 @@ void retro_set_environment(retro_environment_t cb)
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
     static const struct retro_controller_description pads_p1[] = {
-        { "2+2 joystick", RETRO_DEVICE_2BUTTON_JOYSTICK },
-        { "2+2 gamepad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
-        { "2+2 joystick + arrows", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS },
-        { "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },
-        { "4+4 gamepad", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD },
-        { "4+4 joystick + arrows", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS }
+        { "Gamepad (2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
+        { "Gamepad (4buttons)", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD },
+        { "Joystick (2axis/2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK },
+        { "Joystick (4axis/4buttons)", RETRO_DEVICE_4BUTTON_JOYSTICK },
+        { "Joystick (2axis/2buttons + kbd arrows)", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS },
+        { "Joystick (4axis/4buttons + kbd arrows)", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS }
     };
 
     static const struct retro_controller_description pads_p2[] = {
-        { "2+2 joystick", RETRO_DEVICE_2BUTTON_JOYSTICK },
-        { "2+2 gamepad", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
-        { "4+4 joystick", RETRO_DEVICE_4BUTTON_JOYSTICK },
-        { "4+4 gamepad", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD }
+        { "Gamepad (2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
+        { "Gamepad (4buttons)", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD },
+        { "Joystick (2axis/2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK },
+        { "Joystick (4axis/4buttons)", RETRO_DEVICE_4BUTTON_JOYSTICK }
+        
     };
 
     static const struct retro_controller_info ports[] = {
