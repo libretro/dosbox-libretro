@@ -1,4 +1,7 @@
-INCFLAGS += -I$(CORE_DIR)/libco -I$(CORE_DIR)/src -I$(CORE_DIR)/include
+INCFLAGS += -I$(CORE_DIR)/libco \
+				-I$(CORE_DIR)/src \
+				-I$(CORE_DIR)/libretro-common/include \
+				-I$(CORE_DIR)/include
 
 SOURCES_CXX := \
 	$(CORE_DIR)/src/cpu/callback.cpp \
@@ -109,7 +112,9 @@ SOURCES_CXX := \
 	$(CORE_DIR)/libretro/mapper.cpp \
 	$(CORE_DIR)/libretro/mixer-retro.cpp
 
-SOURCES_C := $(CORE_DIR)/libco/libco.c
+SOURCES_C := \
+	$(CORE_DIR)/libco/libco.c \
+	$(CORE_DIR)/libretro-common/file/retro_dirent.c
 
 ifeq ($(WITH_DYNAREC), arm)
 	#COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="ARMV7LE"
