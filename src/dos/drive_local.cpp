@@ -42,7 +42,7 @@ public:
 	bool Seek(Bit32u * pos,Bit32u type);
 	bool Close();
 	Bit16u GetInformation(void);
-	bool UpdateDateTimeFromHost(void);   
+	bool UpdateDateTimeFromHost(void);
 	void FlagReadOnlyMedium(void);
 	void Flush(void);
 private:
@@ -61,20 +61,20 @@ bool localDrive::FileCreate(DOS_File * * file,char * name,Bit16u /*attributes*/)
 	char* temp_name = dirCache.GetExpandName(newname); //Can only be used in till a new drive_cache action is preformed */
 	/* Test if file exists (so we need to truncate it). don't add to dirCache then */
 	bool existing_file=false;
-	
+
 	FILE * test=fopen(temp_name,"rb+");
 	if(test) {
 		fclose(test);
 		existing_file=true;
 
 	}
-	
+
 	FILE * hand=fopen(temp_name,"wb+");
 	if (!hand){
 		LOG_MSG("Warning: file creation failed: %s",newname);
 		return false;
 	}
-   
+
 	if(!existing_file) dirCache.AddEntry(newname, true);
 	/* Make the 16 bit device information */
 	*file=new localFile(name,hand);
@@ -118,7 +118,7 @@ bool localDrive::FileOpen(DOS_File * * file,char * name,Bit32u flags) {
 
 	FILE * hand=fopen(newname,type);
 //	Bit32u err=errno;
-	if (!hand) { 
+	if (!hand) {
 		if((flags&0xf) != OPEN_READ) {
 			FILE * hmm=fopen(newname,"rb");
 			if (hmm) {
@@ -205,10 +205,10 @@ bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 	if (allocation.mediaid==0xF0 ) {
 		EmptyCache(); //rescan floppie-content on each findfirst
 	}
-    
+
 	char end[2]={CROSS_FILESPLIT,0};
 	if (tempDir[strlen(tempDir)-1]!=CROSS_FILESPLIT) strcat(tempDir,end);
-	
+
 	Bit16u id;
 	if (!dirCache.FindFirst(tempDir,id)) {
 		DOS_SetError(DOSERR_PATH_NOT_FOUND);
@@ -216,7 +216,7 @@ bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 	}
 	strcpy(srchInfo[id].srch_dir,tempDir);
 	dta.SetDirID(id);
-	
+
 	Bit8u sAttr;
 	dta.GetSearchParams(sAttr,tempDir);
 
@@ -237,7 +237,7 @@ bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 			}
 			dta.SetResult(dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
 			return true;
-		} else if ((sAttr & DOS_ATTR_VOLUME)  && (*_dir == 0) && !fcb_findfirst) { 
+		} else if ((sAttr & DOS_ATTR_VOLUME)  && (*_dir == 0) && !fcb_findfirst) {
 		//should check for a valid leading directory instead of 0
 		//exists==true if the volume label matches the searchmask and the path is valid
 			if (WildFileCmp(dirCache.GetLabel(),tempDir)) {
@@ -271,26 +271,26 @@ again:
 
 	strcpy(full_name,srchInfo[id].srch_dir);
 	strcat(full_name,dir_ent);
-	
-	//GetExpandName might indirectly destroy dir_ent (by caching in a new directory 
+
+	//GetExpandName might indirectly destroy dir_ent (by caching in a new directory
 	//and due to its design dir_ent might be lost.)
 	//Copying dir_ent first
 	strcpy(dir_entcopy,dir_ent);
-	if (stat(dirCache.GetExpandName(full_name),&stat_block)!=0) { 
+	if (stat(dirCache.GetExpandName(full_name),&stat_block)!=0) {
 		goto again;//No symlinks and such
-	}	
+	}
 
 	if(stat_block.st_mode & S_IFDIR) find_attr=DOS_ATTR_DIRECTORY;
 	else find_attr=DOS_ATTR_ARCHIVE;
  	if (~srch_attr & find_attr & (DOS_ATTR_DIRECTORY | DOS_ATTR_HIDDEN | DOS_ATTR_SYSTEM)) goto again;
-	
+
 	/*file is okay, setup everything to be copied in DTA Block */
 	char find_name[DOS_NAMELENGTH_ASCII];Bit16u find_date,find_time;Bit32u find_size;
 
 	if(strlen(dir_entcopy)<DOS_NAMELENGTH_ASCII){
 		strcpy(find_name,dir_entcopy);
 		upcase(find_name);
-	} 
+	}
 
 	find_size=(Bit32u) stat_block.st_size;
 	struct tm *time;
@@ -298,7 +298,7 @@ again:
 		find_date=DOS_PackDate((Bit16u)(time->tm_year+1900),(Bit16u)(time->tm_mon+1),(Bit16u)time->tm_mday);
 		find_time=DOS_PackTime((Bit16u)time->tm_hour,(Bit16u)time->tm_min,(Bit16u)time->tm_sec);
 	} else {
-		find_time=6; 
+		find_time=6;
 		find_date=4;
 	}
 	dta.SetResult(find_name,find_size,find_date,find_time,find_attr);
@@ -319,7 +319,7 @@ bool localDrive::GetFileAttr(char * name,Bit16u * attr) {
 		return true;
 	}
 	*attr=0;
-	return false; 
+	return false;
 }
 
 bool localDrive::MakeDir(char * dir) {
@@ -329,6 +329,8 @@ bool localDrive::MakeDir(char * dir) {
 	CROSS_FILENAME(newdir);
 #if defined (WIN32)						/* MS Visual C++ */
 	int temp=mkdir(dirCache.GetExpandName(newdir));
+#elif defined (VITA)
+  int temp=sceIoMkdir(dirCache.GetExpandName(newdir), 0777);
 #else
 	int temp=mkdir(dirCache.GetExpandName(newdir),0700);
 #endif
@@ -342,7 +344,11 @@ bool localDrive::RemoveDir(char * dir) {
 	strcpy(newdir,basedir);
 	strcat(newdir,dir);
 	CROSS_FILENAME(newdir);
+#if defined (VITA)
+  int temp=sceIoRmdir(dirCache.GetExpandName(newdir));
+#else
 	int temp=rmdir(dirCache.GetExpandName(newdir));
+#endif
 	if (temp==0) dirCache.DeleteEntry(newdir,true);
 	return (temp==0);
 }
@@ -371,12 +377,16 @@ bool localDrive::Rename(char * oldname,char * newname) {
 	strcat(newold,oldname);
 	CROSS_FILENAME(newold);
 	dirCache.ExpandName(newold);
-	
+
 	char newnew[CROSS_LEN];
 	strcpy(newnew,basedir);
 	strcat(newnew,newname);
 	CROSS_FILENAME(newnew);
-	int temp=rename(newold,dirCache.GetExpandName(newnew));
+#if defined(VITA)
+int temp=sceIoRename(newold,dirCache.GetExpandName(newnew));
+#else
+int temp=rename(newold,dirCache.GetExpandName(newnew));
+#endif
 	if (temp==0) dirCache.CacheOut(newnew);
 	return (temp==0);
 
@@ -435,9 +445,9 @@ bool localDrive::isRemovable(void) {
 	return false;
 }
 
-Bits localDrive::UnMount(void) { 
+Bits localDrive::UnMount(void) {
 	delete this;
-	return 0; 
+	return 0;
 }
 
 localDrive::localDrive(const char * startdir,Bit16u _bytes_sector,Bit8u _sectors_cluster,Bit16u _total_clusters,Bit16u _free_clusters,Bit8u _mediaid) {
@@ -477,10 +487,14 @@ bool localFile::Write(Bit8u * data,Bit16u * size) {
 	}
 	if (last_action==READ) fseek(fhandle,ftell(fhandle),SEEK_SET);
 	last_action=WRITE;
-	if(*size==0){  
-        return (!ftruncate(fileno(fhandle),ftell(fhandle)));
+	if(*size==0){
+#if defined (VITA)
+				return true;
+#else
+				return (!ftruncate(fileno(fhandle),ftell(fhandle)));
+#endif
     }
-    else 
+    else
     {
 		*size=(Bit16u)fwrite(data,1,*size,fhandle);
 		return true;
@@ -499,7 +513,7 @@ bool localFile::Seek(Bit32u * pos,Bit32u type) {
 	}
 	int ret=fseek(fhandle,*reinterpret_cast<Bit32s*>(pos),seektype);
 	if (ret!=0) {
-		// Out of file range, pretend everythings ok 
+		// Out of file range, pretend everythings ok
 		// and move file pointer top end of file... ?! (Black Thorne)
 		fseek(fhandle,0,SEEK_END);
 	};
@@ -527,7 +541,7 @@ bool localFile::Close() {
 Bit16u localFile::GetInformation(void) {
 	return read_only_medium?0x40:0;
 }
-	
+
 
 localFile::localFile(const char* _name, FILE * handle) {
 	fhandle=handle;
