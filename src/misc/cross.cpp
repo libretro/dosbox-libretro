@@ -128,6 +128,8 @@ void Cross::ResolveHomedir(std::string & temp_line) {
 void Cross::CreateDir(std::string const& in) {
 #ifdef WIN32
 	mkdir(in.c_str());
+#elif defined (VITA)
+  sceIoMkdir(in.c_str(), 0700);
 #else
 	mkdir(in.c_str(),0700);
 #endif

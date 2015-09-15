@@ -6,6 +6,11 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#if defined (VITA)
+#include <psp2/kernel/threadmgr.h>
+#define usleep(x) sceKernelDelayThread(x * 1000000)
+#endif
+
 typedef uint8_t Uint8;
 typedef uint16_t Uint16;
 typedef uint32_t Uint32;
@@ -32,7 +37,7 @@ inline unsigned SDL_GetTicks()
 {
     struct timeval t;
     gettimeofday(&t, 0);
-    
+
     return (t.tv_sec * 1000) + (t.tv_usec / 1000);
 }
 
