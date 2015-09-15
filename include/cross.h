@@ -35,7 +35,12 @@
 #define LONGTYPE(a) a##i64
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
-#else										/* LINUX / GCC */
+#elif defined(VITA)
+#include <psp2/io/fcntl.h>
+#include <psp2/io/dirent.h>
+#include <unistd.h>
+#define LONGTYPE(a) a##LL
+#else									/* LINUX / GCC */
 #include <dirent.h>
 #include <unistd.h>
 #define LONGTYPE(a) a##LL
@@ -45,7 +50,7 @@
 
 
 #if defined (WIN32) || defined (OS2)				/* Win 32 & OS/2*/
-#define CROSS_FILENAME(blah) 
+#define CROSS_FILENAME(blah)
 #define CROSS_FILESPLIT '\\'
 #define F_OK 0
 #else
@@ -79,7 +84,7 @@ public:
 
 #if defined (WIN32)
 
-#define WIN32_LEAN_AND_MEAN        // Exclude rarely-used stuff from 
+#define WIN32_LEAN_AND_MEAN        // Exclude rarely-used stuff from
 #include <windows.h>
 
 typedef struct dir_struct {
@@ -87,13 +92,20 @@ typedef struct dir_struct {
 	char            base_path[MAX_PATH+4];
 	WIN32_FIND_DATA search_data;
 } dir_information;
-
+#elif defined(VITA)
+#include <psp2/io/fcntl.h>
+#include <psp2/io/dirent.h>
+typedef struct dir_struct {
+	SceUID directory;
+  SceIoDirent entry;
+	char base_path[CROSS_LEN];
+} dir_information;
 #else
 
 //#include <sys/types.h> //Included above
 #include <dirent.h>
 
-typedef struct dir_struct { 
+typedef struct dir_struct {
 	DIR*  dir;
 	char base_path[CROSS_LEN];
 } dir_information;

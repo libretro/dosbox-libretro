@@ -198,6 +198,56 @@ void close_directory(dir_information* dirp) {
 		dirp->handle = INVALID_HANDLE_VALUE;
 	}
 }
+#elif defined(VITA)
+
+dir_information* open_directory(const char* dirname) {
+	static dir_information dir;
+	dir.directory = sceIoDopen(dirname);
+	safe_strncpy(dir.base_path,dirname,CROSS_LEN);
+	return dir.directory>=0?&dir:NULL;
+}
+
+bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory) {
+	if(sceIoDread(dirp->directory, &dirp->entry) < 0){
+		return false;
+	};
+
+
+
+//	safe_strncpy(entry_name,dentry->d_name,(FILENAME_MAX<MAX_PATH)?FILENAME_MAX:MAX_PATH);	// [include stdio.h], maybe pathconf()
+	safe_strncpy(entry_name,dirp->entry.d_name,CROSS_LEN);
+
+#ifdef DIRENT_HAS_D_TYPE
+		is_directory = PSP2_S_ISDIR(dirp->entry.d_stat.st_mode);
+
+		return true;
+
+#endif
+
+}
+
+bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_directory) {
+	if(sceIoDread(dirp->directory, &dirp->entry) < 0){
+		return false;
+	};
+
+
+
+//	safe_strncpy(entry_name,dentry->d_name,(FILENAME_MAX<MAX_PATH)?FILENAME_MAX:MAX_PATH);	// [include stdio.h], maybe pathconf()
+	safe_strncpy(entry_name,dirp->entry.d_name,CROSS_LEN);
+
+#ifdef DIRENT_HAS_D_TYPE
+		is_directory = PSP2_S_ISDIR(dirp->entry.d_stat.st_mode);
+
+		return true;
+
+#endif
+}
+
+void close_directory(dir_information* dirp) {
+	sceIoDclose(dirp->directory);
+}
+
 
 #else
 #include <dirent.h>
