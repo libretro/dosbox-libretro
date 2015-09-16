@@ -420,7 +420,7 @@ bool CDROM_Interface_Image::CanReadPVD(TrackFile *file, int sectorSize, bool mod
 	return (pvd[0] == 1 && !strncmp((char*)(&pvd[1]), "CD001", 5) && pvd[6] == 1);
 }
 
-#if defined(WIN32) || (defined(__LIBRETRO__) && defined(GEKKO)) // __LIBRETRO__: No dirname on wii
+#if defined(WIN32) || (defined(__LIBRETRO__) && (defined(GEKKO) || defined(VITA)) // __LIBRETRO__: No dirname on wii
 static string FAKEdirname(char * file) {
 	char * sep = strrchr(file, '\\');
 	if (sep == NULL)

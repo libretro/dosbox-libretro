@@ -488,7 +488,7 @@ static Bitu INT11_Handler(void) {
 #define DOSBOX_CLOCKSYNC 0
 #endif
 
-#if defined(__LIBRETRO__) && defined(GEKKO) // No ftime support
+#if defined(__LIBRETRO__) && (defined(GEKKO) || defined(VITA)) // No ftime support
 struct FAKEtimeb
 {
     time_t time;

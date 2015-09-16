@@ -396,7 +396,11 @@ public:
 			struct stat test;
 			strcpy(buffer,line.c_str());
 			if (stat(buffer,&test)){
+#if defined(VITA)
+            strcpy(buffer,"cache0:/retroarch/");
+#else
 				getcwd(buffer,CROSS_LEN);
+#endif
 				strcat(buffer,cross_filesplit);
 				strcat(buffer,line.c_str());
 				if (stat(buffer,&test)) goto nomount;
@@ -409,7 +413,11 @@ public:
 				char* name = strrchr(buffer,CROSS_FILESPLIT);
 				if (!name) { //Only a filename 
 					line = buffer;
+#if defined(VITA)
+               strcpy(buffer,"cache0:/retroarch/");
+#else
 					getcwd(buffer,CROSS_LEN);
+#endif
 					strcat(buffer,cross_filesplit);
 					strcat(buffer,line.c_str());
 					if(stat(buffer,&test)) goto nomount;
