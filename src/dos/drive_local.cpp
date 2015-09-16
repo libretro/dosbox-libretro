@@ -23,6 +23,11 @@
 #include <time.h>
 #include <errno.h>
 
+#ifdef VITA
+#include <psp2/io/stat.h>
+#include <psp2/io/fcntl.h>
+#endif
+
 #include "dosbox.h"
 #include "dos_inc.h"
 #include "drives.h"

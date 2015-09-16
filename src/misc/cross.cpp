@@ -21,6 +21,10 @@
 
 #include <retro_dirent.h>
 
+#ifdef VITA
+#include <psp2/io/stat.h>
+#endif
+
 #include "../../libretro/libretro.h"
 #include "dosbox.h"
 #include "cross.h"
@@ -113,8 +117,6 @@ bool Cross::IsPathAbsolute(std::string const& in)
 #endif
 	return false;
 }
-
-#include <dirent.h>
 
 dir_information* open_directory(const char* dirname)
 {
