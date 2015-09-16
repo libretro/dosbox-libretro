@@ -117,10 +117,12 @@
 /* #undef inline */
 #endif
 
+#ifndef INLINE
 #if C_ATTRIBUTE_ALWAYS_INLINE
 #define INLINE inline __attribute__((always_inline))
 #else
 #define INLINE inline
+#endif
 #endif
 
 #if C_ATTRIBUTE_FASTCALL

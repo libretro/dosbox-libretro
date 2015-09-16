@@ -25,7 +25,7 @@ typedef int SDL_mutex;
 #define SDL_mutexP(...)
 
 // TIMER
-inline void SDL_Delay(unsigned x)
+inline void SDL_Delay(unsigned ms)
 {
    rarch_sleep(ms);
 }
