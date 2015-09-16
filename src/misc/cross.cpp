@@ -24,13 +24,6 @@
 #include "cross.h"
 #include "support.h"
 
-#ifdef WIN32
-#ifndef _WIN32_IE
-#define _WIN32_IE 0x0400
-#endif
-#include <shlobj.h>
-#endif
-
 #if defined HAVE_SYS_TYPES_H && defined HAVE_PWD_H
 #include <sys/types.h>
 #include <pwd.h>
@@ -67,18 +60,26 @@ void Cross::ResolveHomedir(std::string & temp_line)
       return; //No ~
 
    if(temp_line.size() == 1 || temp_line[1] == CROSS_FILESPLIT)
-   { //The ~ and ~/ variant
-      char * home = getenv("HOME");
-      if(home) temp_line.replace(0,1,std::string(home));
+   {
+      //The ~ and ~/ variant
+      char *home = getenv("HOME");
+      if(home)
+         temp_line.replace(0,1,std::string(home));
    }
 #if defined HAVE_SYS_TYPES_H && defined HAVE_PWD_H
    else
-   { // The ~username variant
+   {
+      struct passwd *pass;
+      std::string username;
+      // The ~username variant
       std::string::size_type namelen = temp_line.find(CROSS_FILESPLIT);
-      if(namelen == std::string::npos) namelen = temp_line.size();
-      std::string username = temp_line.substr(1,namelen - 1);
-      struct passwd* pass = getpwnam(username.c_str());
-      if(pass) temp_line.replace(0,namelen,pass->pw_dir); //namelen -1 +1(for the ~)
+
+      if(namelen == std::string::npos)
+         namelen = temp_line.size();
+      username = temp_line.substr(1,namelen - 1);
+      pass     = getpwnam(username.c_str());
+      if(pass)
+         temp_line.replace(0,namelen,pass->pw_dir); //namelen -1 +1(for the ~)
    }
 #endif // USERNAME lookup code
 }
@@ -92,9 +93,10 @@ void Cross::CreateDir(std::string const& in)
 #endif
 }
 
-bool Cross::IsPathAbsolute(std::string const& in) {
+bool Cross::IsPathAbsolute(std::string const& in)
+{
 	// Absolute paths
-#if defined (WIN32) || defined(OS2) && !defined __LIBRETRO__
+#if defined (WIN32)
 	// drive letter
 	if (in.size() > 2 && in[1] == ':' )
       return true;
@@ -108,65 +110,6 @@ bool Cross::IsPathAbsolute(std::string const& in) {
 	return false;
 }
 
-#if defined (WIN32)
-
-dir_information* open_directory(const char* dirname)
-{
-	if (dirname == NULL) return NULL;
-
-	size_t len = strlen(dirname);
-	if (len == 0) return NULL;
-
-	static dir_information dir;
-
-	safe_strncpy(dir.base_path,dirname,MAX_PATH);
-
-	if (dirname[len-1] == '\\') strcat(dir.base_path,"*.*");
-	else                        strcat(dir.base_path,"\\*.*");
-
-	dir.handle = INVALID_HANDLE_VALUE;
-
-	return (access(dirname,0) ? NULL : &dir);
-}
-
-bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory)
-{
-	dirp->handle = FindFirstFile(dirp->base_path, &dirp->search_data);
-	if (INVALID_HANDLE_VALUE == dirp->handle)
-		return false;
-
-	safe_strncpy(entry_name,dirp->search_data.cFileName,(MAX_PATH<CROSS_LEN)?MAX_PATH:CROSS_LEN);
-
-   is_directory = false;
-	if (dirp->search_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-      is_directory = true;
-
-	return true;
-}
-
-bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_directory)
-{
-	int result = FindNextFile(dirp->handle, &dirp->search_data);
-	if (result==0) return false;
-
-	safe_strncpy(entry_name,dirp->search_data.cFileName,(MAX_PATH<CROSS_LEN)?MAX_PATH:CROSS_LEN);
-
-	if (dirp->search_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) is_directory = true;
-	else is_directory = false;
-
-	return true;
-}
-
-void close_directory(dir_information* dirp)
-{
-	if (dirp->handle != INVALID_HANDLE_VALUE)
-   {
-		FindClose(dirp->handle);
-		dirp->handle = INVALID_HANDLE_VALUE;
-	}
-}
-
-#else
 #include <dirent.h>
 
 dir_information* open_directory(const char* dirname)
@@ -179,6 +122,8 @@ dir_information* open_directory(const char* dirname)
 
 bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory)
 {
+	struct stat status;
+	static char buffer[2*CROSS_LEN] = { 0 };
 	struct dirent* dentry = readdir(dirp->dir);
 	if (dentry==NULL)
 		return false;
@@ -199,20 +144,23 @@ bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_dire
 #endif
 
 	// probably use d_type here instead of a full stat()
-	static char buffer[2*CROSS_LEN] = { 0 };
 	buffer[0] = 0;
 	strcpy(buffer,dirp->base_path);
 	strcat(buffer,entry_name);
-	struct stat status;
-	if (stat(buffer,&status)==0) is_directory = (S_ISDIR(status.st_mode)>0);
-	else is_directory = false;
+   is_directory = false;
+
+	if (stat(buffer,&status)==0)
+      is_directory = (S_ISDIR(status.st_mode)>0);
 
 	return true;
 }
 
 bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_directory)
 {
+	struct stat status;
+	static char buffer[2*CROSS_LEN] = { 0 };
 	struct dirent* dentry = readdir(dirp->dir);
+
 	if (dentry==NULL)
 		return false;
 
@@ -232,14 +180,13 @@ bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_direc
 #endif
 
 	// probably use d_type here instead of a full stat()
-	static char buffer[2*CROSS_LEN] = { 0 };
 	buffer[0] = 0;
 	strcpy(buffer,dirp->base_path);
 	strcat(buffer,entry_name);
-	struct stat status;
 
-	if (stat(buffer,&status)==0) is_directory = (S_ISDIR(status.st_mode)>0);
-	else is_directory = false;
+   is_directory = false;
+	if (stat(buffer,&status)==0)
+      is_directory = (S_ISDIR(status.st_mode)>0);
 
 	return true;
 }
@@ -248,5 +195,3 @@ void close_directory(dir_information* dirp)
 {
 	closedir(dirp->dir);
 }
-
-#endif
