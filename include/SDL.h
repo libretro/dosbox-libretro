@@ -8,6 +8,10 @@
 
 #include <retro_miscellaneous.h>
 
+#ifdef VITA
+#include <psp2/kernel/threadmgr.h>
+#endif
+
 typedef uint8_t Uint8;
 typedef uint16_t Uint16;
 typedef uint32_t Uint32;

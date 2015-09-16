@@ -36,7 +36,6 @@
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #else										/* LINUX / GCC */
-#include <dirent.h>
 #include <unistd.h>
 #define LONGTYPE(a) a##LL
 #endif
@@ -75,7 +74,6 @@ public:
 	static void CreateDir(std::string const& temp);
 	static bool IsPathAbsolute(std::string const& in);
 };
-
 
 #include <retro_dirent.h>
 
