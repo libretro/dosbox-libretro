@@ -77,28 +77,12 @@ public:
 };
 
 
-#if defined (WIN32)
-
-#define WIN32_LEAN_AND_MEAN        // Exclude rarely-used stuff from 
-#include <windows.h>
-
-typedef struct dir_struct {
-	HANDLE          handle;
-	char            base_path[MAX_PATH+4];
-	WIN32_FIND_DATA search_data;
-} dir_information;
-
-#else
-
-//#include <sys/types.h> //Included above
-#include <dirent.h>
+#include <retro_dirent.h>
 
 typedef struct dir_struct { 
-	DIR*  dir;
+	RDIR*  dir;
 	char base_path[CROSS_LEN];
 } dir_information;
-
-#endif
 
 dir_information* open_directory(const char* dirname);
 bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory);

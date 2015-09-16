@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <string>
 
+#include <retro_dirent.h>
+
 #include "../../libretro/libretro.h"
 #include "dosbox.h"
 #include "cross.h"
@@ -115,83 +117,38 @@ bool Cross::IsPathAbsolute(std::string const& in)
 dir_information* open_directory(const char* dirname)
 {
 	static dir_information dir;
-	dir.dir=opendir(dirname);
+
+	dir.dir = retro_opendir(dirname);
+
 	safe_strncpy(dir.base_path,dirname,CROSS_LEN);
-	return dir.dir?&dir:NULL;
-}
 
-bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory)
-{
-	struct stat status;
-	static char buffer[2*CROSS_LEN] = { 0 };
-	struct dirent* dentry = readdir(dirp->dir);
-	if (dentry==NULL)
-		return false;
-
-	safe_strncpy(entry_name,dentry->d_name,CROSS_LEN);
-
-#ifdef DIRENT_HAS_D_TYPE
-	if(dentry->d_type == DT_DIR)
-   {
-		is_directory = true;
-		return true;
-	}
-   else if(dentry->d_type == DT_REG)
-   {
-		is_directory = false;
-		return true;
-	}
-#endif
-
-	// probably use d_type here instead of a full stat()
-	buffer[0] = 0;
-	strcpy(buffer,dirp->base_path);
-	strcat(buffer,entry_name);
-   is_directory = false;
-
-	if (stat(buffer,&status)==0)
-      is_directory = (S_ISDIR(status.st_mode)>0);
-
-	return true;
+	return dir.dir ? &dir : NULL;
 }
 
 bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_directory)
 {
-	struct stat status;
-	static char buffer[2*CROSS_LEN] = { 0 };
-	struct dirent* dentry = readdir(dirp->dir);
+   struct stat status;
+   static char buffer[2*CROSS_LEN] = { 0 };
 
-	if (dentry==NULL)
-		return false;
-
-	safe_strncpy(entry_name,dentry->d_name,CROSS_LEN);
-
-#ifdef DIRENT_HAS_D_TYPE
-	if(dentry->d_type == DT_DIR)
+   while (retro_readdir(dirp->dir))
    {
-		is_directory = true;
-		return true;
-	}
-   else if(dentry->d_type == DT_REG)
-   {
-		is_directory = false;
-		return true;
-	}
-#endif
+      char file_path[4096];
 
-	// probably use d_type here instead of a full stat()
-	buffer[0] = 0;
-	strcpy(buffer,dirp->base_path);
-	strcat(buffer,entry_name);
+      safe_strncpy(entry_name, retro_dirent_get_name(dirp->dir), CROSS_LEN);
+      is_directory = retro_dirent_is_dir(dirp->dir, file_path);
 
-   is_directory = false;
-	if (stat(buffer,&status)==0)
-      is_directory = (S_ISDIR(status.st_mode)>0);
+      return true;
+   }
 
-	return true;
+   return false;
+}
+
+bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory)
+{
+   return read_directory_next(dirp, entry_name, is_directory);
 }
 
 void close_directory(dir_information* dirp)
 {
-	closedir(dirp->dir);
+	retro_closedir(dirp->dir);
 }
