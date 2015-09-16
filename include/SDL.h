@@ -6,6 +6,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <retro_miscellaneous.h>
+
 typedef uint8_t Uint8;
 typedef uint16_t Uint16;
 typedef uint32_t Uint32;
@@ -25,7 +27,7 @@ typedef int SDL_mutex;
 // TIMER
 inline void SDL_Delay(unsigned x)
 {
-    usleep(x * 1000);
+   rarch_sleep(ms);
 }
 
 inline unsigned SDL_GetTicks()
