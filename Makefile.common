@@ -115,7 +115,8 @@ SOURCES_CXX := \
 SOURCES_C := $(CORE_DIR)/libco/libco.c
 
 ifneq ($(STATIC_LINKING), 1)
-SOURCES_C += $(CORE_DIR)/libretro-common/file/retro_dirent.c
+SOURCES_C += $(CORE_DIR)/libretro-common/file/retro_dirent.c \
+				 $(CORE_DIR)/libretro-common/file/retro_stat.c
 endif
 
 ifeq ($(WITH_DYNAREC), arm)

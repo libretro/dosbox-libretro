@@ -1,10 +1,29 @@
-#include <retro_dirent.h>
+/* Copyright  (C) 2010-2015 The RetroArch team
+ *
+ * ---------------------------------------------------------------------------------------
+ * The following license statement only applies to this file (retro_dirent.c).
+ * ---------------------------------------------------------------------------------------
+ *
+ * Permission is hereby granted, free of charge,
+ * to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+ * and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 #include <stdlib.h>
 #include <stdio.h>
 
 #if defined(_WIN32)
-#  include <compat/posix_string.h>
 #  ifdef _MSC_VER
 #    define setmode _setmode
 #  endif
@@ -35,6 +54,8 @@
 #endif
 
 #include <boolean.h>
+#include <retro_stat.h>
+#include <retro_dirent.h>
 
 struct RDIR
 {
@@ -56,13 +77,13 @@ struct RDIR
 
 struct RDIR *retro_opendir(const char *name)
 {
+#if defined(_WIN32)
    char path_buf[1024];
+#endif
    struct RDIR *rdir = (struct RDIR*)calloc(1, sizeof(*rdir));
 
    if (!rdir)
       return NULL;
-
-   (void)path_buf;
 
 #if defined(_WIN32)
    snprintf(path_buf, sizeof(path_buf), "%s\\*", name);
@@ -148,22 +169,13 @@ bool retro_dirent_is_dir(struct RDIR *rdir, const char *path)
    const struct dirent *entry = (const struct dirent*)rdir->entry;
    if (entry->d_type == DT_DIR)
       return true;
-   else if (entry->d_type == DT_UNKNOWN /* This can happen on certain file systems. */
-         || entry->d_type == DT_LNK)
-   {
-      struct stat buf;
-      if (stat(path, &buf) < 0)
-         return false;
-
-      return S_ISDIR(buf.st_mode);
-   }
+   /* This can happen on certain file systems. */
+   if (entry->d_type == DT_UNKNOWN || entry->d_type == DT_LNK)
+      return path_is_directory(path);
    return false;
-#else /* dirent struct doesn't have d_type, do it the slow way ... */
-   struct stat buf;
-   if (stat(path, &buf) < 0)
-      return false;
-
-   return S_ISDIR(buf.st_mode);
+#else
+   /* dirent struct doesn't have d_type, do it the slow way ... */
+   return path_is_directory(path);
 #endif
 }
 
