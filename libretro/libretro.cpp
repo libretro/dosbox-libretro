@@ -146,56 +146,56 @@ void retro_set_environment(retro_environment_t cb)
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
 {
-               joystick_type[port] = JOY_NONE;
-            connected[port] = false;
-            dpad[port] = false;
-            emulated_kbd[port] = false;
-    switch (device)
-    {
-        case RETRO_DEVICE_2BUTTON_JOYSTICK:
-        case RETRO_DEVICE_ANALOG:
-        case RETRO_DEVICE_JOYPAD:
-            joystick_type[port] = JOY_2AXIS;
-            connected[port] = true;
-            dpad[port] = false;
-            emulated_kbd[port] = false;
-            break;
-        case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS:
-            joystick_type[port] = JOY_2AXIS;
-            connected[port] = true;
-            dpad[port] = false;
-            emulated_kbd[port] = true;
-            break;
-        case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD:
-            joystick_type[port] = JOY_2AXIS;
-            connected[port] = true;
-            dpad[port] = true;
-            emulated_kbd[port] = false;
-            break;
-        case RETRO_DEVICE_4BUTTON_JOYSTICK:
-            joystick_type[port] = JOY_4AXIS;
-            connected[port] = true;
-            dpad[port] = false;
-            emulated_kbd[port] = false;
-            break;
-        case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS:
-            joystick_type[port] = JOY_4AXIS;
-            connected[port] = true;
-            dpad[port] = false;
-            emulated_kbd[port] = true;
-            break;
-        case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD:
-            joystick_type[port] = JOY_4AXIS;
-            connected[port] = true;
-            dpad[port] = true;
-            emulated_kbd[port] = false;
-            break;
-        default:
-            joystick_type[port] = JOY_NONE;
-            connected[port] = false;
-            dpad[port] = false;
-            emulated_kbd[port] = false;
-            break;
+   joystick_type[port] = JOY_NONE;
+   connected[port] = false;
+   dpad[port] = false;
+   emulated_kbd[port] = false;
+   switch (device)
+   {
+      case RETRO_DEVICE_2BUTTON_JOYSTICK:
+      case RETRO_DEVICE_ANALOG:
+      case RETRO_DEVICE_JOYPAD:
+         joystick_type[port] = JOY_2AXIS;
+         connected[port] = true;
+         dpad[port] = false;
+         emulated_kbd[port] = false;
+         break;
+      case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS:
+         joystick_type[port] = JOY_2AXIS;
+         connected[port] = true;
+         dpad[port] = false;
+         emulated_kbd[port] = true;
+         break;
+      case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD:
+         joystick_type[port] = JOY_2AXIS;
+         connected[port] = true;
+         dpad[port] = true;
+         emulated_kbd[port] = false;
+         break;
+      case RETRO_DEVICE_4BUTTON_JOYSTICK:
+         joystick_type[port] = JOY_4AXIS;
+         connected[port] = true;
+         dpad[port] = false;
+         emulated_kbd[port] = false;
+         break;
+      case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS:
+         joystick_type[port] = JOY_4AXIS;
+         connected[port] = true;
+         dpad[port] = false;
+         emulated_kbd[port] = true;
+         break;
+      case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD:
+         joystick_type[port] = JOY_4AXIS;
+         connected[port] = true;
+         dpad[port] = true;
+         emulated_kbd[port] = false;
+         break;
+      default:
+         joystick_type[port] = JOY_NONE;
+         connected[port] = false;
+         dpad[port] = false;
+         emulated_kbd[port] = false;
+         break;
     }
     log_cb(RETRO_LOG_INFO,"%d\n",joystick_type[port]);
     MAPPER_Init();
