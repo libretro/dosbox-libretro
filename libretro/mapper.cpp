@@ -283,10 +283,18 @@ void MAPPER_Init()
             joytype = joystick_type[0];
             joystick_type[1] = JOY_NONE;
         }
+        else
+        {
+           joystick_type[0] = JOY_NONE;
+        }
         if(connected[1])
         {
             joytype = joystick_type[1];
             joystick_type[0] = JOY_NONE;
+        }
+        else
+        {
+           joystick_type[1] = JOY_NONE;
         }
 
     }
