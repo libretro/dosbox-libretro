@@ -133,7 +133,7 @@ else ifeq ($(platform), vita)
 
 # CTR
 else ifeq ($(platform), ctr)
-   TARGET := libretro_ctr.a
+   TARGET := $(TARGET_NAME)_libretro_ctr.a
    CC = $(DEVKITARM)/bin/arm-none-eabi-gcc$(EXE_EXT)
    CXX = $(DEVKITARM)/bin/arm-none-eabi-g++$(EXE_EXT)
    AR = $(DEVKITARM)/bin/arm-none-eabi-ar$(EXE_EXT)
