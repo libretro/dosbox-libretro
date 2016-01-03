@@ -38,14 +38,14 @@ static const struct { unsigned retroID; KBD_KEYS dosboxID; } keyMap[] =
     {RETROK_k, KBD_k}, {RETROK_l, KBD_l}, {RETROK_m, KBD_m}, {RETROK_n, KBD_n},
     {RETROK_o, KBD_o}, {RETROK_p, KBD_p}, {RETROK_q, KBD_q}, {RETROK_r, KBD_r},
     {RETROK_s, KBD_s}, {RETROK_t, KBD_t}, {RETROK_u, KBD_u}, {RETROK_v, KBD_v},
-    {RETROK_w, KBD_w}, {RETROK_x, KBD_x}, {RETROK_y, KBD_y}, {RETROK_z, KBD_z}, //35
+    {RETROK_w, KBD_w}, {RETROK_x, KBD_x}, {RETROK_y, KBD_y}, {RETROK_z, KBD_z},
     {RETROK_F1, KBD_f1}, {RETROK_F2, KBD_f2}, {RETROK_F3, KBD_f3},
     {RETROK_F4, KBD_f4}, {RETROK_F5, KBD_f5}, {RETROK_F6, KBD_f6},
-    {RETROK_F7, KBD_f7}, {RETROK_F8, KBD_f8}, {RETROK_F9, KBD_f9}, //44
+    {RETROK_F7, KBD_f7}, {RETROK_F8, KBD_f8}, {RETROK_F9, KBD_f9},
     {RETROK_F10, KBD_f10}, {RETROK_F11, KBD_f11}, {RETROK_F12, KBD_f12},
     {RETROK_ESCAPE, KBD_esc}, {RETROK_TAB, KBD_tab}, {RETROK_BACKSPACE, KBD_backspace},
-    {RETROK_RETURN, KBD_enter}, {RETROK_SPACE, KBD_space}, {RETROK_LALT, KBD_leftalt}, //53
-    {RETROK_RALT, KBD_rightalt}, {RETROK_LCTRL, KBD_leftctrl}, {RETROK_RCTRL, KBD_rightctrl}, //55
+    {RETROK_RETURN, KBD_enter}, {RETROK_SPACE, KBD_space}, {RETROK_LALT, KBD_leftalt},
+    {RETROK_RALT, KBD_rightalt}, {RETROK_LCTRL, KBD_leftctrl}, {RETROK_RCTRL, KBD_rightctrl},
     {RETROK_LSHIFT, KBD_leftshift}, {RETROK_RSHIFT, KBD_rightshift},
     {RETROK_CAPSLOCK, KBD_capslock}, {RETROK_SCROLLOCK, KBD_scrolllock},
     {RETROK_NUMLOCK, KBD_numlock}, {RETROK_MINUS, KBD_minus}, {RETROK_EQUALS, KBD_equals},
@@ -55,7 +55,7 @@ static const struct { unsigned retroID; KBD_KEYS dosboxID; } keyMap[] =
     {RETROK_SLASH, KBD_slash}, {RETROK_SYSREQ, KBD_printscreen}, {RETROK_PAUSE, KBD_pause},
     {RETROK_INSERT, KBD_insert}, {RETROK_HOME, KBD_home}, {RETROK_PAGEUP, KBD_pageup},
     {RETROK_PAGEDOWN, KBD_pagedown}, {RETROK_DELETE, KBD_delete}, {RETROK_END, KBD_end},
-    {RETROK_LEFT, KBD_left}, {RETROK_UP, KBD_up}, {RETROK_DOWN, KBD_down}, {RETROK_RIGHT, KBD_right}, //79
+    {RETROK_LEFT, KBD_left}, {RETROK_UP, KBD_up}, {RETROK_DOWN, KBD_down}, {RETROK_RIGHT, KBD_right},
     {RETROK_KP1, KBD_kp1}, {RETROK_KP2, KBD_kp2}, {RETROK_KP3, KBD_kp3}, {RETROK_KP4, KBD_kp4},
     {RETROK_KP5, KBD_kp5}, {RETROK_KP6, KBD_kp6}, {RETROK_KP7, KBD_kp7}, {RETROK_KP8, KBD_kp8},
     {RETROK_KP9, KBD_kp9}, {RETROK_KP0, KBD_kp0}, {RETROK_KP_DIVIDE, KBD_kpdivide},
@@ -129,6 +129,22 @@ struct MouseButton : public Processable
 
     void process()       { item.process(*this, input_cb(1, RDEV(MOUSE), 0, retroButton)); }
     void press() const   { Mouse_ButtonPressed(dosboxButton); }
+    void release() const { Mouse_ButtonReleased(dosboxButton); }
+};
+
+struct EmulatedMouseButton : public Processable
+{
+    unsigned retroPort;
+    unsigned retroID;
+    unsigned dosboxButton;
+
+    InputItem<EmulatedMouseButton> item;
+
+    EmulatedMouseButton(unsigned rP, unsigned rID, unsigned dosbox) :
+        retroPort(rP), retroID(rID), dosboxButton(dosbox) { }
+
+    void process()       { item.process(*this, input_cb(retroPort, RDEV(JOYPAD), 0, retroID)); }
+    void press() const   { Mouse_ButtonPressed(dosboxButton);  }
     void release() const { Mouse_ButtonReleased(dosboxButton); }
 };
 
@@ -267,6 +283,8 @@ void MAPPER_Init()
 
     inputList.push_back(new MouseButton(RDID(MOUSE_LEFT), 0));
     inputList.push_back(new MouseButton(RDID(MOUSE_RIGHT), 1));
+    inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_L2), 0));
+    inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_R2), 1));
 
     struct retro_input_descriptor desc[64];
     joytype=JOY_AUTO;
@@ -533,13 +551,26 @@ void MAPPER_Run(bool pressed)
     poll_cb();
 
     // Mouse movement
-    const int16_t mouseX = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_X));
-    const int16_t mouseY = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_Y));
+    int16_t mouseX = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_X));
+    int16_t mouseY = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_Y));
 
+    const int deadzone = 30;
+    const int speed = 8;
+
+    int16_t emulated_mouseX = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X);
+    int16_t emulated_mouseY = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y);
+
+    if (abs(emulated_mouseX) <= deadzone * 32768 / 100)
+       emulated_mouseX = 0;
+    if (abs(emulated_mouseY) <= deadzone * 32768 / 100)
+       emulated_mouseY = 0;
+
+    emulated_mouseX = emulated_mouseX * speed / 32768;
+    emulated_mouseY = emulated_mouseY * speed / 32768;
+
+    Mouse_CursorMoved(emulated_mouseX, emulated_mouseY, 0, 0, true);
     if(mouseX || mouseY)
-    {
-        Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
-    }
+       Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
 
     for (std::vector<Processable*>::iterator i = inputList.begin(); i != inputList.end(); i ++)
         (*i)->process();
