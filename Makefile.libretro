@@ -131,6 +131,24 @@ else ifeq ($(platform), vita)
    COMMONFLAGS += -DVITA
 	STATIC_LINKING = 1
 
+# CTR
+else ifeq ($(platform), ctr)
+   TARGET := $(TARGET_NAME)_libretro_ctr.a
+   CC = $(DEVKITARM)/bin/arm-none-eabi-gcc$(EXE_EXT)
+   CXX = $(DEVKITARM)/bin/arm-none-eabi-g++$(EXE_EXT)
+   AR = $(DEVKITARM)/bin/arm-none-eabi-ar$(EXE_EXT)
+   ENDIANNESS_DEFINES := -DLSB_FIRST
+   COMMONFLAGS += -DARM11 -D_3DS -Os -s -I$(CTRULIB)/include/
+   COMMONFLAGS += -DHAVE_MKDIR
+   COMMONFLAGS += -march=armv6k -mtune=mpcore -mfloat-abi=hard
+   COMMONFLAGS += -mword-relocations
+   COMMONFLAGS += -fomit-frame-pointer -fstrict-aliasing -ffast-math
+   COMMONFLAGS += -DDISABLE_EXCEPTIONS
+   STATIC_LINKING = 1
+   IS_X86 := 0
+   NEED_BPP := 16
+
+
 else ifeq ($(platform), wii)
    TARGET := $(TARGET_NAME)_libretro_wii.a
    CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
