@@ -148,7 +148,7 @@ else ifeq ($(platform), ctr)
    IS_X86 := 0
    NEED_BPP := 16
 
-
+# Wii
 else ifeq ($(platform), wii)
    TARGET := $(TARGET_NAME)_libretro_wii.a
    CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
