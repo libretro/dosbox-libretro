@@ -30,6 +30,7 @@
 #include "control.h"
 #include "pic.h"
 #include "joystick.h"
+#include <unistd.h>
 
 #define RETRO_DEVICE_2BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0)                     //2 buttons, 2 axes
 #define RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)       //2 buttons, 2 axes, dpad (emulated joystick)
@@ -38,20 +39,22 @@
 #define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 4)       //4 buttons, 4 axes, dpad (emulated joystick)
 #define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 5)         //4 buttons, 4 axes, dpad (emulated keystrokes)*/
 
+bool update_cycles = false;
+bool use_options = false;
 
 int cycles_0 = 0;
 int cycles_1 = 0;
-int cycles_2 = 1000;
+int cycles_2 = 1;
 int cycles_3 = 0;
-bool cycles_flag = false;
-
-bool options_boot = true;
 
 extern Config * control;
 extern Bit32s CPU_CycleMax;
 extern Bit32s CPU_CycleLimit;
 extern bool CPU_CycleAutoAdjust;
 extern bool CPU_SkipCycleAutoAdjust;
+
+MachineType machine=MCH_VGA;
+SVGACards svgaCard = SVGA_None;
 
 int current_port;
 
@@ -86,12 +89,11 @@ void retro_set_environment(retro_environment_t cb)
     environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
 
      static const struct retro_variable vars[] = {
-        { "dosbox_options_on_boot", "Enable core options on boot; enabled|disabled" },
-        /*{ "dosbox_cpu_cycles_auto", "CPU Cycles auto; enabled|disabled" },*/
-        { "dosbox_cpu_cycles_0", "CPU Cycles coarser; 0|100000|200000|300000|400000|500000|600000|700000|800000|900000" },
-        { "dosbox_cpu_cycles_1", "CPU Cycles coarse; 0|10000|20000|30000|40000|50000|60000|70000|80000|90000" },
-        { "dosbox_cpu_cycles_2", "CPU Cycles fine; 1000|2000|3000|4000|5000|6000|7000|8000|9000|0" },
-        { "dosbox_cpu_cycles_3", "CPU Cycles finer; 0|100|200|300|400|500|600|700|800|900" },
+        { "dosbox_machine_type", "Machine type; hercules|cga|tandy|pcjr|ega|vgaonly|svga_s3|svga_et3000|svga_et4000|svga_paradise" },
+        { "dosbox_cpu_cycles_0", "CPU cycles x 100000; 0|1|2|3|4|5|6|7|8|9" },
+        { "dosbox_cpu_cycles_1", "CPU cycles x 10000; 0|1|2|3|4|5|6|7|8|9" },
+        { "dosbox_cpu_cycles_2", "CPU cycles x 1000; 0|1|2|3|4|5|6|7|8|9" },
+        { "dosbox_cpu_cycles_3", "CPU cycles x 100; 1|2|3|4|5|6|7|8|9" },
         { NULL, NULL },
     };
 
@@ -202,16 +204,71 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 
 }
 
-void check_variables(void)
+void update_cpu_cycles()
 {
+    if(update_cycles)
+    {
+        int cycles = cycles_0 + cycles_1 + cycles_2 + cycles_3;
+        char cycles_val[16];
 
-    struct retro_variable var = {0};
+        CPU_CycleMax=cycles;
+    }
+    update_cycles = false;
+}
+
+void check_variables()
+{
+   if(!use_options)
+      return;
+   struct retro_variable var = {0};
+
+   var.key = "dosbox_machine_type";
+   var.value = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "hercules") == 0)
+         machine = MCH_HERC;
+      else if (strcmp(var.value, "cga") == 0)
+         machine = MCH_CGA;
+      else if (strcmp(var.value, "pcjr") == 0)
+         machine = MCH_PCJR;
+      else if (strcmp(var.value, "tandy") == 0)
+         machine = MCH_TANDY;
+      else if (strcmp(var.value, "ega") == 0)
+         machine = MCH_EGA;
+      else if (strcmp(var.value, "svga_s3") == 0)
+      {
+         machine = MCH_VGA;
+         svgaCard = SVGA_S3Trio;
+      }
+      else if (strcmp(var.value, "svga_et4000") == 0)
+      {
+         machine = MCH_VGA;
+         svgaCard = SVGA_TsengET4K;
+      }
+      else if (strcmp(var.value, "svga_et3000") == 0)
+      {
+         machine = MCH_VGA;
+         svgaCard = SVGA_TsengET3K;
+      }
+      else if (strcmp(var.value, "svga_paradise") == 0)
+      {
+         machine = MCH_VGA;
+         svgaCard = SVGA_ParadisePVGA1A;
+      }
+      else
+      {
+         machine = MCH_VGA;
+         svgaCard = SVGA_None;
+      }
+   }
+
     var.key = "dosbox_cpu_cycles_0";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
-        cycles_0 = atoi(var.value);
-        cycles_flag = true;
+        cycles_0 = atoi(var.value) * 100000;
+        update_cycles = true;
 
     }
 
@@ -219,8 +276,8 @@ void check_variables(void)
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
-        cycles_1 = atoi(var.value);
-        cycles_flag = true;
+        cycles_1 = atoi(var.value) * 10000;
+        update_cycles = true;
 
     }
 
@@ -228,8 +285,8 @@ void check_variables(void)
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
-        cycles_2 = atoi(var.value);
-        cycles_flag = true;
+        cycles_2 = atoi(var.value) * 1000;
+        update_cycles = true;
 
     }
 
@@ -237,42 +294,11 @@ void check_variables(void)
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
-        cycles_3 = atoi(var.value);
-        cycles_flag = true;
+        cycles_3 = atoi(var.value) * 100;
+        update_cycles = true;
 
     }
-
-    var.key = "dosbox_options_on_boot";
-    var.value = NULL;
-    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-    {
-        if (strcmp(var.value, "enabled") == 0)
-            options_boot = true;
-        if (strcmp(var.value, "disabled") == 0)
-            options_boot = false;
-
-    }
-
-    //not working will keep this disabled for the time being
-    /*var.key = "dosbox_cpu_cycles_auto";
-    var.value = NULL;
-    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-    {
-        if (strcmp(var.value, "enabled") == 0)
-        {
-            CPU_CycleAutoAdjust = true;
-            CPU_SkipCycleAutoAdjust = false;
-            CPU_CycleLimit = 90;
-        }
-        if (strcmp(var.value, "disabled") == 0)
-        {
-            CPU_CycleAutoAdjust = false;
-            CPU_SkipCycleAutoAdjust = true;
-            CPU_CycleLimit = -1;
-        }
-
-    }*/
-
+    update_cpu_cycles();
 }
 
 
@@ -336,6 +362,8 @@ extern Bitu RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch;
 extern unsigned RDOSGFXcolorMode;
 extern void* RDOSGFXhaveFrame;
 
+unsigned currentWidth, currentHeight;
+
 static void retro_leave_thread(Bitu)
 {
     MIXER_CallBack(0, audioData, samplesPerFrame * 4);
@@ -355,20 +383,25 @@ static void retro_leave_thread(Bitu)
 static void retro_start_emulator(void)
 {
 
-    const char* const argv[2] = {"dosbox", loadPath.c_str()};
+    const char* const argv[2] = {"dosbox", loadPath.c_str()}; 
     CommandLine com_line(loadPath.empty() ? 1 : 2, argv);
     Config myconf(&com_line);
     control=&myconf;
+    bool ret;
 
+    if( access( configPath.c_str(), F_OK ) != -1 )
+       use_options = false;
+    else
+       use_options = true;
+
+    check_variables();
     /* Init the configuration system and add default values */
     DOSBOX_Init();
 
     /* Load config */
-    log_cb(RETRO_LOG_INFO,"Config path: %s\n",configPath.c_str());
     if(!configPath.empty())
-    {
-        control->ParseConfigFile(configPath.c_str());
-    }
+       ret = control->ParseConfigFile(configPath.c_str());
+
     /* Init all the sections */
     control->Init();
 
@@ -439,18 +472,20 @@ void retro_get_system_info(struct retro_system_info *info)
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
     // TODO
-    info->geometry.base_width = 640;
-    info->geometry.base_height = 400;
+    info->geometry.base_width = RDOSGFXwidth == 0 ? 320 : RDOSGFXwidth;
+    info->geometry.base_height = RDOSGFXheight == 0 ? 200 : RDOSGFXheight;
     info->geometry.max_width = 1024;
     info->geometry.max_height = 768;
-    info->geometry.aspect_ratio = 1.333333f;
+    info->geometry.aspect_ratio = (float)4/3;
     info->timing.fps = 60.0;
     info->timing.sample_rate = (double)MIXER_RETRO_GetFrequency();
+
+    currentWidth = RDOSGFXwidth;
+    currentHeight = RDOSGFXheight;
 }
 
 void retro_init (void)
 {
-
     // initialize logger interface
     struct retro_log_callback log;
     if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
@@ -463,7 +498,6 @@ void retro_init (void)
 
     RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_XRGB8888;
     environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &RDOSGFXcolorMode);
-
     if(!emuThread && !mainThread)
     {
         mainThread = co_active();
@@ -528,6 +562,7 @@ char slash;
                 {
                     const char* systemDir = 0;
                     configPath = normalizePath(retro_system_directory + slash + "DOSbox" + slash + "dosbox-libretro.conf");
+                    log_cb(RETRO_LOG_INFO, "Loading default configuration %s\n", configPath.c_str());
                 }
             }
         }
@@ -554,45 +589,21 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
     return false;
 }
 
-void update_cpu_cycles()
-{
-    if(cycles_flag)
-    {
-        int cycles = cycles_0 + cycles_1 + cycles_2 + cycles_3;
-        CPU_CycleMax=cycles;
-
-        //update dosbox config value in case the user wants to export a config file
-        char cycles_val[16];
-        sprintf(cycles_val,"%d",cycles);
-        Section* cpu = control->GetSection("cpu");
-        Prop_multival_remain* prop = ((Section_prop*)cpu)->Get_multivalremain("cycles");
-        prop->SetValue(cycles_val);
-    }
-
-    cycles_flag = false;
-
-}
-
-int frame = 0;
-
 void retro_run (void)
 {
 
-    if(frame==0)
+    if (RDOSGFXwidth != currentWidth || RDOSGFXheight != currentHeight)
     {
-        check_variables();
-        if(options_boot)
-        {
-            cycles_flag = true;
-            update_cpu_cycles();
-        }
+       log_cb(RETRO_LOG_INFO,"Resolution Changed\n Old Res: %dx%d\n New Res: %dx%d\n", currentWidth, currentHeight, RDOSGFXwidth, RDOSGFXheight);
+       struct retro_system_av_info new_av_info;
+       retro_get_system_av_info(&new_av_info);
+       environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &new_av_info);
     }
 
     bool updated = false;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
     {
         check_variables();
-        update_cpu_cycles();
     }
 
 
@@ -615,8 +626,7 @@ void retro_run (void)
     {
         RETROLOG("retro_run called when there is no emulator thread.");
     }
-
-    frame++;
+    use_options = true;
 }
 
 // Stubs

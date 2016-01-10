@@ -45,10 +45,12 @@
 #include "libretro.h"
 
 extern retro_log_printf_t log_cb;
+extern MachineType machine;
+extern SVGACards svgaCard;
 
 Config * control;
-MachineType machine;
-SVGACards svgaCard;
+
+
 
 /* The whole load of startups for all the subfunctions */
 void MSG_Init(Section_prop *);
@@ -294,10 +296,9 @@ static void DOSBOX_RealInit(Section * sec) {
 	}
 
 	std::string mtype(section->Get_string("machine"));
-	svgaCard = SVGA_None; 
-	machine = MCH_VGA;
 	int10.vesa_nolfb = false;
 	int10.vesa_oldvbe = false;
+
 	if      (mtype == "cga")      { machine = MCH_CGA; }
 	else if (mtype == "tandy")    { machine = MCH_TANDY; }
 	else if (mtype == "pcjr")     { machine = MCH_PCJR; }
