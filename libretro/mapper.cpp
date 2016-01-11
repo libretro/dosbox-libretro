@@ -314,6 +314,14 @@ void MAPPER_Init()
 
     }
 
+    struct retro_input_descriptor desc_emulated_mouse[] = {
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, "Mouse X" },
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, "Mouse Y" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, "Left Click" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, "Right Click" },
+        { 255, 255, 255, 255, "" },
+    };
+
     struct retro_input_descriptor desc_dpad[] = {
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "D-Pad Left" },
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "D-Pad Up" },
@@ -332,7 +340,6 @@ void MAPPER_Init()
         { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Analog X" },
         { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Analog Y" },
         { 255, 255, 255, 255, "" },
-
     };
 
     struct retro_input_descriptor desc_4axis[] = {
@@ -399,7 +406,12 @@ void MAPPER_Init()
 
     for(int port=0;port<2;port++)
     {
-        log_cb(RETRO_LOG_INFO, "Configuring port: %d\n",port);
+       log_cb(RETRO_LOG_INFO, "Configuring port: %d\n",port);
+       for(j=0;desc_emulated_mouse[j].port == 0;j++)
+       {
+            desc[i] = desc_emulated_mouse[j];
+            i++;
+       }
         switch(joystick_type[port])
         {
             case JOY_2AXIS:
