@@ -390,9 +390,15 @@ static void retro_start_emulator(void)
     bool ret;
 
     if( access( configPath.c_str(), F_OK ) != -1 )
+    {
        use_options = false;
+       log_cb(RETRO_LOG_INFO, "=>>>>>Configuration found in %s\n", configPath.c_str());
+    }
     else
+    {
        use_options = true;
+       log_cb(RETRO_LOG_INFO, "=>>>>>No configuration found, using core options\n");
+    }
 
     check_variables();
     /* Init the configuration system and add default values */
@@ -589,6 +595,8 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
     return false;
 }
 
+bool first_frame = true;
+
 void retro_run (void)
 {
 
@@ -626,6 +634,13 @@ void retro_run (void)
     {
         RETROLOG("retro_run called when there is no emulator thread.");
     }
+
+    if(first_frame)
+    {
+       check_variables();
+    }
+ 
+    first_frame = false;
     use_options = true;
 }
 
