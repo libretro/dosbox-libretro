@@ -25,6 +25,9 @@ JoystickType joystick_type[16];
 extern bool dpad[16];
 extern bool connected[16];
 extern bool emulated_kbd[16];
+extern bool emulated_mouse;
+extern bool mapper[16];
+extern unsigned mapper_keys[12];
 
 static bool keyboardState[KBD_LAST];
 
@@ -62,7 +65,6 @@ static const struct { unsigned retroID; KBD_KEYS dosboxID; } keyMap[] =
     {RETROK_KP_MULTIPLY, KBD_kpmultiply}, {RETROK_KP_MINUS, KBD_kpminus},
     {RETROK_KP_PLUS, KBD_kpplus}, {RETROK_KP_ENTER, KBD_kpenter}, {RETROK_KP_PERIOD, KBD_kpperiod},
     {RETROK_BACKQUOTE, KBD_grave}, { 0 }
-    /* KBD_extra_lt_gt */
 };
 
 static const unsigned eventKeyMap[] =
@@ -70,6 +72,7 @@ static const unsigned eventKeyMap[] =
     KBD_f1,KBD_f2,KBD_f3,KBD_f4,KBD_f5,KBD_f6,KBD_f7,KBD_f8,KBD_f9,KBD_f10,KBD_f11,KBD_f12,
     KBD_enter,KBD_kpminus,KBD_scrolllock,KBD_printscreen,KBD_pause,KBD_home
 };
+
 static const unsigned eventMOD1 = 55;
 static const unsigned eventMOD2 = 53;
 
@@ -407,11 +410,14 @@ void MAPPER_Init()
     for(int port=0;port<2;port++)
     {
        log_cb(RETRO_LOG_INFO, "Configuring port: %d\n",port);
-       for(j=0;desc_emulated_mouse[j].port == 0;j++)
+       if (emulated_mouse)
+          for(j=0;desc_emulated_mouse[j].port == 0;j++)
+          {
+               desc[i] = desc_emulated_mouse[j];
+               i++;
+          }
+       if (mapper[port])
        {
-            desc[i] = desc_emulated_mouse[j];
-            i++;
-       }
         switch(joystick_type[port])
         {
             case JOY_2AXIS:
@@ -542,7 +548,22 @@ void MAPPER_Init()
                 break;
 
         }
-
+       }
+       else
+       {
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_Y),      mapper_keys[0]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_X),      mapper_keys[1]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_B),      mapper_keys[2]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_A),      mapper_keys[3]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_L),      mapper_keys[4]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_R),      mapper_keys[5]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_UP),     mapper_keys[6]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_DOWN),   mapper_keys[7]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_LEFT),   mapper_keys[8]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_RIGHT),  mapper_keys[9]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT), mapper_keys[10]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),  mapper_keys[11]));
+       }
     }
 
     /*for(i=0;i<64;i++)
