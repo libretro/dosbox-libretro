@@ -26,7 +26,7 @@ extern bool dpad[16];
 extern bool connected[16];
 extern bool emulated_kbd[16];
 extern bool emulated_mouse;
-extern bool mapper;
+extern bool mapper[16];
 extern unsigned mapper_keys[12];
 
 static bool keyboardState[KBD_LAST];
@@ -411,13 +411,31 @@ void MAPPER_Init()
     {
        log_cb(RETRO_LOG_INFO, "Configuring port: %d\n",port);
        if (emulated_mouse)
+       {
           for(j=0;desc_emulated_mouse[j].port == 0;j++)
           {
                desc[i] = desc_emulated_mouse[j];
                i++;
           }
-       if (mapper)
+       }
+       
+       log_cb(RETRO_LOG_INFO, "Keyboard Mapper: %d\n",mapper[port]);
+       if (mapper[port])
        {
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_Y),      mapper_keys[0]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_X),      mapper_keys[1]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_B),      mapper_keys[2]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_A),      mapper_keys[3]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_L),      mapper_keys[4]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_R),      mapper_keys[5]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_UP),     mapper_keys[6]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_DOWN),   mapper_keys[7]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_LEFT),   mapper_keys[8]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_RIGHT),  mapper_keys[9]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT), mapper_keys[10]));
+          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),  mapper_keys[11]));
+       }
+       else
         switch(joystick_type[port])
         {
             case JOY_2AXIS:
@@ -548,22 +566,7 @@ void MAPPER_Init()
                 break;
 
         }
-       }
-       else
-       {
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_Y),      mapper_keys[0]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_X),      mapper_keys[1]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_B),      mapper_keys[2]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_A),      mapper_keys[3]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_L),      mapper_keys[4]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_R),      mapper_keys[5]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_UP),     mapper_keys[6]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_DOWN),   mapper_keys[7]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_LEFT),   mapper_keys[8]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_RIGHT),  mapper_keys[9]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT), mapper_keys[10]));
-          inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),  mapper_keys[11]));
-       }
+       
     }
 
     /*for(i=0;i<64;i++)
