@@ -39,8 +39,7 @@
 #define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 4)       //4 buttons, 4 axes, dpad (emulated joystick)
 #define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 5)         //4 buttons, 4 axes, dpad (emulated keystrokes)*/
 
-bool update_cycles = false;
-bool use_options = false;
+bool enable_core_options = false;
 
 int cycles_0 = 0;
 int cycles_1 = 0;
@@ -85,7 +84,7 @@ void retro_set_environment(retro_environment_t cb)
 {
     environ_cb = cb;
 
-    bool allow_no_game = false;
+    bool allow_no_game = true;
     environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
 
      static const struct retro_variable vars[] = {
@@ -204,23 +203,13 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 
 }
 
-void update_cpu_cycles()
-{
-    if(update_cycles)
-    {
-        int cycles = cycles_0 + cycles_1 + cycles_2 + cycles_3;
-        char cycles_val[16];
-
-        CPU_CycleMax=cycles;
-    }
-    update_cycles = false;
-}
-
 void check_variables()
 {
-   if(!use_options)
+   if(!enable_core_options)
       return;
    struct retro_variable var = {0};
+
+   bool update_cycles = false;
 
    var.key = "dosbox_machine_type";
    var.value = NULL;
@@ -298,7 +287,14 @@ void check_variables()
         update_cycles = true;
 
     }
-    update_cpu_cycles();
+    if(update_cycles)
+    {
+        int cycles = cycles_0 + cycles_1 + cycles_2 + cycles_3;
+        char cycles_val[16];
+
+        CPU_CycleMax=cycles;
+    }
+    update_cycles = false;
 }
 
 
@@ -391,13 +387,13 @@ static void retro_start_emulator(void)
 
     if( access( configPath.c_str(), F_OK ) != -1 )
     {
-       use_options = false;
-       log_cb(RETRO_LOG_INFO, "=>>>>>Configuration found in %s\n", configPath.c_str());
+       enable_core_options = false;
+       log_cb(RETRO_LOG_INFO, "Configuration found at %s, ignoring core options\n", configPath.c_str());
     }
     else
     {
-       use_options = true;
-       log_cb(RETRO_LOG_INFO, "=>>>>>No configuration found, using core options\n");
+       enable_core_options = true;
+       log_cb(RETRO_LOG_INFO, "No configuration found, using core options\n");
     }
 
     check_variables();
@@ -413,6 +409,9 @@ static void retro_start_emulator(void)
 
     /* Init the keyMapper */
     MAPPER_Init();
+
+    if (enable_core_options)
+      check_variables();
 
     /* Init done, go back to the main thread */
     co_switch(mainThread);
@@ -595,7 +594,7 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
     return false;
 }
 
-bool first_frame = true;
+
 
 void retro_run (void)
 {
@@ -635,13 +634,7 @@ void retro_run (void)
         RETROLOG("retro_run called when there is no emulator thread.");
     }
 
-    if(first_frame)
-    {
-       check_variables();
-    }
- 
-    first_frame = false;
-    use_options = true;
+    enable_core_options = true;
 }
 
 // Stubs
