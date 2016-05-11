@@ -26,7 +26,7 @@ extern bool dpad[16];
 extern bool connected[16];
 extern bool emulated_kbd[16];
 extern bool emulated_mouse;
-extern bool mapper[16];
+extern bool mapper;
 extern unsigned mapper_keys[12];
 
 static bool keyboardState[KBD_LAST];
@@ -416,7 +416,7 @@ void MAPPER_Init()
                desc[i] = desc_emulated_mouse[j];
                i++;
           }
-       if (mapper[port])
+       if (mapper)
        {
         switch(joystick_type[port])
         {

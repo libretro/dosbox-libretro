@@ -67,7 +67,7 @@ bool dpad[16];
 bool connected[16];
 bool emulated_kbd[16];
 bool emulated_mouse = true;
-bool mapper[16];
+bool mapper;
 
 unsigned mapper_keys[12];
 
@@ -256,55 +256,55 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
          connected[port] = true;
          dpad[port] = false;
          emulated_kbd[port] = false;
-         mapper[port] = false;
+         mapper = false;
          break;
       case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS:
          joystick_type[port] = JOY_2AXIS;
          connected[port] = true;
          dpad[port] = false;
          emulated_kbd[port] = true;
-         mapper[port] = false;
+         mapper = false;
          break;
       case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD:
          joystick_type[port] = JOY_2AXIS;
          connected[port] = true;
          dpad[port] = true;
          emulated_kbd[port] = false;
-         mapper[port] = false;
+         mapper = false;
          break;
       case RETRO_DEVICE_4BUTTON_JOYSTICK:
          joystick_type[port] = JOY_4AXIS;
          connected[port] = true;
          dpad[port] = false;
          emulated_kbd[port] = false;
-         mapper[port] = false;
+         mapper = false;
          break;
       case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS:
          joystick_type[port] = JOY_4AXIS;
          connected[port] = true;
          dpad[port] = false;
          emulated_kbd[port] = true;
-         mapper[port] = false;
+         mapper = false;
          break;
       case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD:
          joystick_type[port] = JOY_4AXIS;
          connected[port] = true;
          dpad[port] = true;
          emulated_kbd[port] = false;
-         mapper[port] = false;
+         mapper = false;
          break;
       case RETRO_DEVICE_MAPPER:
          joystick_type[port] = JOY_NONE;
          connected[port] = false;
          dpad[port] = false;
          emulated_kbd[port] = false;
-         mapper[port] = true;
+         mapper = true;
       default:
          joystick_type[port] = JOY_NONE;
          connected[port] = false;
          dpad[port] = false;
          emulated_kbd[port] = false;
-         mapper[port] = false;
+         mapper = false;
          break;
    }
    log_cb(RETRO_LOG_INFO,"%d\n",joystick_type[port]);
