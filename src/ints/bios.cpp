@@ -503,7 +503,7 @@ void FAKEftime(struct FAKEtimeb* tb)
 {
    time(&tb->time);
    
-#ifndef __WIN32__
+#if defined(__linux__) || defined(__unix__)
    struct timeval tv;
    gettimeofday(&tv, NULL);
    tb->millitm = tv.tv_usec/1000;
