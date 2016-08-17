@@ -32,7 +32,10 @@
 #include "setup.h"
 #include "serialport.h"
 #include <time.h>
+
+#if !(defined(GEKKO) || defined(VITA) || defined(_3DS) || (defined(ANDROID))) // No ftime support
 #include <sys/timeb.h>
+#endif
 
 
 /* if mem_systems 0 then size_extended is reported as the real size else 
@@ -488,17 +491,27 @@ static Bitu INT11_Handler(void) {
 #define DOSBOX_CLOCKSYNC 0
 #endif
 
-#if defined(__LIBRETRO__) && (defined(GEKKO) || defined(VITA) || defined(_3DS)) // No ftime support
+//android removed ftime in ndks >= android-ndk-r10
+#if defined(GEKKO) || defined(VITA) || defined(_3DS) || (defined(ANDROID)) // No ftime support
 struct FAKEtimeb
 {
-    time_t time;
-    unsigned millitm;
+   time_t time;
+   unsigned millitm;
 };
 
 void FAKEftime(struct FAKEtimeb* tb)
 {
-    time(&tb->time);
-    tb->millitm = 0;
+   time(&tb->time);
+   
+#ifndef __WIN32__
+   struct timeval tv;
+   gettimeofday(&tv, NULL);
+   tb->millitm = tv.tv_usec/1000;
+#else
+   //windows cant use gettimeofday,but ftime already works on windows
+   tb->millitm = 0;
+#endif
+   
 }
 
 #define ftime FAKEftime
@@ -507,32 +520,32 @@ void FAKEftime(struct FAKEtimeb* tb)
 #endif
 
 static void BIOS_HostTimeSync() {
-	/* Setup time and date */
-	struct timeb timebuffer;
-	ftime(&timebuffer);
-	
-	struct tm *loctime;
-	loctime = localtime (&timebuffer.time);
-
-	/*
-	loctime->tm_hour = 23;
-	loctime->tm_min = 59;
-	loctime->tm_sec = 45;
-	loctime->tm_mday = 28;
-	loctime->tm_mon = 2-1;
-	loctime->tm_year = 2007 - 1900;
-	*/
-
-	dos.date.day=(Bit8u)loctime->tm_mday;
-	dos.date.month=(Bit8u)loctime->tm_mon+1;
-	dos.date.year=(Bit16u)loctime->tm_year+1900;
-
-	Bit32u ticks=(Bit32u)(((double)(
-		loctime->tm_hour*3600*1000+
-		loctime->tm_min*60*1000+
-		loctime->tm_sec*1000+
-		timebuffer.millitm))*(((double)PIT_TICK_RATE/65536.0)/1000.0));
-	mem_writed(BIOS_TIMER,ticks);
+   /* Setup time and date */
+   struct timeb timebuffer;
+   ftime(&timebuffer);
+   
+   struct tm *loctime;
+   loctime = localtime(&timebuffer.time);
+   
+   /*
+    loctime->tm_hour = 23;
+    loctime->tm_min = 59;
+    loctime->tm_sec = 45;
+    loctime->tm_mday = 28;
+    loctime->tm_mon = 2-1;
+    loctime->tm_year = 2007 - 1900;
+    */
+   
+   dos.date.day=(Bit8u)loctime->tm_mday;
+   dos.date.month=(Bit8u)loctime->tm_mon+1;
+   dos.date.year=(Bit16u)loctime->tm_year+1900;
+   
+   Bit32u ticks=(Bit32u)(((double)(
+      loctime->tm_hour*3600*1000+
+      loctime->tm_min*60*1000+
+      loctime->tm_sec*1000+
+      timebuffer.millitm))*(((double)PIT_TICK_RATE/65536.0)/1000.0));
+   mem_writed(BIOS_TIMER,ticks);
 }
 
 static Bitu INT8_Handler(void) {
