@@ -137,7 +137,7 @@ else ifeq ($(platform), ctr)
    CC = $(DEVKITARM)/bin/arm-none-eabi-gcc$(EXE_EXT)
    CXX = $(DEVKITARM)/bin/arm-none-eabi-g++$(EXE_EXT)
    AR = $(DEVKITARM)/bin/arm-none-eabi-ar$(EXE_EXT)
-   ENDIANNESS_DEFINES := -DLSB_FIRST
+   ENDIANNESS_DEFINES :=
    COMMONFLAGS += -DARM11 -D_3DS -Os -s -I$(CTRULIB)/include/
    COMMONFLAGS += -DHAVE_MKDIR
    COMMONFLAGS += -march=armv6k -mtune=mpcore -mfloat-abi=hard
