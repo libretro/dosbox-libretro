@@ -170,11 +170,11 @@ void retro_set_environment(retro_environment_t cb)
    snprintf(buf[11],sizeof(buf[11]),"RetroPad Start; %s",  keys);
    
    static const struct retro_variable vars[] = {
-      { "dosbox_machine_type", "Machine type; hercules|cga|tandy|pcjr|ega|vgaonly|svga_s3|svga_et3000|svga_et4000|svga_paradise" },
+      { "dosbox_machine_type", "Machine type; vgaonly|svga_s3|svga_et3000|svga_et4000|svga_paradise|hercules|cga|tandy|pcjr|ega" },
       { "dosbox_cpu_cycles_0", "CPU cycles x 100000; 0|1|2|3|4|5|6|7|8|9" },
-      { "dosbox_cpu_cycles_1", "CPU cycles x 10000; 0|1|2|3|4|5|6|7|8|9" },
-      { "dosbox_cpu_cycles_2", "CPU cycles x 1000; 0|1|2|3|4|5|6|7|8|9" },
-      { "dosbox_cpu_cycles_3", "CPU cycles x 100; 1|2|3|4|5|6|7|8|9" },
+      { "dosbox_cpu_cycles_1", "CPU cycles x 10000;  0|1|2|3|4|5|6|7|8|9" },
+      { "dosbox_cpu_cycles_2", "CPU cycles x 1000;   1|2|3|4|5|6|7|8|9|0" },
+      { "dosbox_cpu_cycles_3", "CPU cycles x 100;    0|1|2|3|4|5|6|7|8|9" },
       { "dosbox_mapper_y", buf[0] },
       { "dosbox_mapper_x", buf[1] },
       { "dosbox_mapper_b", buf[2] },
