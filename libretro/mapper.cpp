@@ -287,8 +287,8 @@ void MAPPER_Init()
     {
        inputList.push_back(new MouseButton(RDID(MOUSE_LEFT), 0));
        inputList.push_back(new MouseButton(RDID(MOUSE_RIGHT), 1));
-       inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_L2), 0));
-       inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_R2), 1));
+       inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_R2), 0));
+       inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_L2), 1));
     }
 
     struct retro_input_descriptor desc[64];
@@ -296,8 +296,8 @@ void MAPPER_Init()
     struct retro_input_descriptor desc_emulated_mouse[] = {
         { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, "Emulated Mouse X Axis" },
         { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, "Emulated Mouse Y Axis" },
-        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, "Emulated Mouse Left Click" },
-        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, "Emulated Mouse Right Click" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, "Emulated Mouse Left Click" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, "Emulated Mouse Right Click" },
         { 255, 255, 255, 255, "" },
     };
 
