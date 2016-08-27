@@ -62,6 +62,7 @@ int current_port;
 bool gamepad[16]; /* true means gamepad, false means joystick */
 bool connected[16];
 bool mapper[16];
+bool emulated_mouse;
 
 unsigned mapper_keys[12];
 
@@ -165,6 +166,7 @@ void retro_set_environment(retro_environment_t cb)
    
    static const struct retro_variable vars[] = {
       { "dosbox_machine_type", "Machine type; vgaonly|svga_s3|svga_et3000|svga_et4000|svga_paradise|hercules|cga|tandy|pcjr|ega" },
+      { "dosbox_emulated_mouse", "Gamepad emulated mouse; enable|disable" },
       { "dosbox_cpu_cycles_0", "CPU cycles x 100000; 0|1|2|3|4|5|6|7|8|9" },
       { "dosbox_cpu_cycles_1", "CPU cycles x 10000; 0|1|2|3|4|5|6|7|8|9" },
       { "dosbox_cpu_cycles_2", "CPU cycles x 1000; 1|2|3|4|5|6|7|8|9|0" },
@@ -306,6 +308,16 @@ void check_variables()
          machine = MCH_VGA;
          svgaCard = SVGA_None;
        }
+   }
+
+   var.key = "dosbox_emulated_mouse";
+   var.value = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "enable") == 0)
+         emulated_mouse = true;
+      else
+         emulated_mouse = false;
    }
 
    var.key = "dosbox_cpu_cycles_0";

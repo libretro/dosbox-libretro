@@ -25,6 +25,8 @@ JoystickType joystick_type;
 extern bool connected[16];
 extern bool mapper[16];
 extern bool gamepad[16];
+extern bool emulated_mouse;
+
 extern unsigned mapper_keys[12];
 
 static bool keyboardState[KBD_LAST];
@@ -281,19 +283,21 @@ void MAPPER_Init()
     environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &callback);
 
     inputList.clear();
-
-    /*inputList.push_back(new MouseButton(RDID(MOUSE_LEFT), 0));
-    inputList.push_back(new MouseButton(RDID(MOUSE_RIGHT), 1));
-    inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_L2), 0));
-    inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_R2), 1));*/
+    if (emulated_mouse)
+    {
+       inputList.push_back(new MouseButton(RDID(MOUSE_LEFT), 0));
+       inputList.push_back(new MouseButton(RDID(MOUSE_RIGHT), 1));
+       inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_L2), 0));
+       inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_R2), 1));
+    }
 
     struct retro_input_descriptor desc[64];
 
     struct retro_input_descriptor desc_emulated_mouse[] = {
-        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, "Mouse X" },
-        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, "Mouse Y" },
-        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, "Left Click" },
-        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, "Right Click" },
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, "Emulated Mouse X Axis" },
+        { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, "Emulated Mouse Y Axis" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, "Emulated Mouse Left Click" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, "Emulated Mouse Right Click" },
         { 255, 255, 255, 255, "" },
     };
 
@@ -574,7 +578,15 @@ void MAPPER_Init()
         inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),  mapper_keys[11]));
       }
     }
-
+    if (emulated_mouse)
+    {
+       for (j=0;  desc_emulated_mouse[j].port == 0; i++)
+       {
+        desc[i] = desc_emulated_mouse[j];
+        j++;
+        log_cb(RETRO_LOG_INFO, "Map: %s\n", desc[i].description);
+       }
+    }
     environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 }
 
@@ -591,23 +603,27 @@ void MAPPER_Run(bool pressed)
     int16_t mouseX = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_X));
     int16_t mouseY = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_Y));
 
+    if(mouseX || mouseY)
+      Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
+
     const int deadzone = 30;
     const int speed = 8;
 
-    /*int16_t emulated_mouseX = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X);
-    int16_t emulated_mouseY = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y);
+    if (emulated_mouse)
+    {
+       int16_t emulated_mouseX = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X);
+       int16_t emulated_mouseY = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y);
 
-    if (abs(emulated_mouseX) <= deadzone * 32768 / 100)
-       emulated_mouseX = 0;
-    if (abs(emulated_mouseY) <= deadzone * 32768 / 100)
-       emulated_mouseY = 0;
+       if (abs(emulated_mouseX) <= deadzone * 32768 / 100)
+          emulated_mouseX = 0;
+       if (abs(emulated_mouseY) <= deadzone * 32768 / 100)
+          emulated_mouseY = 0;
 
-    emulated_mouseX = emulated_mouseX * speed / 32768;
-    emulated_mouseY = emulated_mouseY * speed / 32768;
+       emulated_mouseX = emulated_mouseX * speed / 32768;
+       emulated_mouseY = emulated_mouseY * speed / 32768;
 
-    Mouse_CursorMoved(emulated_mouseX, emulated_mouseY, 0, 0, true);
-    if(mouseX || mouseY)
-       Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);*/
+       Mouse_CursorMoved(emulated_mouseX, emulated_mouseY, 0, 0, true);
+    }
 
     for (std::vector<Processable*>::iterator i = inputList.begin(); i != inputList.end(); i ++)
         (*i)->process();
