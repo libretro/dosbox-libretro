@@ -44,8 +44,6 @@
 #define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 5)    //4 buttons, 4 axes, dpad (emulated keystrokes)*/
 #define RETRO_DEVICE_MAPPER RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 6)                          //4 buttons, 4 axes, dpad (emulated keystrokes)*/
 
-bool enable_core_options = false;
-
 int cycles_0 = 0;
 int cycles_1 = 0;
 int cycles_2 = 1;
@@ -172,9 +170,9 @@ void retro_set_environment(retro_environment_t cb)
    static const struct retro_variable vars[] = {
       { "dosbox_machine_type", "Machine type; vgaonly|svga_s3|svga_et3000|svga_et4000|svga_paradise|hercules|cga|tandy|pcjr|ega" },
       { "dosbox_cpu_cycles_0", "CPU cycles x 100000; 0|1|2|3|4|5|6|7|8|9" },
-      { "dosbox_cpu_cycles_1", "CPU cycles x 10000;  0|1|2|3|4|5|6|7|8|9" },
-      { "dosbox_cpu_cycles_2", "CPU cycles x 1000;   1|2|3|4|5|6|7|8|9|0" },
-      { "dosbox_cpu_cycles_3", "CPU cycles x 100;    0|1|2|3|4|5|6|7|8|9" },
+      { "dosbox_cpu_cycles_1", "CPU cycles x 10000; 0|1|2|3|4|5|6|7|8|9" },
+      { "dosbox_cpu_cycles_2", "CPU cycles x 1000; 1|2|3|4|5|6|7|8|9|0" },
+      { "dosbox_cpu_cycles_3", "CPU cycles x 100; 0|1|2|3|4|5|6|7|8|9" },
       { "dosbox_mapper_y", buf[0] },
       { "dosbox_mapper_x", buf[1] },
       { "dosbox_mapper_b", buf[2] },
@@ -204,7 +202,6 @@ void retro_set_environment(retro_environment_t cb)
 
    static const struct retro_controller_description pads_p2[] = {
       { "Gamepad (2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
-      { "Gamepad (4buttons)", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD },
       { "Joystick (2axis/2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK },
       { "Joystick (4axis/4buttons)", RETRO_DEVICE_4BUTTON_JOYSTICK },
       { "Mapper", RETRO_DEVICE_MAPPER }
@@ -213,7 +210,7 @@ void retro_set_environment(retro_environment_t cb)
 
    static const struct retro_controller_info ports[] = {
       { pads_p1, 7 },
-      { pads_p2, 5 },
+      { pads_p2, 4 },
       { 0 },
    };
    environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
@@ -315,8 +312,6 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 
 void check_variables()
 {
-   if(!enable_core_options)
-     return;
    struct retro_variable var = {0};
 
    bool update_cycles = false;
@@ -571,17 +566,6 @@ static void retro_start_emulator(void)
    control=&myconf;
    bool ret;
 
-   if( access( configPath.c_str(), F_OK ) != -1 )
-   {
-      enable_core_options = false;
-      log_cb(RETRO_LOG_INFO, "Configuration found at %s, ignoring core options\n", configPath.c_str());
-   }
-   else
-   {
-      enable_core_options = true;
-      log_cb(RETRO_LOG_INFO, "No configuration found, using core options\n");
-   }
-
    check_variables();
    /* Init the configuration system and add default values */
    DOSBOX_Init();
@@ -596,8 +580,7 @@ static void retro_start_emulator(void)
    /* Init the keyMapper */
    MAPPER_Init();
 
-   if (enable_core_options)
-     check_variables();
+   check_variables();
 
    /* Init done, go back to the main thread */
    co_switch(mainThread);
@@ -819,8 +802,6 @@ void retro_run (void)
    {
       RETROLOG("retro_run called when there is no emulator thread.");
    }
-
-   enable_core_options = true;
 }
 
 // Stubs
