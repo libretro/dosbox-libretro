@@ -745,7 +745,8 @@ void retro_run (void)
 
    if (RDOSGFXwidth != currentWidth || RDOSGFXheight != currentHeight)
    {
-      log_cb(RETRO_LOG_INFO,"Resolution Changed\n Old Res: %dx%d\n New Res: %dx%d\n", currentWidth, currentHeight, RDOSGFXwidth, RDOSGFXheight);
+      log_cb(RETRO_LOG_INFO,"Resolution changed %dx%d => %dx%d\n", 
+         currentWidth, currentHeight, RDOSGFXwidth, RDOSGFXheight);
       struct retro_system_av_info new_av_info;
       retro_get_system_av_info(&new_av_info);
       environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &new_av_info);
