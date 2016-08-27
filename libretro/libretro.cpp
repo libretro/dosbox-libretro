@@ -32,21 +32,20 @@
 #include "joystick.h"
 #include <unistd.h>
 
+#define RETRO_DEVICE_GAMEPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
+#define RETRO_DEVICE_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
+#define RETRO_DEVICE_MAPPER RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 2)
+
 #ifndef PATH_MAX_LENGTH
 #define PATH_MAX_LENGTH 4096
 #endif
 
-#define RETRO_DEVICE_2BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0)                //2 buttons, 2 axes
-#define RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)           //2 buttons, 2 axes, dpad (emulated joystick)
-#define RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 2)    //2 buttons, 2 axes, dpad (emulated keystrokes)
-#define RETRO_DEVICE_4BUTTON_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 3)                //4 buttons, 4 axes
-#define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 4)           //4 buttons, 4 axes, dpad (emulated joystick)
-#define RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 5)    //4 buttons, 4 axes, dpad (emulated keystrokes)*/
-#define RETRO_DEVICE_MAPPER RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 6)                          //4 buttons, 4 axes, dpad (emulated keystrokes)*/
+/*bool enable_core_options = false;*/
+
 
 int cycles_0 = 0;
-int cycles_1 = 0;
-int cycles_2 = 1;
+int cycles_1 = 1;
+int cycles_2 = 0;
 int cycles_3 = 0;
 
 extern Config * control;
@@ -60,11 +59,8 @@ SVGACards svgaCard = SVGA_None;
 
 int current_port;
 
-extern JoystickType joystick_type[16];
-bool dpad[16];
+bool gamepad[16]; /* true means gamepad, false means joystick */
 bool connected[16];
-bool emulated_kbd[16];
-bool emulated_mouse = true;
 bool mapper[16];
 
 unsigned mapper_keys[12];
@@ -190,27 +186,17 @@ void retro_set_environment(retro_environment_t cb)
 
    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
-   static const struct retro_controller_description pads_p1[] = {
-      { "Gamepad (2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
-      { "Gamepad (4buttons)", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD },
-      { "Joystick (2axis/2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK },
-      { "Joystick (4axis/4buttons)", RETRO_DEVICE_4BUTTON_JOYSTICK },
-      { "Joystick (2axis/2buttons + kbd arrows)", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS },
-      { "Joystick (4axis/4buttons + kbd arrows)", RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS },
-      { "Mapper", RETRO_DEVICE_MAPPER }
-   };
-
-   static const struct retro_controller_description pads_p2[] = {
-      { "Gamepad (2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD },
-      { "Joystick (2axis/2buttons)", RETRO_DEVICE_2BUTTON_JOYSTICK },
-      { "Joystick (4axis/4buttons)", RETRO_DEVICE_4BUTTON_JOYSTICK },
-      { "Mapper", RETRO_DEVICE_MAPPER }
-      
+   static const struct retro_controller_description pads[] = 
+   {
+      { "Gamepad",  RETRO_DEVICE_GAMEPAD },
+      { "Joystick", RETRO_DEVICE_JOYSTICK },
+      { "Mapper",   RETRO_DEVICE_MAPPER },
+      { 0 },
    };
 
    static const struct retro_controller_info ports[] = {
-      { pads_p1, 7 },
-      { pads_p2, 4 },
+      { pads, 3 },
+      { pads, 3 },
       { 0 },
    };
    environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
@@ -240,78 +226,43 @@ void retro_set_environment(retro_environment_t cb)
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
 {
-   joystick_type[port] = JOY_NONE;
    connected[port] = false;
-   dpad[port] = false;
-   emulated_kbd[port] = false;
+   gamepad[port]   = false;
+   mapper[port]    = false;
    switch (device)
    {
-      case RETRO_DEVICE_2BUTTON_JOYSTICK:
-      case RETRO_DEVICE_ANALOG:
       case RETRO_DEVICE_JOYPAD:
-         joystick_type[port] = JOY_2AXIS;
+      case RETRO_DEVICE_GAMEPAD:
          connected[port] = true;
-         dpad[port] = false;
-         emulated_kbd[port] = false;
+         gamepad[port] = true;
          mapper[port] = false;
          break;
-      case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD_ARROWS:
-         joystick_type[port] = JOY_2AXIS;
+      case RETRO_DEVICE_ANALOG:
+      case RETRO_DEVICE_JOYSTICK:
          connected[port] = true;
-         dpad[port] = false;
-         emulated_kbd[port] = true;
-         mapper[port] = false;
-         break;
-      case RETRO_DEVICE_2BUTTON_JOYSTICK_DPAD:
-         joystick_type[port] = JOY_2AXIS;
-         connected[port] = true;
-         dpad[port] = true;
-         emulated_kbd[port] = false;
-         mapper[port] = false;
-         break;
-      case RETRO_DEVICE_4BUTTON_JOYSTICK:
-         joystick_type[port] = JOY_4AXIS;
-         connected[port] = true;
-         dpad[port] = false;
-         emulated_kbd[port] = false;
-         mapper[port] = false;
-         break;
-      case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD_ARROWS:
-         joystick_type[port] = JOY_4AXIS;
-         connected[port] = true;
-         dpad[port] = false;
-         emulated_kbd[port] = true;
-         mapper[port] = false;
-         break;
-      case RETRO_DEVICE_4BUTTON_JOYSTICK_DPAD:
-         joystick_type[port] = JOY_4AXIS;
-         connected[port] = true;
-         dpad[port] = true;
-         emulated_kbd[port] = false;
+         gamepad[port] = false;
          mapper[port] = false;
          break;
       case RETRO_DEVICE_MAPPER:   
-         joystick_type[port] = JOY_NONE;
          connected[port] = false;
-         dpad[port] = false;
-         emulated_kbd[port] = false;
+         gamepad[port] = false;
          mapper[port] = true;
          break;
       default:
-         joystick_type[port] = JOY_NONE;
          connected[port] = false;
-         dpad[port] = false;
-         emulated_kbd[port] = false;
+         gamepad[port] = false;
          mapper[port] = false;
          break;
    }
-   log_cb(RETRO_LOG_INFO,"%d\n",joystick_type[port]);
    MAPPER_Init();
-
 }
 
 void check_variables()
 {
+
+   /*if(!enable_core_options)
+     return;*/
+
    struct retro_variable var = {0};
 
    bool update_cycles = false;
@@ -475,7 +426,6 @@ void check_variables()
    }  
    /* Init the keyMapper */
    MAPPER_Init();
-
 }
 
 
@@ -566,6 +516,17 @@ static void retro_start_emulator(void)
    control=&myconf;
    bool ret;
 
+   /*if( access( configPath.c_str(), F_OK ) != -1 )
+   {
+      enable_core_options = false;
+      log_cb(RETRO_LOG_INFO, "Configuration found at %s, ignoring core options\n", configPath.c_str());
+   }
+   else
+   {
+      enable_core_options = true;
+      log_cb(RETRO_LOG_INFO, "No configuration found, using core options\n");
+   }*/
+
    check_variables();
    /* Init the configuration system and add default values */
    DOSBOX_Init();
@@ -578,8 +539,9 @@ static void retro_start_emulator(void)
    control->Init();
 
    /* Init the keyMapper */
-   MAPPER_Init();
+   //MAPPER_Init();
 
+   /*if (enable_core_options)*/
    check_variables();
 
    /* Init done, go back to the main thread */
@@ -607,10 +569,10 @@ static void retro_wrap_emulator(void)
    retro_start_emulator();
 
    // Exit comes from DOSBox, tell the frontend
-   if(DOSBOXwantsExit)
+   /*if(DOSBOXwantsExit)
    {
       environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
-   }
+   }*/
 
    // Were done here
    co_switch(mainThread);
@@ -743,7 +705,6 @@ char slash;
 
       co_switch(emuThread);
       samplesPerFrame = MIXER_RETRO_GetFrequency() / 60;
-
       return true;
    }
    else
@@ -802,6 +763,9 @@ void retro_run (void)
    {
       RETROLOG("retro_run called when there is no emulator thread.");
    }
+
+   /*enable_core_options = true;*/
+
 }
 
 // Stubs
