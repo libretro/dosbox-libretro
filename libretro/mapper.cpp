@@ -267,11 +267,15 @@ struct EmulatedKeyPress : public Processable
     void process()       { item.process(*this, input_cb(retroPort, RDEV(JOYPAD), 0, retroID)); }
     void press() const
     {
-            KEYBOARD_AddKey(keyMap[keyID].dosboxID, true);
+            if (keyID > 0)
+            /* compensate for the "empty key" offset by substracting 1*/
+               KEYBOARD_AddKey(keyMap[keyID - 1].dosboxID, true);
     }
     void release() const
     {
-            KEYBOARD_AddKey(keyMap[keyID].dosboxID, false);
+            if (keyID > 0)
+            /* compensate for the "empty key" offset by substracting 1*/
+               KEYBOARD_AddKey(keyMap[keyID - 1].dosboxID, false);
     }
 
 };

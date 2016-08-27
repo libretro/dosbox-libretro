@@ -66,7 +66,9 @@ bool emulated_mouse;
 
 unsigned mapper_keys[12];
 
+
 const char* keyDesc[] = {
+   "null", /*disables input for that button, needs an offset in the input code */
    "1","2","3","4",
    "5","6","7","8",
    "9","0","a","b",
