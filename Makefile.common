@@ -1,6 +1,7 @@
-INCFLAGS += -I$(CORE_DIR)/libco \
-				-I$(CORE_DIR)/src \
-				-I$(CORE_DIR)/libretro-common/include \
+LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
+
+INCFLAGS += -I$(CORE_DIR)/src \
+				-I$(LIBRETRO_COMM_DIR)/include \
 				-I$(CORE_DIR)/include
 
 SOURCES_CXX := \
@@ -112,11 +113,11 @@ SOURCES_CXX := \
 	$(CORE_DIR)/libretro/mapper.cpp \
 	$(CORE_DIR)/libretro/mixer-retro.cpp
 
-SOURCES_C := $(CORE_DIR)/libco/libco.c
+SOURCES_C := $(LIBRETRO_COMM_DIR)/libco/libco.c
 
 ifneq ($(STATIC_LINKING), 1)
-SOURCES_C += $(CORE_DIR)/libretro-common/file/retro_dirent.c \
-				 $(CORE_DIR)/libretro-common/file/retro_stat.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/file/retro_dirent.c \
+				 $(LIBRETRO_COMM_DIR)/file/retro_stat.c
 endif
 
 ifeq ($(WITH_DYNAREC), arm)

@@ -20,7 +20,13 @@
 #include <string>
 #include <stdlib.h>
 
-#include "../libco/libco.h"
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
+
+#include <libco.h>
 #include "libretro.h"
 #include "retrodos.h"
 
@@ -30,7 +36,6 @@
 #include "control.h"
 #include "pic.h"
 #include "joystick.h"
-#include <unistd.h>
 
 #define RETRO_DEVICE_GAMEPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
 #define RETRO_DEVICE_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
