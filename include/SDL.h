@@ -31,7 +31,7 @@ typedef int SDL_mutex;
 // TIMER
 inline void SDL_Delay(unsigned ms)
 {
-   rarch_sleep(ms);
+   retro_sleep(ms);
 }
 
 inline unsigned SDL_GetTicks()

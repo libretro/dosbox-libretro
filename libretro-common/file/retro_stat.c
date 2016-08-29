@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (retro_stat.c).
@@ -62,7 +62,7 @@
 #endif
 
 #if defined(VITA)
-#define FIO_S_ISDIR PSP2_S_ISDIR
+#define FIO_S_ISDIR SCE_S_ISDIR
 #endif
 
 #if (defined(__CELLOS_LV2__) && !defined(__PSL1GHT__)) || defined(__QNX__) || defined(PSP)
@@ -200,7 +200,7 @@ bool mkdir_norecurse(const char *dir)
 #if defined(VITA)
    if ((ret == SCE_ERROR_ERRNO_EEXIST) && path_is_directory(dir))
       ret = 0;
-#elif defined(PSP)
+#elif defined(PSP) || defined(_3DS)
    if ((ret == -1) && path_is_directory(dir))
       ret = 0;
 #else 

@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (retro_stat.h).
@@ -26,11 +26,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include <retro_common_api.h>
+
 #include <boolean.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+RETRO_BEGIN_DECLS
 
 /**
  * path_is_directory:
@@ -58,8 +58,6 @@ int32_t path_get_size(const char *path);
  **/
 bool mkdir_norecurse(const char *dir);
 
-#ifdef __cplusplus
-}
-#endif
+RETRO_END_DECLS
 
 #endif

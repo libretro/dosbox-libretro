@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (posix_string.h).
@@ -23,31 +23,39 @@
 #ifndef __LIBRETRO_SDK_COMPAT_POSIX_STRING_H
 #define __LIBRETRO_SDK_COMPAT_POSIX_STRING_H
 
+#include <retro_common_api.h>
+
 #ifdef _MSC_VER
-
 #include <compat/msvc.h>
-
-#ifdef __cplusplus
-extern "C" {
 #endif
 
+RETRO_BEGIN_DECLS
+
+#ifdef _WIN32
+#undef strtok_r
+#define strtok_r(str, delim, saveptr) retro_strtok_r__(str, delim, saveptr)
+
+char *strtok_r(char *str, const char *delim, char **saveptr);
+#endif
+
+#ifdef _MSC_VER
 #undef strcasecmp
 #undef strdup
-#undef isblank
-#undef strtok_r
-#define strcasecmp(a, b) rarch_strcasecmp__(a, b)
-#define strdup(orig) rarch_strdup__(orig)
-#define isblank(c) rarch_isblank__(c)
-#define strtok_r(str, delim, saveptr) rarch_strtok_r__(str, delim, saveptr)
+#define strcasecmp(a, b) retro_strcasecmp__(a, b)
+#define strdup(orig)     retro_strdup__(orig)
 int strcasecmp(const char *a, const char *b);
 char *strdup(const char *orig);
+
+/* isblank is available since MSVC 2013 */
+#if _MSC_VER < 1800
+#undef isblank
+#define isblank(c)       retro_isblank__(c)
 int isblank(int c);
-char *strtok_r(char *str, const char *delim, char **saveptr);
-
-#ifdef __cplusplus
-}
 #endif
 
 #endif
-#endif
 
+
+RETRO_END_DECLS
+
+#endif

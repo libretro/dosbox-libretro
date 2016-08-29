@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (retro_dirent.c).
@@ -23,57 +23,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#if defined(_WIN32)
-#  ifdef _MSC_VER
-#    define setmode _setmode
-#  endif
-#  ifdef _XBOX
-#    include <xtl.h>
-#    define INVALID_FILE_ATTRIBUTES -1
-#  else
-#    include <io.h>
-#    include <fcntl.h>
-#    include <direct.h>
-#    include <windows.h>
-#  endif
-#elif defined(VITA)
-#  include <psp2/io/fcntl.h>
-#  include <psp2/io/dirent.h>
-#else
-#  if defined(PSP)
-#    include <pspiofilemgr.h>
-#  endif
-#  include <sys/types.h>
-#  include <sys/stat.h>
-#  include <dirent.h>
-#  include <unistd.h>
-#endif
-
-#ifdef __CELLOS_LV2__
-#include <cell/cell_fs.h>
-#endif
+#include <retro_common.h>
 
 #include <boolean.h>
 #include <retro_stat.h>
 #include <retro_dirent.h>
-
-struct RDIR
-{
-#if defined(_WIN32)
-   WIN32_FIND_DATA entry;
-   HANDLE directory;
-#elif defined(VITA) || defined(PSP)
-   SceUID directory;
-   SceIoDirent entry;
-#elif defined(__CELLOS_LV2__)
-   CellFsErrno error;
-   int directory;
-   CellFsDirent entry;
-#else
-   DIR *directory;
-   const struct dirent *entry;
-#endif
-};
 
 struct RDIR *retro_opendir(const char *name)
 {
@@ -116,7 +70,12 @@ bool retro_dirent_error(struct RDIR *rdir)
 int retro_readdir(struct RDIR *rdir)
 {
 #if defined(_WIN32)
-   return (FindNextFile(rdir->directory, &rdir->entry) != 0);
+   if(rdir->next)
+      return (FindNextFile(rdir->directory, &rdir->entry) != 0);
+   else {
+      rdir->next = true;
+      return (rdir->directory != INVALID_HANDLE_VALUE);
+   }
 #elif defined(VITA) || defined(PSP)
    return (sceIoDread(rdir->directory, &rdir->entry) > 0);
 #elif defined(__CELLOS_LV2__)
@@ -160,7 +119,7 @@ bool retro_dirent_is_dir(struct RDIR *rdir, const char *path)
 #if defined(PSP)
    return (entry->d_stat.st_attr & FIO_SO_IFDIR) == FIO_SO_IFDIR;
 #elif defined(VITA)
-   return PSP2_S_ISDIR(entry->d_stat.st_mode);
+   return SCE_S_ISDIR(entry->d_stat.st_mode);
 #endif
 #elif defined(__CELLOS_LV2__)
    CellFsDirent *entry = (CellFsDirent*)&rdir->entry;

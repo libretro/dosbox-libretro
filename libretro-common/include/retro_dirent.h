@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (retro_dirent.h).
@@ -23,13 +23,60 @@
 #ifndef __RETRO_DIRENT_H
 #define __RETRO_DIRENT_H
 
+#include <retro_common_api.h>
+
 #include <boolean.h>
 
-#ifdef __cplusplus
-extern "C" {
+#if defined(_WIN32)
+#  ifdef _MSC_VER
+#    define setmode _setmode
+#  endif
+#  ifdef _XBOX
+#    include <xtl.h>
+#    define INVALID_FILE_ATTRIBUTES -1
+#  else
+#    include <io.h>
+#    include <fcntl.h>
+#    include <direct.h>
+#    include <windows.h>
+#  endif
+#elif defined(VITA)
+#  include <psp2/io/fcntl.h>
+#  include <psp2/io/dirent.h>
+#else
+#  if defined(PSP)
+#    include <pspiofilemgr.h>
+#  endif
+#  include <sys/types.h>
+#  include <sys/stat.h>
+#  include <dirent.h>
+#  include <unistd.h>
 #endif
 
-struct RDIR;
+#ifdef __CELLOS_LV2__
+#include <cell/cell_fs.h>
+#endif
+
+RETRO_BEGIN_DECLS
+
+struct RDIR
+{
+#if defined(_WIN32)
+   WIN32_FIND_DATA entry;
+   HANDLE directory;
+   bool next;
+#elif defined(VITA) || defined(PSP)
+   SceUID directory;
+   SceIoDirent entry;
+#elif defined(__CELLOS_LV2__)
+   CellFsErrno error;
+   int directory;
+   CellFsDirent entry;
+#else
+   DIR *directory;
+   const struct dirent *entry;
+#endif
+};
 
 struct RDIR *retro_opendir(const char *name);
 
@@ -43,7 +90,6 @@ const char *retro_dirent_get_name(struct RDIR *rdir);
  *
  * retro_dirent_is_dir:
  * @rdir         : pointer to the directory entry.
- * @path         : path to the directory entry.
  *
  * Is the directory listing entry a directory?
  *
@@ -54,8 +100,6 @@ bool retro_dirent_is_dir(struct RDIR *rdir, const char *path);
 
 void retro_closedir(struct RDIR *rdir);
 
-#ifdef __cplusplus
-}
-#endif
+RETRO_END_DECLS
 
 #endif
