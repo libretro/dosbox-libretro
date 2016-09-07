@@ -16,8 +16,8 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#if !defined __LAZYFLAGS_H
-#define __LAZYFLAG_H
+#ifndef __LAZYFLAGS_H
+#define __LAZYFLAGS_H
 
 //Flag Handling
 Bit32u get_CF(void);
