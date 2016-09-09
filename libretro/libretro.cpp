@@ -141,7 +141,7 @@ void retro_set_environment(retro_environment_t cb)
 {
    environ_cb = cb;
 
-   bool allow_no_game = true;
+   bool allow_no_game = false;
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
 
    char keys[PATH_MAX_LENGTH];
