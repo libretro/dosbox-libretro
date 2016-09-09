@@ -43,7 +43,8 @@ static void FPU_FNOP(void){
 
 static void FPU_PREP_PUSH(void){
 	TOP = (TOP - 1) &7;
-   if (GCC_UNLIKELY(fpu.tags[TOP] != TAG_Empty)) E_Exit("FPU stack overflow");
+   //not needed and causing crashes //dosbox-x doesnt have this
+   //if (GCC_UNLIKELY(fpu.tags[TOP] != TAG_Empty)) E_Exit("FPU stack overflow");
 	fpu.tags[TOP] = TAG_Valid;
 }
 
@@ -55,7 +56,8 @@ static void FPU_PUSH(double in){
 }
 
 static void FPU_FPOP(void){
-   if (GCC_UNLIKELY(fpu.tags[TOP] == TAG_Empty)) E_Exit("FPU stack underflow");
+   //not needed and causing crashes  //dosbox-x doesnt have this
+   //if (GCC_UNLIKELY(fpu.tags[TOP] == TAG_Empty)) E_Exit("FPU stack underflow");
 	fpu.tags[TOP]=TAG_Empty;
 	//maybe set zero in it as well
 	TOP = ((TOP+1)&7);
