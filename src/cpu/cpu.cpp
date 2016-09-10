@@ -2027,11 +2027,16 @@ bool CPU_CPUID(void) {
 			reg_ecx=0;			/* No features */
 			reg_edx=0x00000001;	/* FPU */
 		} else if (CPU_ArchitectureType==CPU_ARCHTYPE_PENTIUMSLOW) {
-			reg_eax=0x513;		/* intel pentium */
-			reg_ebx=0;			/* Not Supported */
-			reg_ecx=0;			/* No features */
-			reg_edx=0x00000011;	/* FPU+TimeStamp/RDTSC */
-		} else {
+         reg_eax=0x513;		/* intel pentium */
+         reg_ebx=0;			/* Not Supported */
+         reg_ecx=0;			/* No features */
+         reg_edx=0x00000011;	/* FPU+TimeStamp/RDTSC */
+      } else if (CPU_ArchitectureType==CPU_ARCHTYPE_P55CSLOW) {
+         reg_eax=0x543;		/* intel pentium mmx (P55C) */
+         reg_ebx=0;			/* Not Supported */
+         reg_ecx=0;			/* No features */
+         reg_edx=0x00800011;	/* FPU+TimeStamp/RDTSC+MMX */
+      } else {
 			return false;
 		}
 		break;
@@ -2390,7 +2395,11 @@ public:
 			}
 		} else if (cputype == "pentium_slow") {
 			CPU_ArchitectureType = CPU_ARCHTYPE_PENTIUMSLOW;
-		}
+      } else if (cputype == "pentium") {
+         CPU_ArchitectureType = CPU_ARCHTYPE_PENTIUMSLOW;
+      } else if (cputype == "pentium_mmx") {
+         CPU_ArchitectureType = CPU_ARCHTYPE_P55CSLOW;
+      }
 
 		if (CPU_ArchitectureType>=CPU_ARCHTYPE_486NEWSLOW) CPU_extflags_toggle=(FLAG_ID|FLAG_AC);
 		else if (CPU_ArchitectureType>=CPU_ARCHTYPE_486OLDSLOW) CPU_extflags_toggle=(FLAG_AC);

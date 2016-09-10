@@ -16,6 +16,7 @@ SOURCES_CXX := \
 	$(CORE_DIR)/src/cpu/core_prefetch.cpp \
 	$(CORE_DIR)/src/cpu/core_dyn_x86.cpp \
 	$(CORE_DIR)/src/cpu/core_dynrec.cpp \
+   $(CORE_DIR)/src/cpu/mmx.cpp \
 	$(CORE_DIR)/src/dos/dos.cpp \
 	$(CORE_DIR)/src/dos/dos_devices.cpp \
 	$(CORE_DIR)/src/dos/dos_execute.cpp \
