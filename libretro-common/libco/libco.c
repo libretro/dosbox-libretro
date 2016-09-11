@@ -18,6 +18,8 @@
   #include "sjlj.c"
 #elif defined(_MSC_VER)
   #include "fiber.c"
+#elif defined(EMSCRIPTEN)
+  #include "ucontext.c"
 #else
   #error "libco: unsupported processor, compiler or operating system"
 #endif
