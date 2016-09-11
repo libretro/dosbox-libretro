@@ -4,7 +4,9 @@
   license: public domain
 */
 
-#if defined(__GNUC__) && defined(__i386__) || (defined(_MSC_VER) && defined(_M_IX86))
+#if defined(EMSCRIPTEN)
+  #include "ucontext.c"
+#elif defined(__GNUC__) && defined(__i386__) || (defined(_MSC_VER) && defined(_M_IX86))
   #include "x86.c"
 #elif defined(__GNUC__) && defined(__amd64__) || (defined(_MSC_VER) && defined(_M_AMD64))
   #include "amd64.c"
@@ -18,8 +20,6 @@
   #include "sjlj.c"
 #elif defined(_MSC_VER)
   #include "fiber.c"
-#elif defined(EMSCRIPTEN)
-  #include "ucontext.c"
 #else
   #error "libco: unsupported processor, compiler or operating system"
 #endif
