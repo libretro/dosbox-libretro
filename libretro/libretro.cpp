@@ -141,7 +141,7 @@ void retro_set_environment(retro_environment_t cb)
 {
    environ_cb = cb;
 
-   bool allow_no_game = false;
+   bool allow_no_game = true;
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
 
    char keys[PATH_MAX_LENGTH];
@@ -170,7 +170,7 @@ void retro_set_environment(retro_environment_t cb)
    snprintf(buf[9],sizeof(buf[9]), "RetroPad Right; %s",  keys);
    snprintf(buf[10],sizeof(buf[10]),"RetroPad Select; %s", keys);
    snprintf(buf[11],sizeof(buf[11]),"RetroPad Start; %s",  keys);
-   
+
    static const struct retro_variable vars[] = {
       { "dosbox_machine_type", "Machine type; vgaonly|svga_s3|svga_et3000|svga_et4000|svga_paradise|hercules|cga|tandy|pcjr|ega" },
       { "dosbox_emulated_mouse", "Gamepad emulated mouse; enable|disable" },
@@ -195,7 +195,7 @@ void retro_set_environment(retro_environment_t cb)
 
    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
-   static const struct retro_controller_description pads[] = 
+   static const struct retro_controller_description pads[] =
    {
       { "Gamepad",  RETRO_DEVICE_GAMEPAD },
       { "Joystick", RETRO_DEVICE_JOYSTICK },
@@ -252,7 +252,7 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
          gamepad[port] = false;
          mapper[port] = false;
          break;
-      case RETRO_DEVICE_MAPPER:   
+      case RETRO_DEVICE_MAPPER:
          connected[port] = false;
          gamepad[port] = false;
          mapper[port] = true;
@@ -370,7 +370,7 @@ void check_variables()
       CPU_CycleMax=cycles;
    }
    update_cycles = false;
-   
+
    var.key = "dosbox_mapper_y";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -442,7 +442,7 @@ void check_variables()
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
       mapper_keys[11] = keyId(var.value);
-   }  
+   }
    /* Init the keyMapper */
    MAPPER_Init();
 }
@@ -529,7 +529,7 @@ static void retro_leave_thread(Bitu)
 static void retro_start_emulator(void)
 {
 
-   const char* const argv[2] = {"dosbox", loadPath.c_str()}; 
+   const char* const argv[2] = {"dosbox", loadPath.c_str()};
    CommandLine com_line(loadPath.empty() ? 1 : 2, argv);
    Config myconf(&com_line);
    control=&myconf;
@@ -616,7 +616,7 @@ void retro_get_system_info(struct retro_system_info *info)
    info->library_name = "DOSBox";
 #ifdef GIT_VERSION
    info->library_version = GIT_VERSION;
-#else   
+#else
    info->library_version = "SVN";
 #endif
    info->valid_extensions = "exe|com|bat|conf";
@@ -750,7 +750,7 @@ void retro_run (void)
 
    if (RDOSGFXwidth != currentWidth || RDOSGFXheight != currentHeight)
    {
-      log_cb(RETRO_LOG_INFO,"Resolution changed %dx%d => %dx%d\n", 
+      log_cb(RETRO_LOG_INFO,"Resolution changed %dx%d => %dx%d\n",
          currentWidth, currentHeight, RDOSGFXwidth, RDOSGFXheight);
       struct retro_system_av_info new_av_info;
       retro_get_system_av_info(&new_av_info);
