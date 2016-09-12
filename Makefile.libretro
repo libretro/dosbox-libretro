@@ -130,7 +130,9 @@ else ifeq ($(platform), vita)
 	CC = arm-vita-eabi-gcc$(EXE_EXT)
 	CXX = arm-vita-eabi-g++$(EXE_EXT)
 	AR = arm-vita-eabi-ar$(EXE_EXT)
-   COMMONFLAGS += -DVITA
+  COMMONFLAGS += -DVITA
+  COMMONFLAGS += -mfloat-abi=hard -ffast-math -fsingle-precision-constant
+  COMMONFLAGS += -mword-relocations -fno-short-enums
 	STATIC_LINKING = 1
 
 # CTR
