@@ -282,7 +282,6 @@ struct EmulatedKeyPress : public Processable
 
 void MAPPER_Init()
 {
-    log_cb(RETRO_LOG_INFO, "****%d %d****\n", connected[0], connected[1]);
     struct retro_keyboard_callback callback = { keyboard_event };
     environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &callback);
 
@@ -379,10 +378,10 @@ void MAPPER_Init()
 
     int i = 0;
     int j = 0;
-    int k = 0;
 
     for(i=0;i<64;i++)
         desc[i] = empty;
+    i=0;
 
     JOYSTICK_Enable(0, false);
     JOYSTICK_Enable(1, false);
@@ -586,9 +585,9 @@ void MAPPER_Init()
     {
        for (j=0;  desc_emulated_mouse[j].port == 0; i++)
        {
-        desc[i] = desc_emulated_mouse[j];
-        j++;
-        log_cb(RETRO_LOG_INFO, "Map: %s\n", desc[i].description);
+         desc[i] = desc_emulated_mouse[j];
+         j++;
+         log_cb(RETRO_LOG_INFO, "Map: %s\n", desc[i].description);
        }
     }
     environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
