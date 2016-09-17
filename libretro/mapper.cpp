@@ -286,10 +286,11 @@ void MAPPER_Init()
     environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &callback);
 
     inputList.clear();
+    inputList.push_back(new MouseButton(RDID(MOUSE_LEFT), 0));
+    inputList.push_back(new MouseButton(RDID(MOUSE_RIGHT), 1));
+
     if (emulated_mouse)
     {
-       inputList.push_back(new MouseButton(RDID(MOUSE_LEFT), 0));
-       inputList.push_back(new MouseButton(RDID(MOUSE_RIGHT), 1));
        inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_R2), 0));
        inputList.push_back(new EmulatedMouseButton(0, RDID(JOYPAD_L2), 1));
     }
@@ -606,9 +607,6 @@ void MAPPER_Run(bool pressed)
     int16_t mouseX = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_X));
     int16_t mouseY = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_Y));
 
-    if(mouseX || mouseY)
-      Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
-
     const int deadzone = 30;
     const int speed = 8;
 
@@ -627,7 +625,8 @@ void MAPPER_Run(bool pressed)
 
        Mouse_CursorMoved(emulated_mouseX, emulated_mouseY, 0, 0, true);
     }
-
+    if(mouseX || mouseY)
+      Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
     for (std::vector<Processable*>::iterator i = inputList.begin(); i != inputList.end(); i ++)
         (*i)->process();
 }
