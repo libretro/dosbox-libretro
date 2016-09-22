@@ -3,15 +3,24 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE    := retro
-CPU_ARCH        :=
 
 ifeq ($(TARGET_ARCH),arm)
 LOCAL_CFLAGS += -DANDROID_ARM
 LOCAL_ARM_MODE := arm
+ifneq (,$(filter $(TARGET_ARCH_ABI),arm64-v8a armeabi-v7a))
+WITH_DYNAREC := arm
+endif
 endif
 
 ifeq ($(TARGET_ARCH),x86)
 LOCAL_CFLAGS +=  -DANDROID_X86
+
+ifeq ($(TARGET_ARCH_ABI), x86_64)
+WITH_DYNAREC := x86_64
+else
+WITH_DYNAREC := x86
+endif
+
 endif
 
 ifeq ($(TARGET_ARCH),mips)
@@ -23,18 +32,10 @@ CORE_DIR := ..
 SOURCES_C   :=
 SOURCES_ASM :=
 
-ifeq ($(HAVE_DYNAREC),1)
-LOCAL_CFLAGS += -DHAVE_DYNAREC
-endif
-
-ifeq ($(CPU_ARCH),arm)
-LOCAL_CFLAGS  += -DARM_ARCH
-endif
-
 ifeq ($(DEBUG),1)
 APP_OPTIM := -O0 -g
 else
-APP_OPTIM := -O2 -DNDEBUG
+APP_OPTIM := -O3 -DNDEBUG
 endif
 
 include $(CORE_DIR)/Makefile.common
