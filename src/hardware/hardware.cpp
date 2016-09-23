@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 
@@ -105,9 +107,9 @@ FILE * OpenCaptureFile(const char * type,const char * ext) {
 	lowcase(file_start);
 	strcat(file_start,"_");
 	bool is_directory;
-	char tempname[CROSS_LEN];
-	bool testRead = read_directory_first(dir, tempname, is_directory );
-	for ( ; testRead; testRead = read_directory_next(dir, tempname, is_directory) ) {
+	char tempname[CROSS_LEN], sname[12];
+	bool testRead = read_directory_first(dir, tempname, sname, is_directory );
+	for ( ; testRead; testRead = read_directory_next(dir, tempname, sname, is_directory) ) {
 		char * test=strstr(tempname,ext);
 		if (!test || strlen(test)!=strlen(ext)) 
 			continue;

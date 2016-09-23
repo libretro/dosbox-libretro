@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 
@@ -83,8 +85,8 @@ typedef struct dir_struct {
 } dir_information;
 
 dir_information* open_directory(const char* dirname);
-bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory);
-bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_directory);
+bool read_directory_first(dir_information* dirp, char* entry_name, char* entry_sname, bool& is_directory);
+bool read_directory_next(dir_information* dirp, char* entry_name, char* entry_sname, bool& is_directory);
 void close_directory(dir_information* dirp);
 
 #endif

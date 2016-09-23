@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 #include <stdio.h>
@@ -28,6 +30,7 @@
 
 struct VFILE_Block {
 	const char * name;
+	const char * lname;
 	Bit8u * data;
 	Bit32u size;
 	Bit16u date;
@@ -41,6 +44,7 @@ static VFILE_Block * first_file;
 void VFILE_Register(const char * name,Bit8u * data,Bit32u size) {
 	VFILE_Block * new_file=new VFILE_Block;
 	new_file->name=name;
+	new_file->lname=name;
 	new_file->data=data;
 	new_file->size=size;
 	new_file->date=DOS_PackDate(2002,10,1);
@@ -202,14 +206,14 @@ bool Virtual_Drive::FileExists(const char* name){
 
 bool Virtual_Drive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 	search_file=first_file;
-	Bit8u attr;char pattern[DOS_NAMELENGTH_ASCII];
-	dta.GetSearchParams(attr,pattern);
+	Bit8u attr;char pattern[CROSS_LEN];
+	dta.GetSearchParams(attr,pattern,true);
 	if (attr == DOS_ATTR_VOLUME) {
-		dta.SetResult("DOSBOX",0,0,0,DOS_ATTR_VOLUME);
+		dta.SetResult("DOSBOX","DOSBOX",0,0,0,DOS_ATTR_VOLUME);
 		return true;
 	} else if ((attr & DOS_ATTR_VOLUME) && !fcb_findfirst) {
 		if (WildFileCmp("DOSBOX",pattern)) {
-			dta.SetResult("DOSBOX",0,0,0,DOS_ATTR_VOLUME);
+			dta.SetResult("DOSBOX","DOSBOX",0,0,0,DOS_ATTR_VOLUME);
 			return true;
 		}
 	}
@@ -217,11 +221,11 @@ bool Virtual_Drive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 }
 
 bool Virtual_Drive::FindNext(DOS_DTA & dta) {
-	Bit8u attr;char pattern[DOS_NAMELENGTH_ASCII];
-	dta.GetSearchParams(attr,pattern);
+	Bit8u attr;char pattern[CROSS_LEN];
+	dta.GetSearchParams(attr,pattern,true);
 	while (search_file) {
 		if (WildFileCmp(search_file->name,pattern)) {
-			dta.SetResult(search_file->name,search_file->size,search_file->date,search_file->time,DOS_ATTR_ARCHIVE);
+			dta.SetResult(search_file->name,search_file->lname,search_file->size,search_file->date,search_file->time,DOS_ATTR_ARCHIVE);
 			search_file=search_file->next;
 			return true;
 		}
@@ -241,6 +245,19 @@ bool Virtual_Drive::GetFileAttr(char * name,Bit16u * attr) {
 		cur_file=cur_file->next;
 	}
 	return false;
+}
+
+bool Virtual_Drive::GetFileAttrEx(char* name, struct stat *status) {
+	return false;
+}
+
+Bit32u Virtual_Drive::GetCompressedSize(char* name) {
+	return 0;
+}
+
+void* Virtual_Drive::CreateOpenFile(const char* name) {
+	DOS_SetError(1);
+	return NULL;
 }
 
 bool Virtual_Drive::Rename(char * oldname,char * newname) {

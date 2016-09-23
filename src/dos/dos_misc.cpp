@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: MS-DOS 7 support
  */
 
 
@@ -57,6 +59,7 @@ static Bitu INT2A_Handler(void) {
 }
 
 static bool DOS_MultiplexFunctions(void) {
+	char name[256];
 	switch (reg_ax) {
 	case 0x1216:	/* GET ADDRESS OF SYSTEM FILE TABLE ENTRY */
 		// reg_bx is a system file table entry, should coincide with
@@ -195,6 +198,33 @@ static bool DOS_MultiplexFunctions(void) {
 		//ESDI=ffff:ffff Location of HMA/Allocated memory
 		SegSet16(es,0xffff);
 		reg_di=0xffff;
+		return true;
+	case 0x1300:
+	case 0x1302:
+		reg_ax=0;
+		return true;
+	case 0x1605:
+		return true;
+	case 0x1612:
+		reg_ax=0;
+		name[0]=1;
+		name[1]=0;
+		MEM_BlockWrite(SegPhys(es)+reg_bx,name,0x20);
+		return true;
+	case 0x1613:	/* Get SYSTEM.DAT path */
+		strcpy(name,"C:\\WINDOWS\\SYSTEM.DAT");
+		MEM_BlockWrite(SegPhys(es)+reg_di,name,(Bitu)(strlen(name)+1));
+		reg_ax=0;
+		reg_cx=strlen(name);
+		return true;
+	case 0x4a16:	/* Open bootlog */
+		return true;
+	case 0x4a17:	/* Write bootlog */
+		MEM_StrCopy(SegPhys(ds)+reg_dx,name,255);
+		LOG(LOG_DOSMISC,LOG_NORMAL)("BOOTLOG: %s\n",name);
+		return true;
+	case 0x4a33:	/* Check MS-DOS Version 7 */
+		reg_ax=0;
 		return true;
 	}
 

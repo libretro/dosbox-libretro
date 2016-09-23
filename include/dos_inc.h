@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 
@@ -28,13 +30,14 @@
 #endif
 
 #include <stddef.h> //for offsetof
+#define CTBUF 127
 
 #ifdef _MSC_VER
 #pragma pack (1)
 #endif
 struct CommandTail{
   Bit8u count;				/* number of bytes returned */
-  char buffer[127];			 /* the buffer itself */
+  char buffer[CTBUF];			 /* the buffer itself */
 } GCC_ATTRIBUTE(packed);
 #ifdef _MSC_VER
 #pragma pack ()
@@ -110,20 +113,21 @@ enum { HAND_NONE=0,HAND_FILE,HAND_DEVICE};
 
 /* Routines for File Class */
 void DOS_SetupFiles (void);
-bool DOS_ReadFile(Bit16u handle,Bit8u * data,Bit16u * amount);
-bool DOS_WriteFile(Bit16u handle,Bit8u * data,Bit16u * amount);
-bool DOS_SeekFile(Bit16u handle,Bit32u * pos,Bit32u type);
-bool DOS_CloseFile(Bit16u handle);
+bool DOS_ReadFile(Bit16u handle,Bit8u * data,Bit16u * amount, bool fcb = false);
+bool DOS_WriteFile(Bit16u handle,Bit8u * data,Bit16u * amount,bool fcb = false);
+bool DOS_SeekFile(Bit16u handle,Bit32u * pos,Bit32u type,bool fcb = false);
+bool DOS_CloseFile(Bit16u handle,bool fcb = false);
 bool DOS_FlushFile(Bit16u handle);
 bool DOS_DuplicateEntry(Bit16u entry,Bit16u * newentry);
 bool DOS_ForceDuplicateEntry(Bit16u entry,Bit16u newentry);
 bool DOS_GetFileDate(Bit16u entry, Bit16u* otime, Bit16u* odate);
 
 /* Routines for Drive Class */
-bool DOS_OpenFile(char const * name,Bit8u flags,Bit16u * entry);
+bool DOS_OpenFile(char const * name,Bit8u flags,Bit16u * entry,bool fcb = false);
 bool DOS_OpenFileExtended(char const * name, Bit16u flags, Bit16u createAttr, Bit16u action, Bit16u *entry, Bit16u* status);
-bool DOS_CreateFile(char const * name,Bit16u attribute,Bit16u * entry);
+bool DOS_CreateFile(char const * name,Bit16u attribute,Bit16u * entry, bool fcb = false);
 bool DOS_UnlinkFile(char const * const name);
+bool DOS_GetSFNPath(char const * const path, char *SFNpath, bool LFN);
 bool DOS_FindFirst(char *search,Bit16u attr,bool fcb_findfirst=false);
 bool DOS_FindNext(void);
 bool DOS_Canonicalize(char const * const name,char * const big);
@@ -136,7 +140,7 @@ bool DOS_MakeName(char const * const name,char * const fullname,Bit8u * drive);
 Bit8u DOS_GetDefaultDrive(void);
 void DOS_SetDefaultDrive(Bit8u drive);
 bool DOS_SetDrive(Bit8u drive);
-bool DOS_GetCurrentDir(Bit8u drive,char * const buffer);
+bool DOS_GetCurrentDir(Bit8u drive,char * const buffer, bool LFN);
 bool DOS_ChangeDir(char const * const dir);
 bool DOS_MakeDir(char const * const dir);
 bool DOS_RemoveDir(char const * const dir);
@@ -144,6 +148,9 @@ bool DOS_Rename(char const * const oldname,char const * const newname);
 bool DOS_GetFreeDiskSpace(Bit8u drive,Bit16u * bytes,Bit8u * sectors,Bit16u * clusters,Bit16u * free);
 bool DOS_GetFileAttr(char const * const name,Bit16u * attr);
 bool DOS_SetFileAttr(char const * const name,Bit16u attr);
+bool DOS_GetFileAttrEx(char const* const name, struct stat *status, Bit8u hdrive=-1);
+Bit32u DOS_GetCompressedFileSize(char const* const name);
+void* DOS_CreateOpenFile(char const* const name);
 
 /* IOCTL Stuff */
 bool DOS_IOCTL(void);
@@ -303,6 +310,8 @@ public:
 	void	SetFCB1				(RealPt src);
 	void	SetFCB2				(RealPt src);
 	void	SetCommandTail		(RealPt src);	
+	void    StoreCommandTail    (void);
+	void    RestoreCommandTail  (void);
 	bool	SetNumFiles			(Bit16u fileNum);
 	Bit16u	FindEntryByHandle	(Bit8u handle);
 			
@@ -455,11 +464,12 @@ public:
 	DOS_DTA(RealPt addr) { SetPt(addr); }
 
 	void SetupSearch(Bit8u _sdrive,Bit8u _sattr,char * _pattern);
-	void SetResult(const char * _name,Bit32u _size,Bit16u _date,Bit16u _time,Bit8u _attr);
+	void SetResult(const char * _name,const char * _lname,Bit32u _size,Bit16u _date,Bit16u _time,Bit8u _attr);
 	
+	int GetFindData(int fmt,char * finddata);
 	Bit8u GetSearchDrive(void);
-	void GetSearchParams(Bit8u & _sattr,char * _spattern);
-	void GetResult(char * _name,Bit32u & _size,Bit16u & _date,Bit16u & _time,Bit8u & _attr);
+	void GetSearchParams(Bit8u & _sattr,char * _spattern,bool lfn);
+	void GetResult(char * _name,char * _lname,Bit32u & _size,Bit16u & _date,Bit16u & _time,Bit8u & _attr);
 
 	void	SetDirID(Bit16u entry)			{ sSave(sDTA,dirID,entry); };
 	void	SetDirIDCluster(Bit16u entry)	{ sSave(sDTA,dirCluster,entry); };
@@ -471,8 +481,8 @@ private:
 	#endif
 	struct sDTA {
 		Bit8u sdrive;						/* The Drive the search is taking place */
-		Bit8u sname[8];						/* The Search pattern for the filename */		
-		Bit8u sext[3];						/* The Search pattern for the extenstion */
+		Bit8u spname[8];					/* The Search pattern for the filename */		
+		Bit8u spext[3];						/* The Search pattern for the extenstion */
 		Bit8u sattr;						/* The Attributes that need to be found */
 		Bit16u dirID;						/* custom: dir-search ID for multiple searches at the same time */
 		Bit16u dirCluster;					/* custom (drive_fat only): cluster number for multiple searches at the same time */
@@ -501,14 +511,16 @@ public:
 	void GetRecord(Bit16u & _cur_block,Bit8u & _cur_rec);
 	void SetRecord(Bit16u _cur_block,Bit8u _cur_rec);
 	void GetSeqData(Bit8u & _fhandle,Bit16u & _rec_size);
+	void SetSeqData(Bit8u _fhandle,Bit16u _rec_size);
 	void GetRandom(Bit32u & _random);
 	void SetRandom(Bit32u  _random);
 	Bit8u GetDrive(void);
 	bool Extended(void);
 	void GetAttr(Bit8u & attr);
 	void SetAttr(Bit8u attr);
-	void SetResultAttr(Bit8u attr);
+	void SetResult(Bit32u size,Bit16u date,Bit16u time,Bit8u attr);
 	bool Valid(void);
+	void ClearBlockRecsize(void);
 private:
 	bool extended;
 	PhysPt real_pt;
@@ -528,6 +540,8 @@ private:
 		Bit8u sft_entries;
 		Bit8u share_attributes;
 		Bit8u extra_info;
+		/* Maybe swap file_handle and sft_entries now that fcbs 
+		 * aren't stored in the psp filetable anymore */
 		Bit8u file_handle;
 		Bit8u reserved[4];
 		/* end */
@@ -622,6 +636,7 @@ struct DOS_Block {
 	bool verify;
 	bool breakcheck;
 	bool echo;          // if set to true dev_con::read will echo input 
+	bool direct_output;
 	struct  {
 		RealPt mediaid;
 		RealPt tempdta;

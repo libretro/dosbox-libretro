@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: MISC FIX
  */
 
 
@@ -98,9 +100,9 @@ Program::Program() {
 	while (mem_readb(envscan)) envscan+=mem_strlen(envscan)+1;	
 	envscan+=3;
 	CommandTail tail;
-	MEM_BlockRead(PhysMake(dos.psp(),128),&tail,128);
-	if (tail.count<127) tail.buffer[tail.count]=0;
-	else tail.buffer[126]=0;
+	MEM_BlockRead(PhysMake(dos.psp(),CTBUF+1),&tail,CTBUF+1);
+	if (tail.count<CTBUF) tail.buffer[tail.count]=0;
+	else tail.buffer[CTBUF-1]=0;
 	char filename[256+1];
 	MEM_StrCopy(envscan,filename,256);
 	cmd = new CommandLine(filename,tail.buffer);
@@ -538,7 +540,7 @@ void CONFIG::Run(void) {
 			std::string::size_type spcpos = pvars[0].find_first_of(' ');
 			// split on the ' '
 			if (spcpos != std::string::npos) {
-				pvars.insert(++pvars.begin(),pvars[0].substr(spcpos+1));
+				pvars.insert(pvars.begin()+1,pvars[0].substr(spcpos+1));
 				pvars[0].erase(spcpos);
 			}
 			switch(pvars.size()) {
@@ -632,7 +634,7 @@ void CONFIG::Run(void) {
 			if ((equpos != std::string::npos) && 
 				((spcpos == std::string::npos) || (equpos < spcpos))) {
 				// If we have a '=' possibly before a ' ' split on the =
-				pvars.insert(++pvars.begin(),pvars[0].substr(equpos+1));
+				pvars.insert(pvars.begin()+1,pvars[0].substr(equpos+1));
 				pvars[0].erase(equpos);
 				// As we had a = the first thing must be a property now
 				Section* sec=control->GetSectionFromProperty(pvars[0].c_str());
@@ -646,7 +648,7 @@ void CONFIG::Run(void) {
 				if ((spcpos != std::string::npos) &&
 					((equpos == std::string::npos) || (spcpos < equpos))) {
 					// ' ' before a possible '=', split on the ' '
-					pvars.insert(++pvars.begin(),pvars[0].substr(spcpos+1));
+					pvars.insert(pvars.begin()+1,pvars[0].substr(spcpos+1));
 					pvars[0].erase(spcpos);
 				}
 				// check if the first parameter is a section or property

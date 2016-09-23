@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 #include <stdlib.h>
@@ -129,16 +131,17 @@ dir_information* open_directory(const char* dirname)
 	return dir.dir ? &dir : NULL;
 }
 
-bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_directory)
+bool read_directory_next(dir_information* dirp, char* entry_name, char* entry_sname, bool& is_directory)
 {
    struct stat status;
    static char buffer[2*CROSS_LEN] = { 0 };
 
-   while (retro_readdir(dirp->dir))
+   if (retro_readdir(dirp->dir))
    {
       char file_path[4096];
 
       safe_strncpy(entry_name, retro_dirent_get_name(dirp->dir), CROSS_LEN);
+      entry_sname[0]=0;
       is_directory = retro_dirent_is_dir(dirp->dir, file_path);
 
       return true;
@@ -147,9 +150,9 @@ bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_direc
    return false;
 }
 
-bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory)
+bool read_directory_first(dir_information* dirp, char* entry_name, char* entry_sname, bool& is_directory)
 {
-   return read_directory_next(dirp, entry_name, is_directory);
+   return read_directory_next(dirp, entry_name, entry_sname, is_directory);
 }
 
 void close_directory(dir_information* dirp)

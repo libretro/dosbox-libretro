@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: MISC FIX
  */
 
 
@@ -245,7 +247,9 @@ char const* Property::Get_help() {
 
 
 bool Prop_int::CheckValue(Value const& in, bool warn) {
-	if(suggested_values.empty() && Property::CheckValue(in,warn)) return true;
+//	if(!suggested_values.empty() && Property::CheckValue(in,warn)) return true;
+	if(!suggested_values.empty()) return Property::CheckValue(in,warn);
+
 	//No >= and <= in Value type and == is ambigious
 	int mi = min;
 	int ma = max;
@@ -337,7 +341,7 @@ void Prop_multival::make_default_value(){
 	while( (p = section->Get_prop(i++)) ) {
 		std::string props = p->Get_Default_Value().ToString();
 		if(props == "") continue;
-		result += seperator; result += props;
+		result += separator; result += props;
 	}
 	Value val(result,Value::V_STRING);
 	SetVal(val,false,true);
@@ -361,14 +365,14 @@ bool Prop_multival_remain::SetValue(std::string const& input) {
 	
 	string::size_type loc = string::npos;
 	while( (p = section->Get_prop(i++)) ) {
-		//trim leading seperators
-		loc = local.find_first_not_of(seperator);
+		//trim leading separators
+		loc = local.find_first_not_of(separator);
 		if(loc != string::npos) local.erase(0,loc);
-		loc = local.find_first_of(seperator);
+		loc = local.find_first_of(separator);
 		string in = "";//default value
 		/* when i == number_of_properties add the total line. (makes more then 
 		 * one string argument possible for parameters of cpu) */
-		if(loc != string::npos && i < number_of_properties) { //seperator found 
+		if(loc != string::npos && i < number_of_properties) { //separator found 
 			in = local.substr(0,loc);
 			local.erase(0,loc+1);
 		} else if(local.size()) { //last argument or last property
@@ -398,18 +402,18 @@ bool Prop_multival::SetValue(std::string const& input) {
 	if(!p) return false;
 	string::size_type loc = string::npos;
 	while( (p = section->Get_prop(i++)) ) {
-		//trim leading seperators
-		loc = local.find_first_not_of(seperator);
+		//trim leading separators
+		loc = local.find_first_not_of(separator);
 		if(loc != string::npos) local.erase(0,loc);
-		loc = local.find_first_of(seperator);
+		loc = local.find_first_of(separator);
 		string in = "";//default value
-		if(loc != string::npos) { //seperator found
+		if(loc != string::npos) { //separator found
 			in = local.substr(0,loc);
 			local.erase(0,loc+1);
 		} else if(local.size()) { //last argument
 			in = local;
 			local = "";
-		}
+		} 
 		//Test Value. If it fails set default
 		Value valtest (in,p->Get_type());
 		if(!p->CheckValue(valtest,true)) {
@@ -586,9 +590,17 @@ bool Section_prop::HandleInputline(string const& gegevens){
 	if(loc == string::npos) return false;
 	string name = str1.substr(0,loc);
 	string val = str1.substr(loc + 1);
+
+	/* Remove quotes around value */
+	trim(val);
+	string::size_type length = val.length();
+	if (length > 1 &&
+	     ((val[0] == '"'  && val[length - 1] == '"' ) ||
+	      (val[0] == '\'' && val[length - 1] == '\''))
+	   ) val = val.substr(1,length - 2); 
 	/* trim the results incase there were spaces somewhere */
 	trim(name);trim(val);
-	for(it tel=properties.begin();tel!=properties.end();tel++){
+	for(it tel = properties.begin();tel != properties.end();tel++){
 		if(!strcasecmp((*tel)->propname.c_str(),name.c_str())){
 			return (*tel)->SetValue(val);
 		}
@@ -690,6 +702,7 @@ bool Config::PrintConfig(char const * const configfilename) const {
 				}
 				helpstr++;
 			}
+			if (!strcmp(temp,"AUTOEXEC_CONFIGFILE_HELP")) fprintf(outfile,MSG_Get("AUTOEXEC_EXAMPLE"));
 		}
 	   
 		fprintf(outfile,"\n");

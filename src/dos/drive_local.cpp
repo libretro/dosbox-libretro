@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 
@@ -34,10 +36,6 @@
 #include "support.h"
 #include "cross.h"
 #include "inout.h"
-
-#if defined(__LIBRETRO__) && defined(GEKKO) // No access() support
-# define access(...) 0
-#endif
 
 class localFile : public DOS_File {
 public:
@@ -207,6 +205,7 @@ bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 	strcat(tempDir,_dir);
 	CROSS_FILENAME(tempDir);
 
+	for (unsigned int i=0;i<strlen(tempDir);i++) tempDir[i]=toupper(tempDir[i]);
 	if (allocation.mediaid==0xF0 ) {
 		EmptyCache(); //rescan floppie-content on each findfirst
 	}
@@ -219,16 +218,17 @@ bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 		DOS_SetError(DOSERR_PATH_NOT_FOUND);
 		return false;
 	}
+
 	strcpy(srchInfo[id].srch_dir,tempDir);
 	dta.SetDirID(id);
 	
 	Bit8u sAttr;
-	dta.GetSearchParams(sAttr,tempDir);
+	dta.GetSearchParams(sAttr,tempDir,true);
 
 	if (this->isRemote() && this->isRemovable()) {
 		// cdroms behave a bit different than regular drives
 		if (sAttr == DOS_ATTR_VOLUME) {
-			dta.SetResult(dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
+			dta.SetResult(dirCache.GetLabel(),dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
 			return true;
 		}
 	} else {
@@ -240,13 +240,13 @@ bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 				DOS_SetError(DOSERR_NO_MORE_FILES);
 				return false;
 			}
-			dta.SetResult(dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
+			dta.SetResult(dirCache.GetLabel(),dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
 			return true;
 		} else if ((sAttr & DOS_ATTR_VOLUME)  && (*_dir == 0) && !fcb_findfirst) { 
 		//should check for a valid leading directory instead of 0
 		//exists==true if the volume label matches the searchmask and the path is valid
 			if (WildFileCmp(dirCache.GetLabel(),tempDir)) {
-				dta.SetResult(dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
+				dta.SetResult(dirCache.GetLabel(),dirCache.GetLabel(),0,0,0,DOS_ATTR_VOLUME);
 				return true;
 			}
 		}
@@ -256,23 +256,23 @@ bool localDrive::FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 
 bool localDrive::FindNext(DOS_DTA & dta) {
 
-	char * dir_ent;
+	char *dir_ent, *ldir_ent;
 	struct stat stat_block;
 	char full_name[CROSS_LEN];
-	char dir_entcopy[CROSS_LEN];
+	char dir_entcopy[CROSS_LEN], ldir_entcopy[CROSS_LEN];
 
-	Bit8u srch_attr;char srch_pattern[DOS_NAMELENGTH_ASCII];
+	Bit8u srch_attr;char srch_pattern[LFN_NAMELENGTH+1];
 	Bit8u find_attr;
 
-	dta.GetSearchParams(srch_attr,srch_pattern);
+	dta.GetSearchParams(srch_attr,srch_pattern,true);
 	Bit16u id = dta.GetDirID();
 
 again:
-	if (!dirCache.FindNext(id,dir_ent)) {
+	if (!dirCache.FindNext(id,dir_ent,ldir_ent)) {
 		DOS_SetError(DOSERR_NO_MORE_FILES);
 		return false;
 	}
-	if(!WildFileCmp(dir_ent,srch_pattern)) goto again;
+	if(!WildFileCmp(dir_ent,srch_pattern)&&!LWildFileCmp(ldir_ent,srch_pattern)) goto again;
 
 	strcpy(full_name,srchInfo[id].srch_dir);
 	strcat(full_name,dir_ent);
@@ -281,6 +281,7 @@ again:
 	//and due to its design dir_ent might be lost.)
 	//Copying dir_ent first
 	strcpy(dir_entcopy,dir_ent);
+	strcpy(ldir_entcopy,ldir_ent);
 	if (stat(dirCache.GetExpandName(full_name),&stat_block)!=0) { 
 		goto again;//No symlinks and such
 	}	
@@ -290,12 +291,14 @@ again:
  	if (~srch_attr & find_attr & (DOS_ATTR_DIRECTORY | DOS_ATTR_HIDDEN | DOS_ATTR_SYSTEM)) goto again;
 	
 	/*file is okay, setup everything to be copied in DTA Block */
-	char find_name[DOS_NAMELENGTH_ASCII];Bit16u find_date,find_time;Bit32u find_size;
+	char find_name[DOS_NAMELENGTH_ASCII], *lfind_name=ldir_ent;
+	Bit16u find_date,find_time;Bit32u find_size;
 
 	if(strlen(dir_entcopy)<DOS_NAMELENGTH_ASCII){
 		strcpy(find_name,dir_entcopy);
 		upcase(find_name);
 	} 
+	lfind_name[LFN_NAMELENGTH]=0;
 
 	find_size=(Bit32u) stat_block.st_size;
 	struct tm *time;
@@ -306,7 +309,7 @@ again:
 		find_time=6; 
 		find_date=4;
 	}
-	dta.SetResult(find_name,find_size,find_date,find_time,find_attr);
+	dta.SetResult(find_name,lfind_name,find_size,find_date,find_time,find_attr);
 	return true;
 }
 
@@ -325,6 +328,66 @@ bool localDrive::GetFileAttr(char * name,Bit16u * attr) {
 	}
 	*attr=0;
 	return false; 
+}
+
+bool localDrive::GetFileAttrEx(char* name, struct stat *status) {
+	char newname[CROSS_LEN];
+	strcpy(newname,basedir);
+	strcat(newname,name);
+	CROSS_FILENAME(newname);
+	dirCache.ExpandName(newname);
+	return !stat(newname,status);
+}
+
+Bit32u localDrive::GetCompressedSize(char* name)
+	{
+   //win32 is not special
+   return 0;
+      /*
+#if !defined (WIN32)
+	return 0;
+#else
+	char newname[CROSS_LEN];
+	strcpy(newname,basedir);
+	strcat(newname,name);
+	CROSS_FILENAME(newname);
+	dirCache.ExpandName(newname);
+	Bit32u size = GetCompressedFileSize(newname, NULL);
+	if (size != INVALID_FILE_SIZE) {
+		if (size != 0 && size == GetFileSize(newname, NULL)) {
+			Bit32u sectors_per_cluster, bytes_per_sector, free_clusters, total_clusters;
+			if (GetDiskFreeSpace(newname, &sectors_per_cluster, &bytes_per_sector, &free_clusters, &total_clusters)) {
+				size = ((size - 1) | (sectors_per_cluster * bytes_per_sector - 1)) + 1;
+			}
+		}
+		return size;
+	} else {
+		DOS_SetError((Bit16u)GetLastError());
+		return -1;
+	}
+#endif
+      */
+}
+
+void* localDrive::CreateOpenFile(const char* name)
+	{
+	char newname[CROSS_LEN];
+	strcpy(newname,basedir);
+	strcat(newname,name);
+	CROSS_FILENAME(newname);
+	dirCache.ExpandName(newname);
+   //win32 is not special
+   return NULL;
+      /*
+#if defined (WIN32)
+	HANDLE handle=CreateFile(newname, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	if (handle==INVALID_HANDLE_VALUE)
+		DOS_SetError((Bit16u)GetLastError());
+	return handle;
+#else
+	return NULL;
+#endif
+      */
 }
 
 bool localDrive::MakeDir(char * dir) {
@@ -390,7 +453,7 @@ bool localDrive::Rename(char * oldname,char * newname) {
 #ifdef VITA
    int temp=sceIoRename(newold,dirCache.GetExpandName(newnew));
 #else
-	int temp=rename(newold,dirCache.GetExpandName(newnew));
+   int temp=rename(newold,dirCache.GetExpandName(newnew));
 #endif
 	if (temp==0) dirCache.CacheOut(newnew);
 	return (temp==0);
@@ -492,12 +555,11 @@ bool localFile::Write(Bit8u * data,Bit16u * size) {
 	}
 	if (last_action==READ) fseek(fhandle,ftell(fhandle),SEEK_SET);
 	last_action=WRITE;
-	if(*size==0)
-   {  
+	if(*size==0){  
 #ifdef VITA
-      return true;
+         return true;
 #else
-      return (!ftruncate(fileno(fhandle),ftell(fhandle)));
+         return (!ftruncate(fileno(fhandle),ftell(fhandle)));
 #endif
     }
     else 
@@ -651,6 +713,18 @@ bool cdromDrive::GetFileAttr(char * name,Bit16u * attr) {
 	bool result = localDrive::GetFileAttr(name,attr);
 	if (result) *attr |= DOS_ATTR_READ_ONLY;
 	return result;
+}
+
+bool cdromDrive::GetFileAttrEx(char* name, struct stat *status) {
+	return localDrive::GetFileAttrEx(name,status);
+}
+
+Bit32u cdromDrive::GetCompressedSize(char* name) {
+	return localDrive::GetCompressedSize(name);
+}
+
+void* cdromDrive::CreateOpenFile(const char* name) {
+		return localDrive::CreateOpenFile(name);
 }
 
 bool cdromDrive::FindFirst(char * _dir,DOS_DTA & dta,bool /*fcb_findfirst*/) {

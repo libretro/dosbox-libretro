@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 
@@ -42,6 +44,7 @@
 
 DOS_File * Files[DOS_FILES];
 DOS_Drive * Drives[DOS_DRIVES];
+int sdrive;
 
 Bit8u DOS_GetDefaultDrive(void) {
 //	return DOS_SDA(DOS_SDA_SEG,DOS_SDA_OFS).GetDrive();
@@ -62,12 +65,32 @@ bool DOS_MakeName(char const * const name,char * const fullname,Bit8u * drive) {
 		DOS_SetError(DOSERR_FILE_NOT_FOUND);
 		return false;
 	}
-	const char * name_int = name;
+	
+	char names[LFN_NAMELENGTH];
+	strcpy(names,name);
+	char * name_int = names;
+	if (strlen(names)==14 && name_int[1]==':' && name_int[2]!='\\' && name_int[9]==' ' && name_int[10]=='.') {
+		for (unsigned int i=0;i<strlen(names);i++)
+			if (i<10 && name_int[i]==32) {
+				name_int[i]='.';
+				name_int[i+1]=name_int[11]==32?0:toupper(name_int[11]);
+				name_int[i+2]=name_int[12]==32?0:toupper(name_int[12]);
+				name_int[i+3]=name_int[13]==32?0:toupper(name_int[13]);
+				name_int[i+4]=0;
+				break;
+			} else if (i<10) name_int[i]=toupper(name_int[i]);
+	}
+
 	char tempdir[DOS_PATHLENGTH];
 	char upname[DOS_PATHLENGTH];
-	Bitu r,w;
+	Bitu r,w,q=0;
+	Bit8u c;
 	*drive = DOS_GetDefaultDrive();
 	/* First get the drive */
+	while (name_int[0]=='"') {
+		q++;
+		name_int++;
+	}
 	if (name_int[1]==':') {
 		*drive=(name_int[0] | 0x20)-'a';
 		name_int+=2;
@@ -78,30 +101,14 @@ bool DOS_MakeName(char const * const name,char * const fullname,Bit8u * drive) {
 	}
 	r=0;w=0;
 	while (name_int[r]!=0 && (r<DOS_PATHLENGTH)) {
-		Bit8u c=name_int[r++];
-		if ((c>='a') && (c<='z')) {upname[w++]=c-32;continue;}
-		if ((c>='A') && (c<='Z')) {upname[w++]=c;continue;}
-		if ((c>='0') && (c<='9')) {upname[w++]=c;continue;}
-		switch (c) {
-		case '/':
-			upname[w++]='\\';
-			break;
-		case ' ': /* should be seperator */
-			break;
-		case '\\':	case '$':	case '#':	case '@':	case '(':	case ')':
-		case '!':	case '%':	case '{':	case '}':	case '`':	case '~':
-		case '_':	case '-':	case '.':	case '*':	case '?':	case '&':
-		case '\'':	case '+':	case '^':	case 246:	case 255:	case 0xa0:
-		case 0xe5:	case 0xbd:	case 0x9d:
-			upname[w++]=c;
-			break;
-		default:
-			LOG(LOG_FILES,LOG_NORMAL)("Makename encountered an illegal char %c hex:%X in %s!",c,c,name);
-			DOS_SetError(DOSERR_PATH_NOT_FOUND);return false;
-			break;
-		}
+		c=name_int[r++];
+		//if ((c>='a') && (c<='z')) c-=32;
+		if (c=='"') {q++;continue;}
+		else if (c=='/') c='\\';
+		else if (c==' ' && q/2*2 == q) break; /* should be separator */
+		upname[w++]=c;
 	}
-   while (r>0 && name_int[r-1]==' ') r--;
+	while (r>0 && name_int[r-1]==' ') r--;
 	if (r>=DOS_PATHLENGTH) { DOS_SetError(DOSERR_PATH_NOT_FOUND);return false; }
 	upname[w]=0;
 	/* Now parse the new file name to make the final filename */
@@ -159,11 +166,12 @@ bool DOS_MakeName(char const * const name,char * const fullname,Bit8u * drive) {
 			lastdir=(Bit32u)strlen(fullname);
 
 			if (lastdir!=0) strcat(fullname,"\\");
+			/*
 			char * ext=strchr(tempdir,'.');
 			if (ext) {
 				if(strchr(ext+1,'.')) { 
 				//another dot in the extension =>file not found
-				//Or path not found depending on wether 
+				//Or path not found depending on whether 
 				//we are still in dir check stage or file stage
 					if(stop)
 						DOS_SetError(DOSERR_FILE_NOT_FOUND);
@@ -175,6 +183,26 @@ bool DOS_MakeName(char const * const name,char * const fullname,Bit8u * drive) {
 				ext[4] = 0;
 				if((strlen(tempdir) - strlen(ext)) > 8) memmove(tempdir + 8, ext, 5);
 			} else tempdir[8]=0;
+			*/
+
+			for (Bitu i=0;i<strlen(tempdir);i++) {
+				c=tempdir[i];
+				if ((c>='a') && (c<='z')) continue;
+				if ((c>='A') && (c<='Z')) continue;
+				if ((c>='0') && (c<='9')) continue;
+				if (c>127) continue;
+				switch (c) {
+				case '$':	case '#':	case '@':	case '(':	case ')':	case ' ':
+				case '!':	case '%':	case '{':	case '}':	case '`':	case '~':
+				case '_':	case '-':	case '.':	case '*':	case '?':	case '&':
+				case '\'':	case '+':	case '^':	case '[':	case ']':
+					break;
+				default:
+					LOG(LOG_FILES,LOG_NORMAL)("Makename encountered an illegal char %c hex:%X in %s!",c,c,name);
+					DOS_SetError(DOSERR_PATH_NOT_FOUND);return false;
+					break;
+				}
+			}
 
 			if (strlen(fullname)+strlen(tempdir)>=DOS_PATHLENGTH) {
 				DOS_SetError(DOSERR_PATH_NOT_FOUND);return false;
@@ -190,14 +218,86 @@ bool DOS_MakeName(char const * const name,char * const fullname,Bit8u * drive) {
 	return true;	
 }
 
-bool DOS_GetCurrentDir(Bit8u drive,char * const buffer) {
+bool DOS_GetSFNPath(char const * const path,char * SFNPath,bool LFN) {
+	char dir_current[DOS_PATHLENGTH + 1], pdir[LFN_NAMELENGTH], *p;
+	Bit8u drive;char fulldir[DOS_PATHLENGTH],LFNPath[CROSS_LEN];
+	char name[DOS_NAMELENGTH_ASCII], lname[LFN_NAMELENGTH];
+	int w=0;
+	DOS_DTA dta(dos.dta());
+	Bit32u size;Bit16u date;Bit16u time;Bit8u attr;
+	if (!DOS_MakeName(path,fulldir,&drive)) return false;
+	sprintf(SFNPath,"%c:\\",drive+'A');
+	strcpy(LFNPath,SFNPath);
+	strcpy(dir_current,Drives[drive]->curdir);
+	Drives[drive]->curdir,"";
+	p = fulldir;
+	if (*p==0) return true;
+	for (char *s = strchr(p,'\\'); s != NULL; s = strchr(p,'\\')) {
+		*s = 0;
+		if (SFNPath[strlen(SFNPath)-1]=='\\')
+			sprintf(pdir,"\"%s%s\"",SFNPath,p);
+		else
+			sprintf(pdir,"\"%s\\%s\"",SFNPath,p);
+		if (!strrchr(p,'*') && !strrchr(p,'?')) {
+			*s = '\\';
+			p = s + 1;
+			if (DOS_FindFirst(pdir,0xffff & DOS_ATTR_DIRECTORY & ~DOS_ATTR_VOLUME,false)) {
+				dta.GetResult(name,lname,size,date,time,attr);
+				strcat(SFNPath,name);
+				strcat(LFNPath,lname);
+				Drives[drive]->curdir,SFNPath+3;
+				strcat(SFNPath,"\\");
+				strcat(LFNPath,"\\");
+			}
+			else {
+			return false;}
+		} else {
+			strcat(SFNPath,p);
+			strcat(LFNPath,p);
+			strcat(SFNPath,"\\");
+			strcat(LFNPath,"\\");
+			*s = '\\';
+			p = s + 1;
+			break;
+		}
+	}
+	if (p != 0) {
+		sprintf(pdir,"\"%s%s\"",SFNPath,p);
+		if (!strrchr(p,'*')&&!strrchr(p,'?')&&DOS_FindFirst(pdir,0xffff & ~DOS_ATTR_VOLUME,false)) {
+			dta.GetResult(name,lname,size,date,time,attr);
+			strcat(SFNPath,name);
+			strcat(LFNPath,lname);
+		} else {
+			strcat(SFNPath,p);
+			strcat(LFNPath,p);
+		}
+	}
+	Drives[drive]->curdir,dir_current;
+	if (LFN) strcpy(SFNPath,LFNPath);
+	return true;
+}
+
+bool DOS_GetCurrentDir(Bit8u drive,char * const buffer, bool LFN) {
 	if (drive==0) drive=DOS_GetDefaultDrive();
 	else drive--;
 	if ((drive>=DOS_DRIVES) || (!Drives[drive])) {
 		DOS_SetError(DOSERR_INVALID_DRIVE);
 		return false;
 	}
-	strcpy(buffer,Drives[drive]->curdir);
+	if (LFN && uselfn) {
+		char cdir[DOS_PATHLENGTH],ldir[DOS_PATHLENGTH];
+		if (strchr(Drives[drive]->curdir,' '))
+			sprintf(cdir,"\"%c:\\%s\"",drive+'A',Drives[drive]->curdir);
+		else
+			sprintf(cdir,"%c:\\%s",drive+'A',Drives[drive]->curdir);
+		if (!DOS_GetSFNPath(cdir,ldir,true))
+			return false;
+		strcpy(buffer,ldir+3);
+		if (DOS_GetSFNPath(cdir,ldir,false))
+			strcpy(Drives[drive]->curdir,ldir+3);
+	} else {
+		strcpy(buffer,Drives[drive]->curdir);
+	}
 	return true;
 }
 
@@ -256,9 +356,10 @@ bool DOS_RemoveDir(char const * const dir) {
 		return false;
 	}
 	/* See if it's current directory */
-	char currdir[DOS_PATHLENGTH]= { 0 };
-	DOS_GetCurrentDir(drive + 1 ,currdir);
-	if(strcmp(currdir,fulldir) == 0) {
+	char currdir[DOS_PATHLENGTH]= { 0 }, lcurrdir[DOS_PATHLENGTH]= { 0 };
+	DOS_GetCurrentDir(drive + 1, currdir, false);
+	DOS_GetCurrentDir(drive + 1, lcurrdir, true);
+	if(strcasecmp(currdir,fulldir) == 0 || uselfn && strcasecmp(lcurrdir,fulldir) == 0) {
 		DOS_SetError(DOSERR_REMOVE_CURRENT_DIRECTORY);
 		return false;
 	}
@@ -307,6 +408,7 @@ bool DOS_Rename(char const * const oldname,char const * const newname) {
 }
 
 bool DOS_FindFirst(char * search,Bit16u attr,bool fcb_findfirst) {
+	LOG(LOG_FILES,LOG_NORMAL)("file search attributes %X name %s",attr,search);
 	DOS_DTA dta(dos.dta());
 	Bit8u drive;char fullsearch[DOS_PATHLENGTH];
 	char dir[DOS_PATHLENGTH];char pattern[DOS_PATHLENGTH];
@@ -332,17 +434,19 @@ bool DOS_FindFirst(char * search,Bit16u attr,bool fcb_findfirst) {
 		strcpy(dir,fullsearch);
 	}
 
+	sdrive=drive;
 	dta.SetupSearch(drive,(Bit8u)attr,pattern);
 
 	if(device) {
 		find_last = strrchr(pattern,'.');
 		if(find_last) *find_last = 0;
 		//TODO use current date and time
-		dta.SetResult(pattern,0,0,0,DOS_ATTR_DEVICE);
+		dta.SetResult(pattern,pattern,0,0,0,DOS_ATTR_DEVICE);
 		LOG(LOG_DOSMISC,LOG_WARN)("finding device %s",pattern);
 		return true;
 	}
    
+	bool r=Drives[drive]->FindFirst(dir,dta,fcb_findfirst);
 	if (Drives[drive]->FindFirst(dir,dta,fcb_findfirst)) return true;
 	
 	return false;
@@ -351,6 +455,7 @@ bool DOS_FindFirst(char * search,Bit16u attr,bool fcb_findfirst) {
 bool DOS_FindNext(void) {
 	DOS_DTA dta(dos.dta());
 	Bit8u i = dta.GetSearchDrive();
+	if(uselfn && i >= DOS_DRIVES || !Drives[i]) i=sdrive;
 	if(i >= DOS_DRIVES || !Drives[i]) {
 		/* Corrupt search. */
 		LOG(LOG_FILES,LOG_ERROR)("Corrupt search!!!!");
@@ -362,8 +467,8 @@ bool DOS_FindNext(void) {
 }
 
 
-bool DOS_ReadFile(Bit16u entry,Bit8u * data,Bit16u * amount) {
-	Bit32u handle=RealHandle(entry);
+bool DOS_ReadFile(Bit16u entry,Bit8u * data,Bit16u * amount,bool fcb) {
+	Bit32u handle = fcb?entry:RealHandle(entry);
 	if (handle>=DOS_FILES) {
 		DOS_SetError(DOSERR_INVALID_HANDLE);
 		return false;
@@ -384,8 +489,8 @@ bool DOS_ReadFile(Bit16u entry,Bit8u * data,Bit16u * amount) {
 	return ret;
 }
 
-bool DOS_WriteFile(Bit16u entry,Bit8u * data,Bit16u * amount) {
-	Bit32u handle=RealHandle(entry);
+bool DOS_WriteFile(Bit16u entry,Bit8u * data,Bit16u * amount,bool fcb) {
+	Bit32u handle = fcb?entry:RealHandle(entry);
 	if (handle>=DOS_FILES) {
 		DOS_SetError(DOSERR_INVALID_HANDLE);
 		return false;
@@ -406,8 +511,8 @@ bool DOS_WriteFile(Bit16u entry,Bit8u * data,Bit16u * amount) {
 	return ret;
 }
 
-bool DOS_SeekFile(Bit16u entry,Bit32u * pos,Bit32u type) {
-	Bit32u handle=RealHandle(entry);
+bool DOS_SeekFile(Bit16u entry,Bit32u * pos,Bit32u type,bool fcb) {
+	Bit32u handle = fcb?entry:RealHandle(entry);
 	if (handle>=DOS_FILES) {
 		DOS_SetError(DOSERR_INVALID_HANDLE);
 		return false;
@@ -419,8 +524,8 @@ bool DOS_SeekFile(Bit16u entry,Bit32u * pos,Bit32u type) {
 	return Files[handle]->Seek(pos,type);
 }
 
-bool DOS_CloseFile(Bit16u entry) {
-	Bit32u handle=RealHandle(entry);
+bool DOS_CloseFile(Bit16u entry, bool fcb) {
+	Bit32u handle = fcb?entry:RealHandle(entry);
 	if (handle>=DOS_FILES) {
 		DOS_SetError(DOSERR_INVALID_HANDLE);
 		return false;
@@ -432,8 +537,10 @@ bool DOS_CloseFile(Bit16u entry) {
 	if (Files[handle]->IsOpen()) {
 		Files[handle]->Close();
 	}
+	
 	DOS_PSP psp(dos.psp());
-	psp.SetFileHandle(entry,0xff);
+	if (!fcb) psp.SetFileHandle(entry,0xff);
+	
 	if (Files[handle]->RemoveRef()<=0) {
 		delete Files[handle];
 		Files[handle]=0;
@@ -470,11 +577,11 @@ static bool PathExists(char const * const name) {
 }
 
 
-bool DOS_CreateFile(char const * name,Bit16u attributes,Bit16u * entry) {
+bool DOS_CreateFile(char const * name,Bit16u attributes,Bit16u * entry,bool fcb) {
 	// Creation of a device is the same as opening it
 	// Tc201 installer
 	if (DOS_FindDevice(name) != DOS_DEVICES)
-		return DOS_OpenFile(name, OPEN_READ, entry);
+		return DOS_OpenFile(name, OPEN_READ, entry, fcb);
 
 	LOG(LOG_FILES,LOG_NORMAL)("file create attributes %X file %s",attributes,name);
 	char fullname[DOS_PATHLENGTH];Bit8u drive;
@@ -493,7 +600,7 @@ bool DOS_CreateFile(char const * name,Bit16u attributes,Bit16u * entry) {
 		return false;
 	}
 	/* We have a position in the main table now find one in the psp table */
-	*entry = psp.FindFreeFileEntry();
+	*entry = fcb?handle:psp.FindFreeFileEntry();
 	if (*entry==0xff) {
 		DOS_SetError(DOSERR_TOO_MANY_OPEN_FILES);
 		return false;
@@ -507,7 +614,8 @@ bool DOS_CreateFile(char const * name,Bit16u attributes,Bit16u * entry) {
 	if (foundit) { 
 		Files[handle]->SetDrive(drive);
 		Files[handle]->AddRef();
-		psp.SetFileHandle(*entry,handle);
+		if (!fcb) psp.SetFileHandle(*entry,handle);
+		Drives[drive]->EmptyCache();
 		return true;
 	} else {
 		if(!PathExists(name)) DOS_SetError(DOSERR_PATH_NOT_FOUND); 
@@ -516,7 +624,7 @@ bool DOS_CreateFile(char const * name,Bit16u attributes,Bit16u * entry) {
 	}
 }
 
-bool DOS_OpenFile(char const * name,Bit8u flags,Bit16u * entry) {
+bool DOS_OpenFile(char const * name,Bit8u flags,Bit16u * entry,bool fcb) {
 	/* First check for devices */
 	if (flags>2) LOG(LOG_FILES,LOG_ERROR)("Special file open command %X file %s",flags,name);
 	else LOG(LOG_FILES,LOG_NORMAL)("file open command %X file %s",flags,name);
@@ -549,7 +657,7 @@ bool DOS_OpenFile(char const * name,Bit8u flags,Bit16u * entry) {
 		return false;
 	}
 	/* We have a position in the main table now find one in the psp table */
-	*entry = psp.FindFreeFileEntry();
+	*entry = fcb?handle:psp.FindFreeFileEntry();
 
 	if (*entry==0xff) {
 		DOS_SetError(DOSERR_TOO_MANY_OPEN_FILES);
@@ -559,12 +667,12 @@ bool DOS_OpenFile(char const * name,Bit8u flags,Bit16u * entry) {
 	if (device) {
 		Files[handle]=new DOS_Device(*Devices[devnum]);
 	} else {
-		exists=Drives[drive]->FileOpen(&Files[handle],fullname,flags);
+		exists=Drives[drive]->FileOpen(&Files[handle],fullname,flags)||Drives[drive]->FileOpen(&Files[handle],upcase(fullname),flags);
 		if (exists) Files[handle]->SetDrive(drive);
 	}
 	if (exists || device ) { 
 		Files[handle]->AddRef();
-		psp.SetFileHandle(*entry,handle);
+		if (!fcb) psp.SetFileHandle(*entry,handle);
 		return true;
 	} else {
 		//Test if file exists, but opened in read-write mode (and writeprotected)
@@ -631,6 +739,11 @@ bool DOS_OpenFileExtended(char const * name, Bit16u flags, Bit16u createAttr, Bi
 
 bool DOS_UnlinkFile(char const * const name) {
 	char fullname[DOS_PATHLENGTH];Bit8u drive;
+	// An existing device returns an access denied error
+	if (DOS_FindDevice(name) != DOS_DEVICES) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
 	if (!DOS_MakeName(name,fullname,&drive)) return false;
 	if(Drives[drive]->FileUnlink(fullname)){
 		return true;
@@ -650,6 +763,36 @@ bool DOS_GetFileAttr(char const * const name,Bit16u * attr) {
 		return false;
 	}
 }
+
+bool DOS_GetFileAttrEx(char const* const name, struct stat *status, Bit8u hdrive)
+	{
+	char fullname[DOS_PATHLENGTH];
+	Bit8u drive;
+	bool usehdrive=hdrive>=0&&hdrive<DOS_FILES;
+	if (usehdrive)
+		strcpy(fullname,name);
+	else if (!DOS_MakeName(name, fullname, &drive))
+		return false;
+	return Drives[usehdrive?hdrive:drive]->GetFileAttrEx(fullname, status);
+	}
+
+Bit32u DOS_GetCompressedFileSize(char const* const name)
+	{
+	char fullname[DOS_PATHLENGTH];
+	Bit8u drive;
+	if (!DOS_MakeName(name, fullname, &drive))
+		return false;
+	return Drives[drive]->GetCompressedSize(fullname);
+	}
+	
+void* DOS_CreateOpenFile(char const* const name)
+	{
+	char fullname[DOS_PATHLENGTH];
+	Bit8u drive;
+	if (!DOS_MakeName(name, fullname, &drive))
+		return NULL;
+	return Drives[drive]->CreateOpenFile(fullname);
+	}
 
 bool DOS_SetFileAttr(char const * const name,Bit16u /*attr*/) 
 // this function does not change the file attributs
@@ -766,7 +909,21 @@ bool DOS_CreateTempFile(char * const name,Bit16u * entry) {
 	return true;
 }
 
-#define FCB_SEP ":.;,=+"
+char DOS_ToUpper(char c) {
+	unsigned char uc = *reinterpret_cast<unsigned char*>(&c);
+	if (uc > 0x60 && uc < 0x7B) uc -= 0x20;
+	else if (uc > 0x7F && uc < 0xA5) {
+		const unsigned char t[0x25] = { 
+			0x00, 0x9a, 0x45, 0x41, 0x8E, 0x41, 0x8F, 0x80, 0x45, 0x45, 0x45, 0x49, 0x49, 0x49, 0x00, 0x00,
+			0x00, 0x92, 0x00, 0x4F, 0x99, 0x4F, 0x55, 0x55, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x41, 0x49, 0x4F, 0x55, 0xA5};
+			if (t[uc - 0x80]) uc = t[uc-0x80];
+	}
+	char sc = *reinterpret_cast<char*>(&uc);
+	return sc;
+}
+
+#define FCB_SEP ":;,=+"
 #define ILLEGAL ":.;,=+ \t/\"[]<>|"
 
 static bool isvalid(const char in){
@@ -814,77 +971,87 @@ Bit8u FCB_Parsename(Bit16u seg,Bit16u offset,Bit8u parser ,char *string, Bit8u *
 	fcb.GetName(fcb_name.full);
 	fcb_name.part.drive[0]-='A'-1;fcb_name.part.drive[1]=0;
 	fcb_name.part.name[8]=0;fcb_name.part.ext[3]=0;
-	/* Strip of the leading sepetaror */
-	if((parser & PARSE_SEP_STOP) && *string)  {       //ignore leading seperator
-		char sep[] = FCB_SEP;char a[2];
-		a[0]= *string;a[1]='\0';
-		if (strcspn(a,sep)==0) string++;
-	} 
 	/* strip leading spaces */
 	while((*string==' ')||(*string=='\t')) string++;
+
+	/* Strip of the leading separator */
+	if((parser & PARSE_SEP_STOP) && *string) {
+		char sep[] = FCB_SEP;char a[2];
+		a[0] = *string;a[1] = '\0';
+		if (strcspn(a,sep) == 0) string++;
+	} 
+
+	/* Skip following spaces as well */
+	while((*string==' ')||(*string=='\t')) string++;
+
 	/* Check for a drive */
 	if (string[1]==':') {
+		unsigned char d = *reinterpret_cast<unsigned char*>(&string[0]);
+		if (!isvalid(toupper(d))) {string += 2; goto savefcb;} //TODO check (for ret value)
 		fcb_name.part.drive[0]=0;
 		hasdrive=true;
-		if (isalpha(string[0]) && Drives[toupper(string[0])-'A']) {
-			fcb_name.part.drive[0]=(char)(toupper(string[0])-'A'+1);
+		if (isalpha(d) && Drives[toupper(d)-'A']) { //Floppies under dos always exist, but don't bother with that at this level
+			; //THIS* was here
 		} else ret=0xff;
+		fcb_name.part.drive[0]=DOS_ToUpper(string[0])-'A'+1; //Always do THIS* and continue parsing, just return the right code
 		string+=2;
 	}
-	/* Special checks for . and .. */
-	if (string[0]=='.') {
-		string++;
-		if (!string[0])	{
-			hasname=true;
-			ret=PARSE_RET_NOWILD;
-			strcpy(fcb_name.part.name,".       ");
-			goto savefcb;
-		}
-		if (string[1]=='.' && !string[1])	{
-			string++;
-			hasname=true;
-			ret=PARSE_RET_NOWILD;
-			strcpy(fcb_name.part.name,"..      ");
-			goto savefcb;
-		}
-		goto checkext;
-	}
-	/* Copy the name */	
+
+	/* Check for extension only file names */
+	if (string[0] == '.') {string++;goto checkext;}
+
+	/* do nothing if not a valid name */
+	if(!isvalid(string[0])) goto savefcb;
+
 	hasname=true;finished=false;fill=' ';index=0;
-	while (index<8) {
-		if (!finished) {
-			if (string[0]=='*') {fill='?';fcb_name.part.name[index]='?';if (!ret) ret=1;finished=true;}
-			else if (string[0]=='?') {fcb_name.part.name[index]='?';if (!ret) ret=1;}
-			else if (isvalid(string[0])) {fcb_name.part.name[index]=(char)(toupper(string[0]));}
-			else { finished=true;continue; }
-			string++;
-		} else {
-			fcb_name.part.name[index]=fill;
+	/* Copy the name */	
+	while (true) {
+		unsigned char nc = *reinterpret_cast<unsigned char*>(&string[0]);
+		char ncs = (char)toupper(nc); //Should use DOS_ToUpper, but then more calls need to be changed.
+		if (ncs == '*') { //Handle *
+			fill = '?';
+			ncs = '?';
 		}
-		index++;
+		if (ncs == '?' && !ret && index < 8) ret = 1; //Don't override bad drive
+		if (!isvalid(ncs)) { //Fill up the name.
+			while(index < 8) 
+				fcb_name.part.name[index++] = fill; 
+			break;
+		}
+		if (index < 8) { 
+			fcb_name.part.name[index++] = (fill == '?')?fill:ncs; 
+		}
+		string++;
 	}
 	if (!(string[0]=='.')) goto savefcb;
 	string++;
 checkext:
 	/* Copy the extension */
 	hasext=true;finished=false;fill=' ';index=0;
-	while (index<3) {
-		if (!finished) {
-			if (string[0]=='*') {fill='?';fcb_name.part.ext[index]='?';finished=true;}
-			else if (string[0]=='?') {fcb_name.part.ext[index]='?';if (!ret) ret=1;}
-			else if (isvalid(string[0])) {fcb_name.part.ext[index]=(char)(toupper(string[0]));}
-			else { finished=true;continue; }
-			string++;
-		} else {
-			fcb_name.part.ext[index]=fill;
+	while (true) {
+		unsigned char nc = *reinterpret_cast<unsigned char*>(&string[0]);
+		char ncs = (char)toupper(nc);
+		if (ncs == '*') { //Handle *
+			fill = '?';
+			ncs = '?';
 		}
-		index++;
+		if (ncs == '?' && !ret && index < 3) ret = 1;
+		if (!isvalid(ncs)) { //Fill up the name.
+			while(index < 3) 
+				fcb_name.part.ext[index++] = fill; 
+			break;
+		}
+		if (index < 3) { 
+			fcb_name.part.ext[index++] = (fill=='?')?fill:ncs; 
+		}
+		string++;
 	}
 savefcb:
 	if (!hasdrive & !(parser & PARSE_DFLT_DRIVE)) fcb_name.part.drive[0] = 0;
 	if (!hasname & !(parser & PARSE_BLNK_FNAME)) strcpy(fcb_name.part.name,"        ");
 	if (!hasext & !(parser & PARSE_BLNK_FEXT)) strcpy(fcb_name.part.ext,"   ");
 	fcb.SetName(fcb_name.part.drive[0],fcb_name.part.name,fcb_name.part.ext);
+	fcb.ClearBlockRecsize(); //Undocumented bonus work.
 	*change=(Bit8u)(string-string_begin);
 	return ret;
 }
@@ -905,9 +1072,10 @@ static void DTAExtendName(char * const name,char * const filename,char * const e
 
 static void SaveFindResult(DOS_FCB & find_fcb) {
 	DOS_DTA find_dta(dos.tables.tempdta);
-	char name[DOS_NAMELENGTH_ASCII];Bit32u size;Bit16u date;Bit16u time;Bit8u attr;Bit8u drive;
+	char name[DOS_NAMELENGTH_ASCII],lname[LFN_NAMELENGTH];
+	Bit32u size;Bit16u date;Bit16u time;Bit8u attr;Bit8u drive;
 	char file_name[9];char ext[4];
-	find_dta.GetResult(name,size,date,time,attr);
+	find_dta.GetResult(name,lname,size,date,time,attr);
 	drive=find_fcb.GetDrive()+1;
 	Bit8u find_attr = DOS_ATTR_ARCHIVE;
 	find_fcb.GetAttr(find_attr); /* Gets search attributes if extended */
@@ -917,8 +1085,7 @@ static void SaveFindResult(DOS_FCB & find_fcb) {
 	fcb.Create(find_fcb.Extended());
 	fcb.SetName(drive,file_name,ext);
 	fcb.SetAttr(find_attr);      /* Only adds attribute if fcb is extended */
-	fcb.SetResultAttr(attr);
-	fcb.SetSizeDateTime(size,date,time);
+	fcb.SetResult(size,date,time,attr);
 }
 
 bool DOS_FCBCreate(Bit16u seg,Bit16u offset) { 
@@ -928,7 +1095,7 @@ bool DOS_FCBCreate(Bit16u seg,Bit16u offset) {
 	Bit8u attr = DOS_ATTR_ARCHIVE;
 	fcb.GetAttr(attr);
 	if (!attr) attr = DOS_ATTR_ARCHIVE; //Better safe than sorry 
-	if (!DOS_CreateFile(shortname,attr,&handle)) return false;
+	if (!DOS_CreateFile(shortname,attr,&handle,true)) return false;
 	fcb.FileOpen((Bit8u)handle);
 	return true;
 }
@@ -944,21 +1111,15 @@ bool DOS_FCBOpen(Bit16u seg,Bit16u offset) {
 	if (!DOS_MakeName(shortname,fullname,&drive)) return false;
 	
 	/* Check, if file is already opened */
-	for (Bit8u i=0;i<DOS_FILES;i++) {
-		DOS_PSP psp(dos.psp());
+	for (Bit8u i = 0;i < DOS_FILES;i++) {
 		if (Files[i] && Files[i]->IsOpen() && Files[i]->IsName(fullname)) {
-			handle = psp.FindEntryByHandle(i);
-			if (handle==0xFF) {
-				// This shouldnt happen
-				LOG(LOG_FILES,LOG_ERROR)("DOS: File %s is opened but has no psp entry.",shortname);
-				return false;
-			}
-			fcb.FileOpen((Bit8u)handle);
+			Files[i]->AddRef();
+			fcb.FileOpen(i);
 			return true;
 		}
 	}
 	
-	if (!DOS_OpenFile(shortname,OPEN_READWRITE,&handle)) return false;
+	if (!DOS_OpenFile(shortname,OPEN_READWRITE,&handle,true)) return false;
 	fcb.FileOpen((Bit8u)handle);
 	return true;
 }
@@ -968,7 +1129,7 @@ bool DOS_FCBClose(Bit16u seg,Bit16u offset) {
 	if(!fcb.Valid()) return false;
 	Bit8u fhandle;
 	fcb.FileClose(fhandle);
-	DOS_CloseFile(fhandle);
+	DOS_CloseFile(fhandle,true);
 	return true;
 }
 
@@ -1002,11 +1163,15 @@ Bit8u DOS_FCBRead(Bit16u seg,Bit16u offset,Bit16u recno) {
 		LOG(LOG_FCB,LOG_WARN)("Reopened closed FCB");
 		fcb.GetSeqData(fhandle,rec_size);
 	}
+	if (rec_size == 0) {
+		rec_size = 128;
+		fcb.SetSeqData(fhandle,rec_size);
+	}
 	fcb.GetRecord(cur_block,cur_rec);
 	Bit32u pos=((cur_block*128)+cur_rec)*rec_size;
-	if (!DOS_SeekFile(fhandle,&pos,DOS_SEEK_SET)) return FCB_READ_NODATA; 
+	if (!DOS_SeekFile(fhandle,&pos,DOS_SEEK_SET,true)) return FCB_READ_NODATA; 
 	Bit16u toread=rec_size;
-	if (!DOS_ReadFile(fhandle,dos_copybuf,&toread)) return FCB_READ_NODATA;
+	if (!DOS_ReadFile(fhandle,dos_copybuf,&toread,true)) return FCB_READ_NODATA;
 	if (toread==0) return FCB_READ_NODATA;
 	if (toread < rec_size) { //Zero pad copybuffer to rec_size
 		Bitu i = toread;
@@ -1029,12 +1194,16 @@ Bit8u DOS_FCBWrite(Bit16u seg,Bit16u offset,Bit16u recno) {
 		LOG(LOG_FCB,LOG_WARN)("Reopened closed FCB");
 		fcb.GetSeqData(fhandle,rec_size);
 	}
+	if (rec_size == 0) {
+		rec_size = 128;
+		fcb.SetSeqData(fhandle,rec_size);
+	}
 	fcb.GetRecord(cur_block,cur_rec);
 	Bit32u pos=((cur_block*128)+cur_rec)*rec_size;
-	if (!DOS_SeekFile(fhandle,&pos,DOS_SEEK_SET)) return FCB_ERR_WRITE; 
+	if (!DOS_SeekFile(fhandle,&pos,DOS_SEEK_SET,true)) return FCB_ERR_WRITE; 
 	MEM_BlockRead(Real2Phys(dos.dta())+recno*rec_size,dos_copybuf,rec_size);
 	Bit16u towrite=rec_size;
-	if (!DOS_WriteFile(fhandle,dos_copybuf,&towrite)) return FCB_ERR_WRITE;
+	if (!DOS_WriteFile(fhandle,dos_copybuf,&towrite,true)) return FCB_ERR_WRITE;
 	Bit32u size;Bit16u date,time;
 	fcb.GetSizeDateTime(size,date,time);
 	if (pos+towrite>size) size=pos+towrite;
@@ -1046,9 +1215,8 @@ Bit8u DOS_FCBWrite(Bit16u seg,Bit16u offset,Bit16u recno) {
 	Bit16u min = (Bit16u)((seconds % 3600)/60);
 	Bit16u sec = (Bit16u)(seconds % 60);
 	time = DOS_PackTime(hour,min,sec);
-	Bit8u temp=RealHandle(fhandle);
-	Files[temp]->time=time;
-	Files[temp]->date=date;
+	Files[fhandle]->time = time;
+	Files[fhandle]->date = date;
 	fcb.SetSizeDateTime(size,date,time);
 	if (++cur_rec>127) { cur_block++;cur_rec=0; }	
 	fcb.SetRecord(cur_block,cur_rec);
@@ -1061,9 +1229,9 @@ Bit8u DOS_FCBIncreaseSize(Bit16u seg,Bit16u offset) {
 	fcb.GetSeqData(fhandle,rec_size);
 	fcb.GetRecord(cur_block,cur_rec);
 	Bit32u pos=((cur_block*128)+cur_rec)*rec_size;
-	if (!DOS_SeekFile(fhandle,&pos,DOS_SEEK_SET)) return FCB_ERR_WRITE; 
+	if (!DOS_SeekFile(fhandle,&pos,DOS_SEEK_SET,true)) return FCB_ERR_WRITE; 
 	Bit16u towrite=0;
-	if (!DOS_WriteFile(fhandle,dos_copybuf,&towrite)) return FCB_ERR_WRITE;
+	if (!DOS_WriteFile(fhandle,dos_copybuf,&towrite,true)) return FCB_ERR_WRITE;
 	Bit32u size;Bit16u date,time;
 	fcb.GetSizeDateTime(size,date,time);
 	if (pos+towrite>size) size=pos+towrite;
@@ -1075,9 +1243,8 @@ Bit8u DOS_FCBIncreaseSize(Bit16u seg,Bit16u offset) {
 	Bit16u min = (Bit16u)((seconds % 3600)/60);
 	Bit16u sec = (Bit16u)(seconds % 60);
 	time = DOS_PackTime(hour,min,sec);
-	Bit8u temp=RealHandle(fhandle);
-	Files[temp]->time=time;
-	Files[temp]->date=date;
+	Files[fhandle]->time = time;
+	Files[fhandle]->date = date;
 	fcb.SetSizeDateTime(size,date,time);
 	fcb.SetRecord(cur_block,cur_rec);
 	return FCB_SUCCESS;
@@ -1147,14 +1314,18 @@ Bit8u DOS_FCBRandomWrite(Bit16u seg,Bit16u offset,Bit16u * numRec,bool restore) 
 }
 
 bool DOS_FCBGetFileSize(Bit16u seg,Bit16u offset) {
-	char shortname[DOS_PATHLENGTH];Bit16u entry;Bit8u handle;Bit16u rec_size;
+	char shortname[DOS_PATHLENGTH];Bit16u entry;
 	DOS_FCB fcb(seg,offset);
 	fcb.GetName(shortname);
-	if (!DOS_OpenFile(shortname,OPEN_READ,&entry)) return false;
-	handle = RealHandle(entry);
+	if (!DOS_OpenFile(shortname,OPEN_READ,&entry,true)) return false;
 	Bit32u size = 0;
-	Files[handle]->Seek(&size,DOS_SEEK_END);
-	DOS_CloseFile(entry);fcb.GetSeqData(handle,rec_size);
+	Files[entry]->Seek(&size,DOS_SEEK_END);
+	DOS_CloseFile(entry,true);
+
+	Bit8u handle; Bit16u rec_size;
+	fcb.GetSeqData(handle,rec_size);
+	if (rec_size == 0) rec_size = 128; //Use default if missing.
+	
 	Bit32u random=(size/rec_size);
 	if (size % rec_size) random++;
 	fcb.SetRandom(random);
@@ -1181,7 +1352,7 @@ bool DOS_FCBDeleteFile(Bit16u seg,Bit16u offset){
 		nextfile = DOS_FCBFindNext(seg,offset);
 	}
 	dos.dta(old_dta);  /*Restore dta */
-	return  return_value;
+	return return_value;
 }
 
 bool DOS_FCBRenameFile(Bit16u seg, Bit16u offset){
@@ -1200,12 +1371,12 @@ bool DOS_FCBRenameFile(Bit16u seg, Bit16u offset){
 	for (Bit8u i=0;i<DOS_FILES;i++) {
 		if (Files[i] && Files[i]->IsOpen() && Files[i]->IsName(fullname)) {
 			Bit16u handle = psp.FindEntryByHandle(i);
+			//(more than once maybe)
 			if (handle == 0xFF) {
-				// This shouldnt happen
-				LOG(LOG_FILES,LOG_ERROR)("DOS: File %s is opened but has no psp entry.",oldname);
-				return false;
+				DOS_CloseFile(i,true);
+			} else {
+				DOS_CloseFile(handle);
 			}
-			DOS_CloseFile(handle);
 		}
 	}
 

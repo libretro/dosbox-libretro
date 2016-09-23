@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 
@@ -692,6 +694,16 @@ void DOSBOX_Init(void) {
 	Pbool = secprop->Add_bool("umb",Property::Changeable::WhenIdle,true);
 	Pbool->Set_help("Enable UMB support.");
 
+   Pstring = secprop->Add_string("ver",Property::Changeable::WhenIdle,"7.10");
+   Pstring->Set_help("Set DOS version. The default value is 7.10.");
+   
+   const char* lfn_settings[] = { "true", "auto", "false", 0};
+   Pstring = secprop->Add_string("lfn",Property::Changeable::WhenIdle,"auto");
+   Pstring->Set_values(lfn_settings);
+   Pstring->Set_help("Enable LFN support. The default (=auto) means that LFN support\n"
+                     "will be enabled if and only if the major DOS version is set to\n"
+                     "at least 7.");
+   
 	secprop->AddInitFunction(&DOS_KeyboardLayout_Init,true);
 	Pstring = secprop->Add_string("keyboardlayout",Property::Changeable::WhenIdle, "auto");
 	Pstring->Set_help("Language code of the keyboard layout (or none).");

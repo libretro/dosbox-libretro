@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN and AUTO MOUNT support
  */
 
 
@@ -46,6 +48,12 @@
 #include "os2.h"
 #endif
 
+#if defined(WIN32)
+#ifndef S_ISDIR
+#define S_ISDIR(m) (((m)&S_IFMT)==S_IFDIR)
+#endif
+#endif
+
 #if C_DEBUG
 Bitu DEBUG_EnableDebugger(void);
 #endif
@@ -56,7 +64,8 @@ static Bitu ZDRIVE_NUM = 25;
 class MOUNT : public Program {
 public:
 	void ListMounts(void) {
-		char name[DOS_NAMELENGTH_ASCII];Bit32u size;Bit16u date;Bit16u time;Bit8u attr;
+		char name[DOS_NAMELENGTH_ASCII],lname[LFN_NAMELENGTH];
+		Bit32u size;Bit16u date;Bit16u time;Bit8u attr;
 		/* Command uses dta so set it to our internal dta */
 		RealPt save_dta = dos.dta();
 		dos.dta(dos.tables.tempdta);
@@ -69,10 +78,10 @@ public:
 		for (int d = 0;d < DOS_DRIVES;d++) {
 			if (!Drives[d]) continue;
 
-			char root[4] = {'A'+d,':','\\',0};
+			char root[7] = {'A'+d,':','\\','*','.','*',0};
 			bool ret = DOS_FindFirst(root,DOS_ATTR_VOLUME);
 			if (ret) {
-				dta.GetResult(name,size,date,time,attr);
+				dta.GetResult(name,lname,size,date,time,attr);
 				DOS_FindNext(); //Mark entry as invalid
 			} else name[0] = 0;
 
@@ -109,6 +118,8 @@ public:
 			WriteOut(MSG_Get("PROGRAM_CONFIG_SECURE_DISALLOW"));
 			return;
 		}
+		bool path_relative_to_last_config = false;
+		if (cmd->FindExist("-pr",true)) path_relative_to_last_config = true;
 
 		/* Check for unmounting */
 		if (cmd->FindString("-u",umount,false)) {
@@ -245,10 +256,17 @@ public:
 
 			if (!cmd->FindCommand(2,temp_line)) goto showusage;
 			if (!temp_line.size()) goto showusage;
+			if(path_relative_to_last_config && control->configfiles.size() && !Cross::IsPathAbsolute(temp_line)) {
+				std::string lastconfigdir(control->configfiles[control->configfiles.size()-1]);
+				std::string::size_type pos = lastconfigdir.rfind(CROSS_FILESPLIT);
+				if(pos == std::string::npos) pos = 0; //No directory then erase string
+				lastconfigdir.erase(pos);
+				if (lastconfigdir.length())	temp_line = lastconfigdir + CROSS_FILESPLIT + temp_line;
+			}
 			struct stat test;
 			//Win32 : strip tailing backslashes
 			//os2: some special drive check
-			//rest: substiture ~ for home
+			//rest: substitute ~ for home
 			bool failed = false;
 #if defined (WIN32) || defined(OS2)
 			/* Removing trailing backslash if not root dir so stat will succeed */
@@ -289,7 +307,7 @@ public:
 				return;
 			}
 			/* Not a switch so a normal directory/file */
-			if (!(test.st_mode & S_IFDIR)) {
+			if (!S_ISDIR(test.st_mode)) {
 #ifdef OS2
 				HFILE cdrom_fd = 0;
 				ULONG ulAction = 0;
@@ -827,7 +845,7 @@ public:
 			WriteOut(MSG_Get("PROGRAM_BOOT_BOOT"), drive);
 			for(i=0;i<512;i++) real_writeb(0, 0x7c00 + i, bootarea.rawdata[i]);
 
-         /* create appearance of floppy drive DMA usage (Demon's Forge) */
+			/* create appearance of floppy drive DMA usage (Demon's Forge) */
 			if (!IS_TANDY_ARCH && floppysize!=0) GetDMAChannel(2)->tcount=true;
 
 			/* revector some dos-allocated interrupts */
@@ -856,60 +874,81 @@ static void BOOT_ProgramStart(Program * * make) {
 }
 
 
-#if C_DEBUG
-class LDGFXROM : public Program {
+class LOADROM : public Program {
 public:
 	void Run(void) {
-		if (!(cmd->FindCommand(1, temp_line))) return;
+		if (!(cmd->FindCommand(1, temp_line))) {
+			WriteOut(MSG_Get("PROGRAM_LOADROM_SPECIFY_FILE"));
+			return;
+		}
 
 		Bit8u drive;
 		char fullname[DOS_PATHLENGTH];
-
 		localDrive* ldp=0;
 		if (!DOS_MakeName((char *)temp_line.c_str(),fullname,&drive)) return;
 
-		try {		
+		try {
+			/* try to read ROM file into buffer */
 			ldp=dynamic_cast<localDrive*>(Drives[drive]);
 			if(!ldp) return;
 
 			FILE *tmpfile = ldp->GetSystemFilePtr(fullname, "rb");
 			if(tmpfile == NULL) {
-				LOG_MSG("BIOS file not accessible.");
+				WriteOut(MSG_Get("PROGRAM_LOADROM_CANT_OPEN"));
 				return;
 			}
 			fseek(tmpfile, 0L, SEEK_END);
-			if (ftell(tmpfile)>0x10000) {
-				LOG_MSG("BIOS file too large.");
+			if (ftell(tmpfile)>0x8000) {
+				WriteOut(MSG_Get("PROGRAM_LOADROM_TOO_LARGE"));
+				fclose(tmpfile);
 				return;
 			}
 			fseek(tmpfile, 0L, SEEK_SET);
-
-			PhysPt rom_base=PhysMake(0xc000,0);
-
-			Bit8u vga_buffer[0x10000];
-			Bitu data_written=0;
-			Bitu data_read=fread(vga_buffer, 1, 0x10000, tmpfile);
-			for (Bitu ct=0; ct<data_read; ct++) {
-				phys_writeb(rom_base+(data_written++),vga_buffer[ct]);
-			}
+			Bit8u rom_buffer[0x8000];
+			Bitu data_read = fread(rom_buffer, 1, 0x8000, tmpfile);
 			fclose(tmpfile);
 
-			rom_base=PhysMake(0xf000,0);
-			phys_writeb(rom_base+0xf065,0xcf);
+			/* try to identify ROM type */
+			PhysPt rom_base = 0;
+			if (data_read >= 0x4000 && rom_buffer[0] == 0x55 && rom_buffer[1] == 0xaa &&
+				rom_buffer[3] == 0xeb && strncmp((char*)(&rom_buffer[0x1e]), "IBM", 3) == 0) {
+
+				if (!IS_EGAVGA_ARCH) {
+					WriteOut(MSG_Get("PROGRAM_LOADROM_INCOMPATIBLE"));
+					return;
+				}
+				rom_base = PhysMake(0xc000, 0); // video BIOS
+			}
+			else if (data_read == 0x8000 && rom_buffer[0] == 0xe9 && rom_buffer[1] == 0x8f &&
+				rom_buffer[2] == 0x7e && strncmp((char*)(&rom_buffer[0x4cd4]), "IBM", 3) == 0) {
+
+				rom_base = PhysMake(0xf600, 0); // BASIC
+			}
+
+			if (rom_base) {
+				/* write buffer into ROM */
+				for (Bitu i=0; i<data_read; i++) phys_writeb(rom_base + i, rom_buffer[i]);
+
+				if (rom_base == 0xc0000) {
+					/* initialize video BIOS */
+					phys_writeb(PhysMake(0xf000, 0xf065), 0xcf);
+					reg_flags &= ~FLAG_IF;
+					CALLBACK_RunRealFar(0xc000, 0x0003);
+					LOG_MSG("Video BIOS ROM loaded and initialized.");
+				}
+				else WriteOut(MSG_Get("PROGRAM_LOADROM_BASIC_LOADED"));
+			}
+			else WriteOut(MSG_Get("PROGRAM_LOADROM_UNRECOGNIZED"));
 		}
 		catch(...) {
 			return;
 		}
-
-		reg_flags&=~FLAG_IF;
-		CALLBACK_RunRealFar(0xc000,0x0003);
 	}
 };
 
-static void LDGFXROM_ProgramStart(Program * * make) {
-	*make=new LDGFXROM;
+static void LOADROM_ProgramStart(Program * * make) {
+	*make=new LOADROM;
 }
-#endif
 
 
 // LOADFIX
@@ -1122,7 +1161,7 @@ public:
 			if (type=="floppy") {
 				mediaid=0xF0;		
 			} else if (type=="iso") {
-				str_size=="2048,1,60000,0";	// ignored, see drive_iso.cpp (AllocationInfo)
+				//str_size="2048,1,65535,0";	// ignored, see drive_iso.cpp (AllocationInfo)
 				mediaid=0xF8;		
 				fstype = "iso";
 			} 
@@ -1207,7 +1246,7 @@ public:
 						}
 					}
 				}
-				if ((test.st_mode & S_IFDIR)) {
+				if (S_ISDIR(test.st_mode)) {
 					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_MOUNT"));
 					return;
 				}
@@ -1223,7 +1262,7 @@ public:
 			if(fstype=="fat") {
 				if (imgsizedetect) {
 					FILE * diskfile = fopen(temp_line.c_str(), "rb+");
-					if(!diskfile) {
+					if (!diskfile) {
 						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
 						return;
 					}
@@ -1287,7 +1326,7 @@ public:
 				for(ct = 0; ct < imgDisks.size(); ct++) {
 					DriveManager::CycleAllDisks();
 
-					char root[4] = {drive, ':', '\\', 0};
+					char root[7] = {drive,':','\\','*','.','*',0};
 					DOS_FindFirst(root, DOS_ATTR_VOLUME); // force obtaining the label and saving it in dirCache
 				}
 				dos.dta(save_dta);
@@ -1368,6 +1407,10 @@ public:
 
 			} else {
 				FILE *newDisk = fopen(temp_line.c_str(), "rb+");
+				if (!newDisk) {
+					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
+					return;
+				}
 				fseek(newDisk,0L, SEEK_END);
 				imagesize = (ftell(newDisk) / 1024);
 
@@ -1503,12 +1546,13 @@ void DOS_SetupPrograms(void) {
 	MSG_Add("PROGRAM_LOADFIX_ERROR","Memory allocation error.\n");
 
 	MSG_Add("MSCDEX_SUCCESS","MSCDEX installed.\n");
-   MSG_Add("MSCDEX_ERROR_MULTIPLE_CDROMS","MSCDEX: Failure: Drive-letters of multiple CD-ROM drives have to be continuous.\n");
+	MSG_Add("MSCDEX_ERROR_MULTIPLE_CDROMS","MSCDEX: Failure: Drive-letters of multiple CD-ROM drives have to be continuous.\n");
 	MSG_Add("MSCDEX_ERROR_NOT_SUPPORTED","MSCDEX: Failure: Not yet supported.\n");
+	MSG_Add("MSCDEX_ERROR_PATH","MSCDEX: Specified location is not a CD-ROM drive.\n");
 	MSG_Add("MSCDEX_ERROR_OPEN","MSCDEX: Failure: Invalid file or unable to open.\n");
-   MSG_Add("MSCDEX_TOO_MANY_DRIVES","MSCDEX: Failure: Too many CD-ROM drives (max: 5). MSCDEX Installation failed.\n");
+	MSG_Add("MSCDEX_TOO_MANY_DRIVES","MSCDEX: Failure: Too many CD-ROM drives (max: 5). MSCDEX Installation failed.\n");
 	MSG_Add("MSCDEX_LIMITED_SUPPORT","MSCDEX: Mounted subdirectory: limited support.\n");
-   MSG_Add("MSCDEX_INVALID_FILEFORMAT","MSCDEX: Failure: File is either no ISO/CUE image or contains errors.\n");
+	MSG_Add("MSCDEX_INVALID_FILEFORMAT","MSCDEX: Failure: File is either no ISO/CUE image or contains errors.\n");
 	MSG_Add("MSCDEX_UNKNOWN_ERROR","MSCDEX: Failure: Unknown error.\n");
 
 	MSG_Add("PROGRAM_RESCAN_SUCCESS","Drive cache cleared.\n");
@@ -1522,7 +1566,7 @@ void DOS_SetupPrograms(void) {
 		"For information about special keys type \033[34;1mintro special\033[0m\n"
 		"For more information about DOSBox, go to \033[34;1mhttp://www.dosbox.com/wiki\033[0m\n"
 		"\n"
-      "\033[31;1mDOSBox will stop/exit without a warning if an error occurred!\033[0m\n"
+		"\033[31;1mDOSBox will stop/exit without a warning if an error occurred!\033[0m\n"
 		"\n"
 		"\n"
 		);
@@ -1536,9 +1580,9 @@ void DOS_SetupPrograms(void) {
 		"\033[44;1m\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n"
-      "\xBA \033[32mmount c ~/dosgames\033[37m will create a C drive with ~/dosgames as contents.\xBA\n"
+		"\xBA \033[32mmount c c:\\dosgames\\\033[37m will create a C drive with c:\\dosgames as contents.\xBA\n"
 		"\xBA                                                                         \xBA\n"
-      "\xBA \033[32mc:\\dosgames\\\033[37m is an example. Replace it with your own games directory.  \033[37m \xBA\n"
+		"\xBA \033[32mc:\\dosgames\\\033[37m is an example. Replace it with your own games directory.  \033[37m \xBA\n"
 		"\xC8\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBC\033[0m\n"
@@ -1547,9 +1591,9 @@ void DOS_SetupPrograms(void) {
 		"\033[44;1m\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n"
-      "\xBA \033[32m~/dosgames\033[37m is an example. Replace it with your own games directory.\033[37m  \xBA\n"
+		"\xBA \033[32mmount c ~/dosgames\033[37m will create a C drive with ~/dosgames as contents.\xBA\n"
 		"\xBA                                                                      \xBA\n"
-		"\xBA \033[32m~/dosprogs\033[37m is an example. Replace it with your own games directory.\033[37m  \xBA\n"
+		"\xBA \033[32m~/dosgames\033[37m is an example. Replace it with your own games directory.\033[37m  \xBA\n"
 		"\xC8\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBC\033[0m\n"
@@ -1629,6 +1673,13 @@ void DOS_SetupPrograms(void) {
 	MSG_Add("PROGRAM_BOOT_CART_LIST_CMDS","Available PCjr cartridge commandos:%s");
 	MSG_Add("PROGRAM_BOOT_CART_NO_CMDS","No PCjr cartridge commandos found");
 
+	MSG_Add("PROGRAM_LOADROM_SPECIFY_FILE","Must specify ROM file to load.\n");
+	MSG_Add("PROGRAM_LOADROM_CANT_OPEN","ROM file not accessible.\n");
+	MSG_Add("PROGRAM_LOADROM_TOO_LARGE","ROM file too large.\n");
+	MSG_Add("PROGRAM_LOADROM_INCOMPATIBLE","Video BIOS not supported by machine type.\n");
+	MSG_Add("PROGRAM_LOADROM_UNRECOGNIZED","ROM file not recognized.\n");
+	MSG_Add("PROGRAM_LOADROM_BASIC_LOADED","BASIC ROM loaded.\n");
+
 	MSG_Add("PROGRAM_IMGMOUNT_SPECIFY_DRIVE","Must specify drive letter to mount image at.\n");
 	MSG_Add("PROGRAM_IMGMOUNT_SPECIFY2","Must specify drive number (0 or 3) to mount image at (0,1=fda,fdb;2,3=hda,hdb).\n");
 	MSG_Add("PROGRAM_IMGMOUNT_SPECIFY_GEOMETRY",
@@ -1674,9 +1725,7 @@ void DOS_SetupPrograms(void) {
 	PROGRAMS_MakeFile("RESCAN.COM",RESCAN_ProgramStart);
 	PROGRAMS_MakeFile("INTRO.COM",INTRO_ProgramStart);
 	PROGRAMS_MakeFile("BOOT.COM",BOOT_ProgramStart);
-#if C_DEBUG
-	PROGRAMS_MakeFile("LDGFXROM.COM", LDGFXROM_ProgramStart);
-#endif
+	PROGRAMS_MakeFile("LOADROM.COM", LOADROM_ProgramStart);
 	PROGRAMS_MakeFile("IMGMOUNT.COM", IMGMOUNT_ProgramStart);
 	PROGRAMS_MakeFile("KEYB.COM", KEYB_ProgramStart);
 }

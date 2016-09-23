@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 
@@ -48,6 +50,7 @@ char * lowcase(char * str);
 bool ScanCMDBool(char * cmd,char const * const check);
 char * ScanCMDRemain(char * cmd);
 char * StripWord(char *&cmd);
+char * StripArg(char *&cmd);
 bool IsDecWord(char * word);
 bool IsHexWord(char * word);
 Bits ConvDecWord(char * word);

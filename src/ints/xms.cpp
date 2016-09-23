@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Wengier: LFN support
  */
 
 
@@ -116,6 +118,7 @@ Bitu XMS_GetEnabledA20(void) {
 
 static RealPt xms_callback;
 static bool umb_available;
+bool uselfn, autolfn;
 
 static XMS_Block xms_handles[XMS_HANDLES];
 
@@ -421,6 +424,11 @@ public:
 	XMS(Section* configuration):Module_base(configuration){
 		Section_prop * section=static_cast<Section_prop *>(configuration);
 		umb_available=false;
+		const char *dosver=section->Get_string("ver"), *p = strchr(dosver,'.');
+		dos.version.major = strlen(dosver)==0?7:(Bit8u)(atoi(dosver));
+		dos.version.minor = strlen(dosver)==0?10:(p==NULL?0:(Bit8u)(atoi(p+1)));
+		uselfn = strcmp(section->Get_string("lfn"),"false") && (!strcmp(section->Get_string("lfn"),"true") || dos.version.major>=7);
+		autolfn = !strcmp(section->Get_string("lfn"),"auto");
 		if (!section->Get_bool("xms")) return;
 		Bitu i;
 		BIOS_ZeroExtendedSize(true);
