@@ -70,6 +70,10 @@ MidiHandler Midi_none;
 
 /* Include different midi drivers, lowest ones get checked first for default */
 
+//use only crossplatform midi synthizizer
+#include "midi_mt32.h"
+
+/*
 #if defined(__LIBRETRO__) && defined(C_FLUIDSYNTH) // Add Fluidsynth support
 #include "midi_synth.h"
 #endif
@@ -96,6 +100,7 @@ MidiHandler Midi_none;
 
 #endif
 #endif
+*/
 
 DB_Midi midi;
 
