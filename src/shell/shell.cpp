@@ -392,8 +392,11 @@ public:
 			if (line.length() > CROSS_LEN) continue; 
 			strcpy(buffer,line.c_str());
 			if (stat(buffer,&test)) {
-				if (getcwd(buffer,CROSS_LEN) == NULL) continue;
-				if (strlen(buffer) + line.length() + 1 > CROSS_LEN) continue;
+#if defined(VITA)
+            strcpy(buffer,"ux0:/data/retroarch/");
+#else
+            getcwd(buffer,CROSS_LEN);
+#endif
 				strcat(buffer,cross_filesplit);
 				strcat(buffer,line.c_str());
 				if (stat(buffer,&test)) continue;
