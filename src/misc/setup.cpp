@@ -702,7 +702,6 @@ bool Config::PrintConfig(char const * const configfilename) const {
 				}
 				helpstr++;
 			}
-			if (!strcmp(temp,"AUTOEXEC_CONFIGFILE_HELP")) fprintf(outfile,MSG_Get("AUTOEXEC_EXAMPLE"));
 		}
 	   
 		fprintf(outfile,"\n");
