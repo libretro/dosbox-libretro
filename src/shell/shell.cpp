@@ -410,7 +410,11 @@ public:
 				char* name = strrchr(buffer,CROSS_FILESPLIT);
 				if (!name) { //Only a filename 
 					line = buffer;
+#if defined(VITA)
+               strcpy(buffer, "ux0:/data/retroarch/");
+#else
 					if (getcwd(buffer,CROSS_LEN) == NULL) continue;
+#endif
 					if (strlen(buffer) + line.length() + 1 > CROSS_LEN) continue;
 					strcat(buffer,cross_filesplit);
 					strcat(buffer,line.c_str());
