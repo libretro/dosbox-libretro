@@ -1,5 +1,5 @@
 LOCAL_PATH := $(call my-dir)
-GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
+GIT_VERSION := "GIT ($(shell git describe --abbrev=4 --dirty --always --tags))"
 
 include $(CLEAR_VARS)
 

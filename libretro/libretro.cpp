@@ -617,7 +617,7 @@ void retro_get_system_info(struct retro_system_info *info)
 #ifdef GIT_VERSION
    info->library_version = GIT_VERSION;
 #else
-   info->library_version = "SVN";
+   info->library_version = "GIT";
 #endif
    info->valid_extensions = "exe|com|bat|conf";
    info->need_fullpath = true;

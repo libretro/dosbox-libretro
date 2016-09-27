@@ -1,5 +1,5 @@
 DEBUG=0
-GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
+GIT_VERSION := "GIT ($(shell git describe --abbrev=4 --dirty --always --tags))"
 
 UNAME=$(shell uname -a)
 
