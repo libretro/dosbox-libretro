@@ -1,4 +1,5 @@
 LOCAL_PATH := $(call my-dir)
+GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
 
 include $(CLEAR_VARS)
 
@@ -41,7 +42,7 @@ endif
 include $(CORE_DIR)/Makefile.common
 
 LOCAL_SRC_FILES := $(SOURCES_C) $(SOURCES_CXX) $(SOURCES_ASM)
-LOCAL_CFLAGS += $(APP_OPTIM) -D__LIBRETRO__ -DFRONTEND_SUPPORTS_RGB565 $(INCFLAGS)
+LOCAL_CFLAGS += $(APP_OPTIM) -D__LIBRETRO__ -DFRONTEND_SUPPORTS_RGB565 $(INCFLAGS) -DGIT_VERSION=\"$(GIT_VERSION)\"
 LOCAL_CPP_FEATURES += rtti exceptions
 
 include $(BUILD_SHARED_LIBRARY)
