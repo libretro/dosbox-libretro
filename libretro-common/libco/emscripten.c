@@ -36,11 +36,9 @@ cothread_t co_create(unsigned int heapsize, void (*coentry)(void))
       co_active_ = (cothread_t)1;
    }
 
-   	 emscripten_coroutine ret = emscripten_coroutine_create(co_thunk, coentry, heapsize);
+   emscripten_coroutine ret = emscripten_coroutine_create(co_thunk, coentry, heapsize);
   
-     return (cothread_t)emscripten_coroutine;
-   }
-
+   return ret;
 }
 
 void co_delete(cothread_t cothread)
