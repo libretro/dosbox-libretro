@@ -137,6 +137,30 @@ void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_c
 void retro_set_input_poll(retro_input_poll_t cb) { poll_cb = cb; }
 void retro_set_input_state(retro_input_state_t cb) { input_cb = cb; }
 
+char buf[12][PATH_MAX_LENGTH];
+
+static struct retro_variable vars[] = {
+   { "dosbox_machine_type", "Machine type; vgaonly|svga_s3|svga_et3000|svga_et4000|svga_paradise|hercules|cga|tandy|pcjr|ega" },
+   { "dosbox_emulated_mouse", "Gamepad emulated mouse; enable|disable" },
+   { "dosbox_cpu_cycles_0", "CPU cycles x 100000; 0|1|2|3|4|5|6|7|8|9" },
+   { "dosbox_cpu_cycles_1", "CPU cycles x 10000; 0|1|2|3|4|5|6|7|8|9" },
+   { "dosbox_cpu_cycles_2", "CPU cycles x 1000; 1|2|3|4|5|6|7|8|9|0" },
+   { "dosbox_cpu_cycles_3", "CPU cycles x 100; 0|1|2|3|4|5|6|7|8|9" },
+   { "dosbox_mapper_y", buf[0] },
+   { "dosbox_mapper_x", buf[1] },
+   { "dosbox_mapper_b", buf[2] },
+   { "dosbox_mapper_a", buf[3] },
+   { "dosbox_mapper_l", buf[4] },
+   { "dosbox_mapper_r", buf[5] },
+   { "dosbox_mapper_up", buf[6] },
+   { "dosbox_mapper_down", buf[7] },
+   { "dosbox_mapper_left", buf[8] },
+   { "dosbox_mapper_right", buf[9] },
+   { "dosbox_mapper_select", buf[10] },
+   { "dosbox_mapper_start", buf[11] },
+   { NULL, NULL },
+};
+
 void retro_set_environment(retro_environment_t cb)
 {
    environ_cb = cb;
@@ -157,7 +181,6 @@ void retro_set_environment(retro_environment_t cb)
       i++;
    }
 
-   char buf[12][PATH_MAX_LENGTH];
    snprintf(buf[0],sizeof(buf[0]), "RetroPad Y; %s",     keys);
    snprintf(buf[1],sizeof(buf[1]), "RetroPad X; %s",     keys);
    snprintf(buf[2],sizeof(buf[2]), "RetroPad B; %s",     keys);
@@ -171,27 +194,7 @@ void retro_set_environment(retro_environment_t cb)
    snprintf(buf[10],sizeof(buf[10]),"RetroPad Select; %s", keys);
    snprintf(buf[11],sizeof(buf[11]),"RetroPad Start; %s",  keys);
 
-   static const struct retro_variable vars[] = {
-      { "dosbox_machine_type", "Machine type; vgaonly|svga_s3|svga_et3000|svga_et4000|svga_paradise|hercules|cga|tandy|pcjr|ega" },
-      { "dosbox_emulated_mouse", "Gamepad emulated mouse; enable|disable" },
-      { "dosbox_cpu_cycles_0", "CPU cycles x 100000; 0|1|2|3|4|5|6|7|8|9" },
-      { "dosbox_cpu_cycles_1", "CPU cycles x 10000; 0|1|2|3|4|5|6|7|8|9" },
-      { "dosbox_cpu_cycles_2", "CPU cycles x 1000; 1|2|3|4|5|6|7|8|9|0" },
-      { "dosbox_cpu_cycles_3", "CPU cycles x 100; 0|1|2|3|4|5|6|7|8|9" },
-      { "dosbox_mapper_y", buf[0] },
-      { "dosbox_mapper_x", buf[1] },
-      { "dosbox_mapper_b", buf[2] },
-      { "dosbox_mapper_a", buf[3] },
-      { "dosbox_mapper_l", buf[4] },
-      { "dosbox_mapper_r", buf[5] },
-      { "dosbox_mapper_up", buf[6] },
-      { "dosbox_mapper_down", buf[7] },
-      { "dosbox_mapper_left", buf[8] },
-      { "dosbox_mapper_right", buf[9] },
-      { "dosbox_mapper_select", buf[10] },
-      { "dosbox_mapper_start", buf[11] },
-      { NULL, NULL },
-   };
+
 
    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
