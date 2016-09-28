@@ -5,7 +5,7 @@
 */
 
 #if defined(EMSCRIPTEN)
-  #include "ucontext.c"
+  #include "emscripten.c"
 #elif defined(__GNUC__) && defined(__i386__) || (defined(_MSC_VER) && defined(_M_IX86))
   #include "x86.c"
 #elif defined(__GNUC__) && defined(__amd64__) || (defined(_MSC_VER) && defined(_M_AMD64))
