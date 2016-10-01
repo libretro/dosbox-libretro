@@ -637,9 +637,6 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
    info->geometry.aspect_ratio = (float)4/3;
    info->timing.fps = 60.0;
    info->timing.sample_rate = (double)MIXER_RETRO_GetFrequency();
-
-   currentWidth = RDOSGFXwidth;
-   currentHeight = RDOSGFXheight;
 }
 
 void retro_init (void)
@@ -758,6 +755,8 @@ void retro_run (void)
       struct retro_system_av_info new_av_info;
       retro_get_system_av_info(&new_av_info);
       environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &new_av_info);
+      currentWidth = RDOSGFXwidth;
+      currentHeight = RDOSGFXheight;
    }
 
    bool updated = false;
