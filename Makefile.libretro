@@ -63,7 +63,6 @@ endif
 
 # iOS
 else ifneq (,$(findstring ios,$(platform)))
-
    TARGET := $(TARGET_NAME)_libretro_ios.dylib
    COMMONFLAGS += -DHAVE_POSIX_MEMALIGN=1 -marm
    fpic = -fPIC
@@ -75,6 +74,7 @@ else ifneq (,$(findstring ios,$(platform)))
 
    CC = cc -arch armv7 -isysroot $(IOSSDK)
    CXX = c++ -arch armv7 -isysroot $(IOSSDK)
+   WITH_DYNAREC = arm
 	COMMONFLAGS += -DIOS
 ifeq ($(platform),ios9)
 	CC += -miphoneos-version-min=8.0
@@ -89,6 +89,7 @@ TARGET = iphone:latest:$(DEPLOYMENT_IOSVERSION)
 ARCHS = armv7 armv7s
 TARGET_IPHONEOS_DEPLOYMENT_VERSION=$(DEPLOYMENT_IOSVERSION)
 THEOS_BUILD_DIR := objs
+WITH_DYNAREC = arm
 COMMONFLAGS += -DIOS
 COMMONFLAGS += -DHAVE_POSIX_MEMALIGN=1 -marm
 include $(THEOS)/makefiles/common.mk
@@ -130,6 +131,7 @@ else ifeq ($(platform), vita)
 	CC = arm-vita-eabi-gcc$(EXE_EXT)
 	CXX = arm-vita-eabi-g++$(EXE_EXT)
 	AR = arm-vita-eabi-ar$(EXE_EXT)
+  WITH_DYNAREC = arm
   COMMONFLAGS += -DVITA
   COMMONFLAGS += -mthumb -mcpu=cortex-a9 -mfloat-abi=hard -ftree-vectorize  -ffast-math -fsingle-precision-constant -funroll-loops
   COMMONFLAGS += -mword-relocations
