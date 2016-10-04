@@ -22,7 +22,7 @@
 #include "dosbox.h"
 #include "video.h"
 #include "render.h"
-#include "../gui/render_scalers.h"
+#include "render_scalers.h"
 #include "vga.h"
 #include "pic.h"
 

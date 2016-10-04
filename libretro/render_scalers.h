@@ -19,7 +19,6 @@
 #ifndef _RENDER_SCALERS_H
 #define _RENDER_SCALERS_H
 
-//#include "render.h"
 #include "video.h"
 // reduced to save some memory
 #define SCALER_MAXWIDTH		800 

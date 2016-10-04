@@ -1,4 +1,4 @@
-#include <string.h>
+#include <string.h>//for memcpy/memset
 
 #include "libretro.h"
 

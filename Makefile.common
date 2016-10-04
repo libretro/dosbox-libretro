@@ -4,7 +4,7 @@ INCFLAGS += -I$(CORE_DIR)/src \
             -I$(CORE_DIR)/libretro \
 				-I$(LIBRETRO_COMM_DIR)/include \
 				-I$(CORE_DIR)/include \
-            -I$(CORE_DIR)/src/gui/munt
+            -I$(CORE_DIR)/src/midi/munt
 
 SOURCES_CXX := \
 	$(CORE_DIR)/src/cpu/callback.cpp \
@@ -110,29 +110,29 @@ SOURCES_CXX := \
 	$(CORE_DIR)/libretro/dosbox.cpp \
 	$(CORE_DIR)/libretro/render.cpp \
 	$(CORE_DIR)/libretro/render_scalers.cpp \
-	$(CORE_DIR)/src/gui/midi.cpp \
+	$(CORE_DIR)/src/midi/midi.cpp \
 	$(CORE_DIR)/libretro/libretro.cpp \
 	$(CORE_DIR)/libretro/dos_gfx.cpp \
 	$(CORE_DIR)/libretro/mapper.cpp \
 	$(CORE_DIR)/libretro/mixer-retro.cpp \
-   $(CORE_DIR)/src/gui/munt/Analog.cpp \
-   $(CORE_DIR)/src/gui/munt/BReverbModel.cpp \
-   $(CORE_DIR)/src/gui/munt/File.cpp \
-   $(CORE_DIR)/src/gui/munt/FileStream.cpp \
-   $(CORE_DIR)/src/gui/munt/LA32Ramp.cpp \
-   $(CORE_DIR)/src/gui/munt/LA32WaveGenerator.cpp \
-   $(CORE_DIR)/src/gui/munt/MidiStreamParser.cpp \
-   $(CORE_DIR)/src/gui/munt/Part.cpp \
-   $(CORE_DIR)/src/gui/munt/Partial.cpp \
-   $(CORE_DIR)/src/gui/munt/PartialManager.cpp \
-   $(CORE_DIR)/src/gui/munt/Poly.cpp \
-   $(CORE_DIR)/src/gui/munt/ROMInfo.cpp \
-   $(CORE_DIR)/src/gui/munt/Synth.cpp \
-   $(CORE_DIR)/src/gui/munt/Tables.cpp \
-   $(CORE_DIR)/src/gui/munt/TVA.cpp \
-   $(CORE_DIR)/src/gui/munt/TVF.cpp \
-   $(CORE_DIR)/src/gui/munt/TVP.cpp \
-   $(CORE_DIR)/src/gui/munt/sha1/sha1.cpp
+   $(CORE_DIR)/src/midi/munt/Analog.cpp \
+   $(CORE_DIR)/src/midi/munt/BReverbModel.cpp \
+   $(CORE_DIR)/src/midi/munt/File.cpp \
+   $(CORE_DIR)/src/midi/munt/FileStream.cpp \
+   $(CORE_DIR)/src/midi/munt/LA32Ramp.cpp \
+   $(CORE_DIR)/src/midi/munt/LA32WaveGenerator.cpp \
+   $(CORE_DIR)/src/midi/munt/MidiStreamParser.cpp \
+   $(CORE_DIR)/src/midi/munt/Part.cpp \
+   $(CORE_DIR)/src/midi/munt/Partial.cpp \
+   $(CORE_DIR)/src/midi/munt/PartialManager.cpp \
+   $(CORE_DIR)/src/midi/munt/Poly.cpp \
+   $(CORE_DIR)/src/midi/munt/ROMInfo.cpp \
+   $(CORE_DIR)/src/midi/munt/Synth.cpp \
+   $(CORE_DIR)/src/midi/munt/Tables.cpp \
+   $(CORE_DIR)/src/midi/munt/TVA.cpp \
+   $(CORE_DIR)/src/midi/munt/TVF.cpp \
+   $(CORE_DIR)/src/midi/munt/TVP.cpp \
+   $(CORE_DIR)/src/midi/munt/sha1/sha1.cpp
 
 SOURCES_C := $(LIBRETRO_COMM_DIR)/libco/libco.c
 

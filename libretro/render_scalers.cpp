@@ -50,14 +50,6 @@ scalerSourceCache_t scalerSourceCache;
 #define conc3d(A,B,C) _conc5(A,_,B,_,C)
 #define conc4d(A,B,C,D) _conc7(A,_,B,_,C,_,D)
 
-static INLINE void BituMove( void *_dst, const void * _src, Bitu size) {
-	Bitu * dst=(Bitu *)(_dst);
-	const Bitu * src=(Bitu *)(_src);
-	size/=sizeof(Bitu);
-	for (Bitu x=0; x<size;x++)
-		dst[x] = src[x];
-}
-
 static INLINE void ScalerAddLines( Bitu changed, Bitu count ) {
 	if ((Scaler_ChangedLineIndex & 1) == changed ) {
 		Scaler_ChangedLines[Scaler_ChangedLineIndex] += count;
@@ -67,6 +59,19 @@ static INLINE void ScalerAddLines( Bitu changed, Bitu count ) {
 	render.scale.outWrite += render.scale.outPitch * count;
 }
 
+#if defined(ANDROID) || defined(__linux__) || defined(__APPLE__) || defined(EMSCRIPTEN) || defined(_WIN32)
+//platform optimized memcpy will probably be faster
+#define BituMove(dst,src,size) memcpy((void*)(dst),(void*)(src),(size))
+#define BituMove2(dst,src,size) memcpy((void*)(dst),(void*)(src),(size))
+#else
+//no platform optimized memcpy avalible
+static INLINE void BituMove( void *_dst, const void * _src, Bitu size) {
+	Bitu * dst=(Bitu *)(_dst);
+	const Bitu * src=(Bitu *)(_src);
+	size/=sizeof(Bitu);
+	for (Bitu x=0; x<size;x++)
+		dst[x] = src[x];
+}
 
 #define BituMove2(_DST,_SRC,_SIZE)			\
 {											\
@@ -75,6 +80,7 @@ static INLINE void ScalerAddLines( Bitu changed, Bitu count ) {
 	Bitu * bsrc=(Bitu *)(_SRC);				\
 	while (bsize--) *bdst++=*bsrc++;		\
 }
+#endif
 
 #define interp_w2(P0,P1,W0,W1)															\
 	((((P0&redblueMask)*W0+(P1&redblueMask)*W1)/(W0+W1)) & redblueMask) |	\

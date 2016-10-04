@@ -33,7 +33,7 @@
 #include "serialport.h"
 #include <time.h>
 
-#if !(defined(GEKKO) || defined(VITA) || defined(_3DS) || (defined(ANDROID))) // No ftime support
+#if !(defined(GEKKO) || defined(VITA) || defined(_3DS) || defined(ANDROID)) // No ftime support
 #include <sys/timeb.h>
 #endif
 
