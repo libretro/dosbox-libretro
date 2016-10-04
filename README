@@ -16,8 +16,8 @@ TODO:
 
 Building:
 
-* You must edit include/config.h to set options for build platform, the supplied version is for 64-bit OSX with latest xcode and clang.
-  
+* To build for your current platform "cd */libretro-dosbox (ENTER) make (ENTER)"
+
 Notes:
 
 * There seems to be no trivial way to have the DOSBox core return periodically, so libco is used to enter/exit the emulator loop. This actually works better than one would expect.
