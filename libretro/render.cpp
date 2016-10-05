@@ -103,10 +103,8 @@ static void RENDER_FinishLineHandler(const void * s) {
 	if (s) {
 		const Bitu *src = (Bitu*)s;
 		Bitu *cache = (Bitu*)(render.scale.cacheRead);
-		for (Bits x=render.src.start;x>0;) {
-			cache[0] = src[0];
-			x--; src++; cache++;
-		}
+      Bits x = render.src.start;
+      if(x > 0)memcpy(cache,src,x * sizeof(Bitu));
 	}
 	render.scale.cacheRead += render.scale.cachePitch;
 }
@@ -200,8 +198,8 @@ static Bitu MakeAspectTable(Bitu skip,Bitu height,double scaley,Bitu miny) {
 	Bitu i;
 	double lines=0;
 	Bitu linesadded=0;
-	for (i=0;i<skip;i++)
-		Scaler_Aspect[i] = 0;
+   
+   memset(Scaler_Aspect,0,skip);
 
 	height += skip;
 	for (i=skip;i<height;i++) {
