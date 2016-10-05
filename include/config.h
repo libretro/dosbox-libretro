@@ -51,7 +51,6 @@
 /* #undef C_IPX */ /* Define to 1 to enable IPX over Internet networking, requires SDL_net */
 /* #undef C_MODEM */ /* Define to 1 to enable internal modem support, requires SDL_net */
 /* #undef C_SDL_SOUND */ /* Define to 1 to enable SDL_sound support */
-/* #undef C_SSHOT */ /* Define to 1 to enable screenshots, requires libpng */
 
 // ----- HEADERS: Define if headers exist in build environment
 #define HAVE_INTTYPES_H 1
