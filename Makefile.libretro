@@ -122,6 +122,7 @@ else ifeq ($(platform), psp1)
    CC = psp-gcc$(EXE_EXT)
    CXX = psp-g++$(EXE_EXT)
    AR = psp-ar$(EXE_EXT)
+   WITH_DYNAREC = mips
    COMMONFLAGS += -DPSP -G0
 	STATIC_LINKING = 1
 
@@ -144,6 +145,7 @@ else ifeq ($(platform), ctr)
    CC = $(DEVKITARM)/bin/arm-none-eabi-gcc$(EXE_EXT)
    CXX = $(DEVKITARM)/bin/arm-none-eabi-g++$(EXE_EXT)
    AR = $(DEVKITARM)/bin/arm-none-eabi-ar$(EXE_EXT)
+   WITH_DYNAREC = oldarm
    ENDIANNESS_DEFINES :=
    COMMONFLAGS += -DARM11 -D_3DS -Os -s -I$(CTRULIB)/include/
    COMMONFLAGS += -DHAVE_MKDIR

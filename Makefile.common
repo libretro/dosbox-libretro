@@ -18,7 +18,7 @@ SOURCES_CXX := \
 	$(CORE_DIR)/src/cpu/core_prefetch.cpp \
 	$(CORE_DIR)/src/cpu/core_dyn_x86.cpp \
 	$(CORE_DIR)/src/cpu/core_dynrec.cpp \
-   $(CORE_DIR)/src/cpu/mmx.cpp \
+	$(CORE_DIR)/src/cpu/mmx.cpp \
 	$(CORE_DIR)/src/dos/dos.cpp \
 	$(CORE_DIR)/src/dos/dos_devices.cpp \
 	$(CORE_DIR)/src/dos/dos_execute.cpp \
@@ -143,10 +143,16 @@ endif
 
 ifeq ($(WITH_DYNAREC), arm)
    COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV7LE"
+else ifeq ($(WITH_DYNAREC), oldarm)
+   COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV4LE"
 else ifeq ($(WITH_DYNAREC), x86_64)
    COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86_64" -DC_HAVE_MPROTECT
 else ifeq ($(WITH_DYNAREC), x86)
    COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86"
+else ifeq ($(WITH_DYNAREC), ppc)
+   COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="POWERPC"
+else ifeq ($(WITH_DYNAREC), mips)
+   COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="MIPSEL"
 endif
 
 ifeq ($(WANT_FLUIDSYNTH), 1)
