@@ -5,26 +5,43 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE    := retro
 
-ifeq ($(TARGET_ARCH),arm)
+#is not reset by clear_vars and will overflow to the next arch if not reset
+WITH_DYNAREC :=
+
+ifeq ($(TARGET_ARCH_ABI), armeabi)
 LOCAL_CFLAGS += -DANDROID_ARM
 LOCAL_ARM_MODE := arm
-ifneq (,$(filter $(TARGET_ARCH_ABI),arm64-v8a armeabi-v7a))
+WITH_DYNAREC := oldarm
+endif
+
+ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
+LOCAL_CFLAGS += -DANDROID_ARM
+LOCAL_ARM_MODE := arm
 WITH_DYNAREC := arm
 endif
+
+ifeq ($(TARGET_ARCH_ABI), arm64-v8a)
+LOCAL_CFLAGS += -DANDROID_ARM
+LOCAL_ARM_MODE := arm
+#the armv7 dynarec wont run on armv8 unless running in armv7 emulation mode
 endif
 
-ifeq ($(TARGET_ARCH),x86)
+ifeq ($(TARGET_ARCH_ABI), x86)
 LOCAL_CFLAGS +=  -DANDROID_X86
-
-ifeq ($(TARGET_ARCH_ABI), x86_64)
-WITH_DYNAREC := x86_64
-else
 WITH_DYNAREC := x86
 endif
 
+ifeq ($(TARGET_ARCH_ABI), x86_64)
+LOCAL_CFLAGS +=  -DANDROID_X86
+WITH_DYNAREC := x86_64
 endif
 
-ifeq ($(TARGET_ARCH),mips)
+ifeq ($(TARGET_ARCH_ABI), mips)
+LOCAL_CFLAGS += -DANDROID_MIPS -D__mips__ -D__MIPSEL__
+WITH_DYNAREC := mips
+endif
+
+ifeq ($(TARGET_ARCH_ABI), mips64)
 LOCAL_CFLAGS += -DANDROID_MIPS -D__mips__ -D__MIPSEL__
 endif
 
@@ -32,8 +49,10 @@ CORE_DIR := ..
 
 SOURCES_C   :=
 SOURCES_ASM :=
+INCFLAGS :=
+COMMONFLAGS :=
 
-ifeq ($(DEBUG),1)
+ifeq ($(DEBUG), 1)
 APP_OPTIM := -O0 -g
 else
 APP_OPTIM := -O3 -DNDEBUG

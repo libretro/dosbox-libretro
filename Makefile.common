@@ -1,10 +1,10 @@
 LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
 
 INCFLAGS += -I$(CORE_DIR)/src \
-            -I$(CORE_DIR)/libretro \
+				-I$(CORE_DIR)/libretro \
 				-I$(LIBRETRO_COMM_DIR)/include \
 				-I$(CORE_DIR)/include \
-            -I$(CORE_DIR)/src/midi/munt
+				-I$(CORE_DIR)/src/midi/munt
 
 SOURCES_CXX := \
 	$(CORE_DIR)/src/cpu/callback.cpp \
@@ -115,24 +115,24 @@ SOURCES_CXX := \
 	$(CORE_DIR)/libretro/dos_gfx.cpp \
 	$(CORE_DIR)/libretro/mapper.cpp \
 	$(CORE_DIR)/libretro/mixer-retro.cpp \
-   $(CORE_DIR)/src/midi/munt/Analog.cpp \
-   $(CORE_DIR)/src/midi/munt/BReverbModel.cpp \
-   $(CORE_DIR)/src/midi/munt/File.cpp \
-   $(CORE_DIR)/src/midi/munt/FileStream.cpp \
-   $(CORE_DIR)/src/midi/munt/LA32Ramp.cpp \
-   $(CORE_DIR)/src/midi/munt/LA32WaveGenerator.cpp \
-   $(CORE_DIR)/src/midi/munt/MidiStreamParser.cpp \
-   $(CORE_DIR)/src/midi/munt/Part.cpp \
-   $(CORE_DIR)/src/midi/munt/Partial.cpp \
-   $(CORE_DIR)/src/midi/munt/PartialManager.cpp \
-   $(CORE_DIR)/src/midi/munt/Poly.cpp \
-   $(CORE_DIR)/src/midi/munt/ROMInfo.cpp \
-   $(CORE_DIR)/src/midi/munt/Synth.cpp \
-   $(CORE_DIR)/src/midi/munt/Tables.cpp \
-   $(CORE_DIR)/src/midi/munt/TVA.cpp \
-   $(CORE_DIR)/src/midi/munt/TVF.cpp \
-   $(CORE_DIR)/src/midi/munt/TVP.cpp \
-   $(CORE_DIR)/src/midi/munt/sha1/sha1.cpp
+	$(CORE_DIR)/src/midi/munt/Analog.cpp \
+	$(CORE_DIR)/src/midi/munt/BReverbModel.cpp \
+	$(CORE_DIR)/src/midi/munt/File.cpp \
+	$(CORE_DIR)/src/midi/munt/FileStream.cpp \
+	$(CORE_DIR)/src/midi/munt/LA32Ramp.cpp \
+	$(CORE_DIR)/src/midi/munt/LA32WaveGenerator.cpp \
+	$(CORE_DIR)/src/midi/munt/MidiStreamParser.cpp \
+	$(CORE_DIR)/src/midi/munt/Part.cpp \
+	$(CORE_DIR)/src/midi/munt/Partial.cpp \
+	$(CORE_DIR)/src/midi/munt/PartialManager.cpp \
+	$(CORE_DIR)/src/midi/munt/Poly.cpp \
+	$(CORE_DIR)/src/midi/munt/ROMInfo.cpp \
+	$(CORE_DIR)/src/midi/munt/Synth.cpp \
+	$(CORE_DIR)/src/midi/munt/Tables.cpp \
+	$(CORE_DIR)/src/midi/munt/TVA.cpp \
+	$(CORE_DIR)/src/midi/munt/TVF.cpp \
+	$(CORE_DIR)/src/midi/munt/TVP.cpp \
+	$(CORE_DIR)/src/midi/munt/sha1/sha1.cpp
 
 SOURCES_C := $(LIBRETRO_COMM_DIR)/libco/libco.c
 
@@ -142,20 +142,21 @@ SOURCES_C += $(LIBRETRO_COMM_DIR)/file/retro_dirent.c \
 endif
 
 ifeq ($(WITH_DYNAREC), arm)
-   COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV7LE"
+	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV7LE"
 else ifeq ($(WITH_DYNAREC), oldarm)
-   COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV4LE"
+	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV4LE"
 else ifeq ($(WITH_DYNAREC), x86_64)
-   COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86_64" -DC_HAVE_MPROTECT
+	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86_64" -DC_HAVE_MPROTECT
 else ifeq ($(WITH_DYNAREC), x86)
-   COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86"
+	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86"
 else ifeq ($(WITH_DYNAREC), ppc)
-   COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="POWERPC"
+	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="POWERPC"
 else ifeq ($(WITH_DYNAREC), mips)
-   COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="MIPSEL"
+	#COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="MIPSEL"
+	#the mips dynarec wont compile but nothing new uses mips anyway(just the old psp)
 endif
 
 ifeq ($(WANT_FLUIDSYNTH), 1)
-    COMMONFLAGS += -DC_FLUIDSYNTH
-    LDFLAGS += -lfluidsynth
+	COMMONFLAGS += -DC_FLUIDSYNTH
+	LDFLAGS += -lfluidsynth
 endif
