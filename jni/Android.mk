@@ -8,6 +8,9 @@ LOCAL_MODULE    := retro
 #is not reset by clear_vars and will overflow to the next arch if not reset
 WITH_DYNAREC :=
 
+#needed for windows mprotect fix
+platform = unix
+
 ifeq ($(TARGET_ARCH_ABI), armeabi)
 LOCAL_CFLAGS += -DANDROID_ARM
 LOCAL_ARM_MODE := arm
