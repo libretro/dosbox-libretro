@@ -78,10 +78,6 @@
 /* #undef size_t */ /* Define to `unsigned int' if <sys/types.h> does not define. */
 /* #undef socklen_t */ /* Define to `int` if you don't have socklen_t */
 
-#ifndef __WIN32__
-# define C_HAVE_MPROTECT 1 /* Define to 1 if you have the mprotect function */
-#endif
-
 // ----- COMPILER FEATURES
 #define C_ATTRIBUTE_ALWAYS_INLINE 1
 #define C_HAS_ATTRIBUTE 1
