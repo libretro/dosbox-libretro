@@ -141,6 +141,9 @@ SOURCES_C += $(LIBRETRO_COMM_DIR)/file/retro_dirent.c \
 				 $(LIBRETRO_COMM_DIR)/file/retro_stat.c
 endif
 
+
+WMPROTECT = 0
+
 ifeq ($(WITH_DYNAREC), arm)
 	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV7LE"
 else ifeq ($(WITH_DYNAREC), oldarm)
@@ -148,7 +151,7 @@ else ifeq ($(WITH_DYNAREC), oldarm)
 else ifeq ($(WITH_DYNAREC), x86_64)
 	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86_64"
 	ifeq ($(platform), unix)
-		COMMONFLAGS += -DC_HAVE_MPROTECT
+		WMPROTECT = 1
 	endif
 else ifeq ($(WITH_DYNAREC), x86)
 	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86"
@@ -157,6 +160,14 @@ else ifeq ($(WITH_DYNAREC), ppc)
 else ifeq ($(WITH_DYNAREC), mips)
 	#COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="MIPSEL"
 	#the mips dynarec wont compile but nothing new uses mips anyway(just the old psp)
+endif
+
+#fix embedded compilers counting "if VAR" as true even if VAR is not defined or set when using
+#"if VAR" instead of "ifdef VAR" or "if defined(VAR):
+ifeq ($(WMPROTECT), 1)
+	COMMONFLAGS += -DC_HAVE_MPROTECT="1"
+else
+	COMMONFLAGS += -DC_HAVE_MPROTECT="0"
 endif
 
 ifeq ($(WANT_FLUIDSYNTH), 1)
