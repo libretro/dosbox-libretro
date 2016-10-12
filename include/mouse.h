@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@ void Mouse_ButtonPressed(Bit8u button);
 void Mouse_ButtonReleased(Bit8u button);
 
 void Mouse_AutoLock(bool enable);
-void Mouse_NewVideoMode(void);
+void Mouse_BeforeNewVideoMode(bool setmode);
+void Mouse_AfterNewVideoMode(bool setmode);
 
 #endif

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -44,8 +44,6 @@ private:
 		Bit8u attr;
 		Bit8u data[NUMBER_ANSI_DATA];
 		Bit8u numberofarg;
-		Bit16u nrows;
-		Bit16u ncols;
 		Bit8s savecol;
 		Bit8s saverow;
 		bool warned;
@@ -55,6 +53,7 @@ private:
 bool device_CON::Read(Bit8u * data,Bit16u * size) {
 	Bit16u oldax=reg_ax;
 	Bit16u count=0;
+	INT10_SetCurMode();
 	if ((readcache) && (*size)) {
 		data[count++]=readcache;
 		if(dos.echo) INT10_TeletypeOutput(readcache,7);
@@ -116,8 +115,10 @@ bool device_CON::Read(Bit8u * data,Bit16u * size) {
 bool device_CON::Write(Bit8u * data,Bit16u * size) {
 	Bit16u count=0;
 	Bitu i;
-	Bit8u col,row;
+	Bit8u col,row,page;
+	Bit16u ncols,nrows;
 	Bit8u tempdata;
+	INT10_SetCurMode();
 	while (*size>count) {
 		if (!ansi.esc){
 			if(data[count]=='\033') {
@@ -127,11 +128,25 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 				ansi.esc=true;
 				count++;
 				continue;
+			} else if(data[count] == '\t' && !dos.direct_output) {
+				/* expand tab if not direct output */
+				page = real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
+				do {
+					if(ansi.enabled) INT10_TeletypeOutputAttr(' ',ansi.attr,true);
+					else INT10_TeletypeOutput(' ',7);
+					col=CURSOR_POS_COL(page);
+				} while(col%8);
+				lastwrite = data[count++];
+				continue;
 			} else { 
 				/* Some sort of "hack" now that '\n' doesn't set col to 0 (int10_char.cpp old chessgame) */
-				if((data[count] == '\n') && (lastwrite != '\r')) INT10_TeletypeOutputAttr('\r',ansi.attr,ansi.enabled);
-            /* use ansi attribute if ansi is enabled, otherwise use DOS default attribute*/
-            INT10_TeletypeOutputAttr(data[count],ansi.enabled?ansi.attr:7,true);
+				if((data[count] == '\n') && (lastwrite != '\r')) {
+					if(ansi.enabled) INT10_TeletypeOutputAttr('\r',ansi.attr,true);
+					else INT10_TeletypeOutput('\r',7);
+				}
+				/* use ansi attribute if ansi is enabled, otherwise use DOS default attribute*/
+				if(ansi.enabled) INT10_TeletypeOutputAttr(data[count],ansi.attr,true);
+				else INT10_TeletypeOutput(data[count],7);
 				lastwrite = data[count++];
 				continue;
 		}
@@ -156,7 +171,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 		continue;
 	}
 	/*ansi.esc and ansi.sci are true */
-	Bit8u page = real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
+	page = real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
 	switch(data[count]){
 		case '0':
 		case '1':
@@ -269,11 +284,13 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 				ansi.warned = true;
 				LOG(LOG_IOCTL,LOG_WARN)("ANSI SEQUENCES USED");
 			}
+			ncols = real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
+			nrows = real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1;
 			/* Turn them into positions that are on the screen */
 			if(ansi.data[0] == 0) ansi.data[0] = 1;
 			if(ansi.data[1] == 0) ansi.data[1] = 1;
-			if(ansi.data[0] > ansi.nrows) ansi.data[0] = (Bit8u)ansi.nrows;
-			if(ansi.data[1] > ansi.ncols) ansi.data[1] = (Bit8u)ansi.ncols;
+			if(ansi.data[0] > nrows) ansi.data[0] = (Bit8u)nrows;
+			if(ansi.data[1] > ncols) ansi.data[1] = (Bit8u)ncols;
 			INT10_SetCursorPos(--(ansi.data[0]),--(ansi.data[1]),page); /*ansi=1 based, int10 is 0 based */
 			ClearAnsi();
 			break;
@@ -290,9 +307,10 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 		case 'B': /*cursor Down */
 			col=CURSOR_POS_COL(page) ;
 			row=CURSOR_POS_ROW(page) ;
+			nrows = real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1;
 			tempdata = (ansi.data[0]? ansi.data[0] : 1);
-			if(tempdata + static_cast<Bitu>(row) >= ansi.nrows)
-				{ row = ansi.nrows - 1;}
+			if(tempdata + static_cast<Bitu>(row) >= nrows)
+				{ row = nrows - 1;}
 			else	{ row += tempdata; }
 			INT10_SetCursorPos(row,col,page);
 			ClearAnsi();
@@ -300,9 +318,10 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 		case 'C': /*cursor forward */
 			col=CURSOR_POS_COL(page);
 			row=CURSOR_POS_ROW(page);
+			ncols = real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
 			tempdata=(ansi.data[0]? ansi.data[0] : 1);
-			if(tempdata + static_cast<Bitu>(col) >= ansi.ncols) 
-				{ col = ansi.ncols - 1;} 
+			if(tempdata + static_cast<Bitu>(col) >= ncols) 
+				{ col = ncols - 1;} 
 			else	{ col += tempdata;}
 			INT10_SetCursorPos(row,col,page);
 			ClearAnsi();
@@ -342,15 +361,17 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 		case 'K': /* erase till end of line (don't touch cursor) */
 			col = CURSOR_POS_COL(page);
 			row = CURSOR_POS_ROW(page);
-			INT10_WriteChar(' ',ansi.attr,page,ansi.ncols-col,true); //Use this one to prevent scrolling when end of screen is reached
-			//for(i = col;i<(Bitu) ansi.ncols; i++) INT10_TeletypeOutputAttr(' ',ansi.attr,true);
+			ncols = real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
+			INT10_WriteChar(' ',ansi.attr,page,ncols-col,true); //Use this one to prevent scrolling when end of screen is reached
+			//for(i = col;i<(Bitu) ncols; i++) INT10_TeletypeOutputAttr(' ',ansi.attr,true);
 			INT10_SetCursorPos(row,col,page);
 			ClearAnsi();
 			break;
 		case 'M': /* delete line (NANSI) */
-			col = CURSOR_POS_COL(page);
 			row = CURSOR_POS_ROW(page);
-			INT10_ScrollWindow(row,0,ansi.nrows-1,ansi.ncols-1,ansi.data[0]? -ansi.data[0] : -1,ansi.attr,0xFF);
+			ncols = real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
+			nrows = real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1;
+			INT10_ScrollWindow(row,0,nrows-1,ncols-1,ansi.data[0]? -ansi.data[0] : -1,ansi.attr,0xFF);
 			ClearAnsi();
 			break;
 		case 'l':/* (if code =7) disable linewrap */
@@ -399,8 +420,6 @@ device_CON::device_CON() {
 	lastwrite=0;
 	ansi.enabled=false;
 	ansi.attr=0x7;
-	ansi.ncols=real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS); //should be updated once set/reset mode is implemented
-	ansi.nrows=real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1;
 	ansi.saverow=0;
 	ansi.savecol=0;
 	ansi.warned=false;

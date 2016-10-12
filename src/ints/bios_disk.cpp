@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -58,7 +58,7 @@ void CMOS_SetRegister(Bitu regNr, Bit8u val); //For setting equipment word
 /* 2 floppys and 2 harddrives, max */
 imageDisk *imageDiskList[MAX_DISK_IMAGES];
 imageDisk *diskSwap[MAX_SWAPPABLE_DISKS];
-Bits swapPosition;
+Bit32s swapPosition;
 
 void updateDPT(void) {
 	Bit32u tmpheads, tmpcyl, tmpsect, tmpsize;
@@ -101,9 +101,9 @@ void incrementFDD(void) {
 
 void swapInDisks(void) {
 	bool allNull = true;
-	Bits diskcount = 0;
-	Bits swapPos = swapPosition;
-	int i;
+	Bit32s diskcount = 0;
+	Bit32s swapPos = swapPosition;
+	Bit32s i;
 
 	/* Check to make sure that  there is at least one setup image */
 	for(i=0;i<MAX_SWAPPABLE_DISKS;i++) {
@@ -163,9 +163,10 @@ Bit8u imageDisk::Read_AbsoluteSector(Bit32u sectnum, void * data) {
 
 	bytenum = sectnum * sector_size;
 
-	if (bytenum!=current_fpos) fseek(diskimg,bytenum,SEEK_SET);
+	if (last_action==WRITE || bytenum!=current_fpos) fseek(diskimg,bytenum,SEEK_SET);
 	size_t ret=fread(data, 1, sector_size, diskimg);
 	current_fpos=bytenum+ret;
+	last_action=READ;
 
 	return 0x00;
 }
@@ -186,9 +187,10 @@ Bit8u imageDisk::Write_AbsoluteSector(Bit32u sectnum, void *data) {
 
 	//LOG_MSG("Writing sectors to %ld at bytenum %d", sectnum, bytenum);
 
-	if (bytenum!=current_fpos) fseek(diskimg,bytenum,SEEK_SET);
-	size_t ret=fwrite(data, sector_size, 1, diskimg);
+	if (last_action==READ || bytenum!=current_fpos) fseek(diskimg,bytenum,SEEK_SET);
+	size_t ret=fwrite(data, 1, sector_size, diskimg);
 	current_fpos=bytenum+ret;
+	last_action=WRITE;
 
 	return ((ret>0)?0x00:0x05);
 
@@ -200,6 +202,7 @@ imageDisk::imageDisk(FILE *imgFile, Bit8u *imgName, Bit32u imgSizeK, bool isHard
 	sectors = 0;
 	sector_size = 512;
 	current_fpos = 0;
+	last_action = NONE;
 	diskimg = imgFile;
 	fseek(diskimg,0,SEEK_SET);
 	
@@ -263,7 +266,7 @@ Bit32u imageDisk::getSectSize(void) {
 	return sector_size;
 }
 
-static Bitu GetDosDriveNumber(Bitu biosNum) {
+static Bit8u GetDosDriveNumber(Bit8u biosNum) {
 	switch(biosNum) {
 		case 0x0:
 			return 0x0;
@@ -282,7 +285,7 @@ static Bitu GetDosDriveNumber(Bitu biosNum) {
 	}
 }
 
-static bool driveInactive(Bitu driveNum) {
+static bool driveInactive(Bit8u driveNum) {
 	if(driveNum>=(2 + MAX_HDD_IMAGES)) {
 		LOG(LOG_BIOS,LOG_ERROR)("Disk %d non-existant", driveNum);
 		last_status = 0x01;
@@ -308,7 +311,7 @@ static bool driveInactive(Bitu driveNum) {
 static Bitu INT13_DiskHandler(void) {
 	Bit16u segat, bufptr;
 	Bit8u sectbuf[512];
-	Bitu  drivenum;
+	Bit8u  drivenum;
 	Bitu  i,t;
 	last_drive = reg_dl;
 	drivenum = GetDosDriveNumber(reg_dl);
@@ -450,6 +453,15 @@ static Bitu INT13_DiskHandler(void) {
 		//reg_al = 0x00; /* CRC verify succeeded */
 		CALLBACK_SCF(false);
           
+		break;
+	case 0x05: /* Format track */
+		if (driveInactive(drivenum)) {
+			reg_ah = 0xff;
+			CALLBACK_SCF(true);
+			return CBRET_NONE;
+		}
+		reg_ah = 0x00;
+		CALLBACK_SCF(false);
 		break;
 	case 0x08: /* Get drive parameters */
 		if(driveInactive(drivenum)) {

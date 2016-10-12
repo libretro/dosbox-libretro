@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -699,6 +699,7 @@ static void DSP_Reset(void) {
 
 	DSP_ChangeMode(MODE_NONE);
 	DSP_FlushData();
+	sb.dsp.cmd=DSP_NO_COMMAND;
 	sb.dsp.cmd_len=0;
 	sb.dsp.in.pos=0;
 	sb.dsp.write_busy=0;
@@ -756,6 +757,16 @@ static void DSP_ADC_CallBack(DmaChannel * /*chan*/, DMAEvent event) {
 	}
 	SB_RaiseIRQ(SB_IRQ_8);
 	ch->Register_Callback(0);
+}
+
+static void DSP_ChangeRate(Bitu freq) {
+	if (sb.freq!=freq && sb.dma.mode!=DSP_DMA_NONE) {
+		sb.chan->FillUp();
+		sb.chan->SetFreq(freq / (sb.mixer.stereo ? 2 : 1));
+		sb.dma.rate=(freq*sb.dma.mul) >> SB_SH;
+		sb.dma.min=(sb.dma.rate*3)/1000;
+	}
+	sb.freq=freq;
 }
 
 Bitu DEBUG_EnableDebugger(void);
@@ -845,16 +856,13 @@ static void DSP_DoCommand(void) {
 		if (sb.midi == true) MIDI_RawOutByte(sb.dsp.in.data[0]);
 		break;
 	case 0x40:	/* Set Timeconstant */
-		sb.freq=(1000000 / (256 - sb.dsp.in.data[0]));
-		/* Nasty kind of hack to allow runtime changing of frequency */
-		if (sb.dma.mode != DSP_DMA_NONE && sb.dma.autoinit) {
-			DSP_PrepareDMA_Old(sb.dma.mode,sb.dma.autoinit,sb.dma.sign);
-		}
+		DSP_ChangeRate(1000000 / (256 - sb.dsp.in.data[0]));
 		break;
 	case 0x41:	/* Set Output Samplerate */
 	case 0x42:	/* Set Input Samplerate */
+		/* Note: 0x42 is handled like 0x41, needed by Fasttracker II */
 		DSP_SB16_ONLY;
-		sb.freq=(sb.dsp.in.data[0] << 8)  | sb.dsp.in.data[1];
+		DSP_ChangeRate((sb.dsp.in.data[0] << 8) | sb.dsp.in.data[1]);
 		break;
 	case 0x48:	/* Set DMA Block Size */
 		DSP_SB2_ABOVE;
@@ -1525,6 +1533,7 @@ private:
 		else if (!strcasecmp(omode,"opl2")) opl_mode=OPL_opl2;
 		else if (!strcasecmp(omode,"dualopl2")) opl_mode=OPL_dualopl2;
 		else if (!strcasecmp(omode,"opl3")) opl_mode=OPL_opl3;
+		else if (!strcasecmp(omode,"opl3gold")) opl_mode=OPL_opl3gold;
 		/* Else assume auto */
 		else {
 			switch (type) {
@@ -1580,6 +1589,7 @@ public:
 			// fall-through
 		case OPL_dualopl2:
 		case OPL_opl3:
+		case OPL_opl3gold:
 			OPL_Init(section,oplmode);
 			break;
 		}
@@ -1637,6 +1647,7 @@ public:
 			// fall-through
 		case OPL_dualopl2:
 		case OPL_opl3:
+		case OPL_opl3gold:
 			OPL_ShutDown(m_configuration);
 			break;
 		}

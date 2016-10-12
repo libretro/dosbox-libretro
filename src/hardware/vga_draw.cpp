@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -197,10 +197,10 @@ static Bit8u * VGA_Draw_Linear_Line(Bitu vidstart, Bitu /*line*/) {
 }
 
 static Bit8u * VGA_Draw_Xlat16_Linear_Line(Bitu vidstart, Bitu /*line*/) {
-   Bitu offset = vidstart & vga.draw.linear_mask;
-   Bit8u *ret = &vga.draw.linear_base[offset];
+	Bitu offset = vidstart & vga.draw.linear_mask;
+	Bit8u *ret = &vga.draw.linear_base[offset];
 	Bit16u* temps = (Bit16u*) TempLine;
-  
+
 	// see VGA_Draw_Linear_Line
 	if (GCC_UNLIKELY((vga.draw.line_length + offset)& ~vga.draw.linear_mask)) {
 		Bitu end = (offset + vga.draw.line_length) & vga.draw.linear_mask;
@@ -946,7 +946,7 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 		vga.draw.parts_left = vga.draw.parts_total;
 		PIC_AddEvent(VGA_DrawPart,(float)vga.draw.delay.parts + draw_skip,vga.draw.parts_lines);
 		break;
-	case LINE:
+	case DRAWLINE:
 	case EGALINE:
 		if (GCC_UNLIKELY(vga.draw.lines_done < vga.draw.lines_total)) {
 			LOG(LOG_VGAMISC,LOG_NORMAL)( "Lines left: %d", 
@@ -1042,7 +1042,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	case MCH_CGA:
 	case MCH_PCJR:
 	case MCH_TANDY:
-		vga.draw.mode = LINE;
+		vga.draw.mode = DRAWLINE;
 		break;
 	case MCH_EGA:
 		// Note: The Paradise SVGA uses the same panning mechanism as EGA
@@ -1050,7 +1050,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		break;
 	case MCH_VGA:
 		if (svgaCard==SVGA_None) {
-			vga.draw.mode = LINE;
+			vga.draw.mode = DRAWLINE;
 			break;
 		}
 		// fall-through
@@ -1310,7 +1310,9 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		break;
 	case 3:		//480 line mode, filled with 525 total
 	default:
-		pheight = (480.0 / 480.0) * ( 525.0 / vtotal );
+		//Allow 527 total ModeX to have exact 1:1 aspect
+		target_total = (vga.mode==M_VGA && vtotal==527) ? 527.0 : 525.0;
+		pheight = (480.0 / 480.0) * ( target_total / vtotal );
 		break;
 	}
 
@@ -1403,6 +1405,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		vga.draw.linear_mask = (vga.vmemwrap<<1) - 1;
 		break;
 	case M_CGA16:
+		aspect_ratio=1.2;
 		doubleheight=true;
 		vga.draw.blocks=width*2;
 		width<<=4;
@@ -1421,7 +1424,6 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		VGA_DrawLine=VGA_Draw_1BPP_Line;
 		break;
 	case M_TEXT:
-		aspect_ratio=1.2;
 		vga.draw.blocks=width;
 		doublewidth=(vga.seq.clocking_mode & 0x8) > 0;
 		if ((IS_VGA_ARCH) && (svgaCard==SVGA_None)) {
@@ -1432,7 +1434,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 			} else {
 				vga.draw.char9dot = true;
 				width*=9;
-            aspect_ratio*=1.125;
+				aspect_ratio*=1.125;
 			}
 			VGA_DrawLine=VGA_TEXT_Xlat16_Draw_Line;
 			bpp=16;
@@ -1444,9 +1446,9 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		}
 		break;
 	case M_HERC_GFX:
-		aspect_ratio=1.5;
 		vga.draw.blocks=width*2;
 		width*=16;
+		aspect_ratio=((double)width/(double)height)*(3.0/4.0);
 		VGA_DrawLine=VGA_Draw_1BPP_Line;
 		break;
 	case M_TANDY2:
@@ -1499,7 +1501,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		VGA_DrawLine=VGA_TEXT_Draw_Line;
 		break;
 	case M_HERC_TEXT:
-      aspect_ratio=((double)480)/((double)350);
+		aspect_ratio=((double)480)/((double)350);
 		vga.draw.blocks=width;
 		width<<=3;
 		VGA_DrawLine=VGA_TEXT_Herc_Draw_Line;

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -99,6 +99,8 @@
 extern Bit8u int10_font_08[256 * 8];
 extern Bit8u int10_font_14[256 * 14];
 extern Bit8u int10_font_16[256 * 16];
+extern Bit8u int10_font_14_alternate[20 * 15 + 1];
+extern Bit8u int10_font_16_alternate[19 * 17 + 1];
 
 struct VideoModeBlock {
 	Bit16u	mode;
@@ -154,6 +156,7 @@ static Bit8u CURSOR_POS_ROW(Bit8u page) {
 }
 
 bool INT10_SetVideoMode(Bit16u mode);
+void INT10_SetCurMode(void);
 
 void INT10_ScrollWindow(Bit8u rul,Bit8u cul,Bit8u rlr,Bit8u clr,Bit8s nlines,Bit8u attr,Bit8u page);
 

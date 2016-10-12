@@ -275,12 +275,10 @@ void DOS_Shell::CMD_RENAME(char * args){
 		strcpy(target,dir_source);
 		strncat(target,args,CROSS_LEN);
 
-		if (!DOS_Rename(arg1,target))
-			WriteOut(MSG_Get("SHELL_CMD_RENAME_ERROR"),arg1);
+		DOS_Rename(arg1,target);
 
 	} else {
-		if (!DOS_Rename(arg1,args))
-			WriteOut(MSG_Get("SHELL_CMD_RENAME_ERROR"),arg1);
+		DOS_Rename(arg1,args);
 	}
 }
 

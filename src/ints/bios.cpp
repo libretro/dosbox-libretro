@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -491,6 +491,7 @@ static Bitu INT11_Handler(void) {
 #define DOSBOX_CLOCKSYNC 0
 #endif
 
+
 //android removed ftime in ndks >= android-ndk-r10
 #if defined(GEKKO) || defined(VITA) || defined(_3DS) || (defined(ANDROID)) // No ftime support
 struct FAKEtimeb
@@ -519,33 +520,37 @@ void FAKEftime(struct FAKEtimeb* tb)
 
 #endif
 
+
+
 static void BIOS_HostTimeSync() {
-   /* Setup time and date */
-   struct timeb timebuffer;
-   ftime(&timebuffer);
-   
-   struct tm *loctime;
-   loctime = localtime(&timebuffer.time);
-   
-   /*
-    loctime->tm_hour = 23;
-    loctime->tm_min = 59;
-    loctime->tm_sec = 45;
-    loctime->tm_mday = 28;
-    loctime->tm_mon = 2-1;
-    loctime->tm_year = 2007 - 1900;
-    */
-   
-   dos.date.day=(Bit8u)loctime->tm_mday;
-   dos.date.month=(Bit8u)loctime->tm_mon+1;
-   dos.date.year=(Bit16u)loctime->tm_year+1900;
-   
-   Bit32u ticks=(Bit32u)(((double)(
-      loctime->tm_hour*3600*1000+
-      loctime->tm_min*60*1000+
-      loctime->tm_sec*1000+
-      timebuffer.millitm))*(((double)PIT_TICK_RATE/65536.0)/1000.0));
-   mem_writed(BIOS_TIMER,ticks);
+	Bit32u milli = 0;
+	/* Setup time and date */
+	struct timeb timebuffer;
+	ftime(&timebuffer);
+	
+	struct tm *loctime;
+	loctime = localtime (&timebuffer.time);
+	milli = (Bit32u) timebuffer.millitm;
+
+	/*
+	loctime->tm_hour = 23;
+	loctime->tm_min = 59;
+	loctime->tm_sec = 45;
+	loctime->tm_mday = 28;
+	loctime->tm_mon = 2-1;
+	loctime->tm_year = 2007 - 1900;
+	*/
+
+	dos.date.day=(Bit8u)loctime->tm_mday;
+	dos.date.month=(Bit8u)loctime->tm_mon+1;
+	dos.date.year=(Bit16u)loctime->tm_year+1900;
+
+	Bit32u ticks=(Bit32u)(((double)(
+		loctime->tm_hour*3600*1000+
+		loctime->tm_min*60*1000+
+		loctime->tm_sec*1000+
+		milli))*(((double)PIT_TICK_RATE/65536.0)/1000.0));
+	mem_writed(BIOS_TIMER,ticks);
 }
 
 static Bitu INT8_Handler(void) {
@@ -1119,6 +1124,11 @@ public:
 		CALLBACK_Setup(call_irq2,NULL,CB_IRET_EOI_PIC1,Real2Phys(BIOS_DEFAULT_IRQ2_LOCATION),"irq 2 bios");
 		RealSetVec(0x0a,BIOS_DEFAULT_IRQ2_LOCATION);
 
+		// INT 05h: Print Screen
+		// IRQ1 handler calls it when PrtSc key is pressed; does nothing unless hooked
+		phys_writeb(Real2Phys(BIOS_DEFAULT_INT5_LOCATION),0xcf);
+		RealSetVec(0x05,BIOS_DEFAULT_INT5_LOCATION);
+
 		/* Some hardcoded vectors */
 		phys_writeb(Real2Phys(BIOS_DEFAULT_HANDLER_LOCATION),0xcf);	/* bios default interrupt vector location -> IRET */
 		phys_writew(Real2Phys(RealGetVec(0x12))+0x12,0x20); //Hack for Jurresic
@@ -1265,6 +1275,8 @@ public:
 		}
 		// PS2 mouse
 		config |= 0x04;
+		// DMA *not* supported - Ancient Art of War CGA uses this to identify PCjr
+		if (machine==MCH_PCJR) config |= 0x100;
 		// Gameport
 		config |= 0x1000;
 		mem_writew(BIOS_CONFIGURATION,config);

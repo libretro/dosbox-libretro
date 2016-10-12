@@ -141,6 +141,9 @@ SOURCES_C += $(LIBRETRO_COMM_DIR)/file/retro_dirent.c \
 				 $(LIBRETRO_COMM_DIR)/file/retro_stat.c
 endif
 
+ifneq (,$(filter $(platform),unix osx))
+COMMONFLAGS += -DC_HAVE_MPROTECT="1"
+endif
 
 ifeq ($(WITH_DYNAREC), arm)
 	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV7LE"
@@ -148,9 +151,6 @@ else ifeq ($(WITH_DYNAREC), oldarm)
 	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV4LE"
 else ifeq ($(WITH_DYNAREC), x86_64)
 	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86_64"
-	ifeq ($(platform), unix)
-		COMMONFLAGS += -DC_HAVE_MPROTECT="1"
-	endif
 else ifeq ($(WITH_DYNAREC), x86)
 	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86"
 else ifeq ($(WITH_DYNAREC), ppc)

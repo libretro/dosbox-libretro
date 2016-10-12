@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -259,15 +259,26 @@ void DrawCursorText() {
 
 	//use current page (CV program)
 	Bit8u page = real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
-	Bit16u result;
-
-	ReadCharAttr(mouse.backposx,mouse.backposy,page,&result);
-	mouse.backData[0]	= (Bit8u)(result & 0xFF);
-	mouse.backData[1]	= (Bit8u)(result>>8);
-	mouse.background	= true;
-	// Write Cursor
-	result = (result & mouse.textAndMask) ^ mouse.textXorMask;
-	WriteChar(mouse.backposx,mouse.backposy,page,(Bit8u)(result&0xFF),(Bit8u)(result>>8),true);
+	
+	if (mouse.cursorType == 0) {
+		Bit16u result;
+		ReadCharAttr(mouse.backposx,mouse.backposy,page,&result);
+		mouse.backData[0]	= (Bit8u)(result & 0xFF);
+		mouse.backData[1]	= (Bit8u)(result>>8);
+		mouse.background	= true;
+		// Write Cursor
+		result = (result & mouse.textAndMask) ^ mouse.textXorMask;
+		WriteChar(mouse.backposx,mouse.backposy,page,(Bit8u)(result&0xFF),(Bit8u)(result>>8),true);
+	} else {
+		Bit16u address=page * real_readw(BIOSMEM_SEG,BIOSMEM_PAGE_SIZE);
+		address += (mouse.backposy * real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS) + mouse.backposx) * 2;
+		address /= 2;
+		Bit16u cr = real_readw(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS);
+		IO_Write(cr    , 0xe);
+		IO_Write(cr + 1, (address>>8) & 0xff);
+		IO_Write(cr    , 0xf);
+		IO_Write(cr + 1, address & 0xff);
+	}
 }
 
 // ***************************************************************************
@@ -364,6 +375,7 @@ void RestoreCursorBackground() {
 
 void DrawCursor() {
 	if (mouse.hidden || mouse.inhibit_draw) return;
+	INT10_SetCurMode();
 	// In Textmode ?
 	if (CurMode->type==M_TEXT) {
 		DrawCursorText();
@@ -465,8 +477,8 @@ void Mouse_CursorMoved(float xrel,float yrel,float x,float y,bool emulate) {
 		mouse.y += dy;
 	} else {
 		if (CurMode->type == M_TEXT) {
-			mouse.x = x*CurMode->swidth;
-			mouse.y = y*CurMode->sheight * 8 / CurMode->cheight;
+			mouse.x = x*real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS)*8;
+			mouse.y = y*(real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS)+1)*8;
 		} else if ((mouse.max_x < 2048) || (mouse.max_y < 2048) || (mouse.max_x != mouse.max_y)) {
 			if ((mouse.max_x > 0) && (mouse.max_y > 0)) {
 				mouse.x = x*mouse.max_x;
@@ -590,12 +602,20 @@ static void Mouse_ResetHardware(void){
 	PIC_SetIRQMask(MOUSE_IRQ,false);
 }
 
+void Mouse_BeforeNewVideoMode(bool setmode) {
+	if (CurMode->type!=M_TEXT) RestoreCursorBackground();
+	else RestoreCursorBackgroundText();
+	mouse.hidden = 1;
+	mouse.oldhidden = 1;
+	mouse.background = false;
+}
+
 //Does way to much. Many things should be moved to mouse reset one day
-void Mouse_NewVideoMode(void) {
+void Mouse_AfterNewVideoMode(bool setmode) {
 	mouse.inhibit_draw = false;
 	/* Get the correct resolution from the current video mode */
 	Bit8u mode = mem_readb(BIOS_VIDEO_MODE);
-	if(mode == mouse.mode) {LOG(LOG_MOUSE,LOG_NORMAL)("New video is the same as the old"); /*return;*/}
+	if (setmode && mode == mouse.mode) LOG(LOG_MOUSE,LOG_NORMAL)("New video mode is the same as the old");
 	mouse.gran_x = (Bit16s)0xffff;
 	mouse.gran_y = (Bit16s)0xffff;
 	switch (mode) {
@@ -637,7 +657,6 @@ void Mouse_NewVideoMode(void) {
 		return;
 	}
 	mouse.mode = mode;
-	mouse.hidden = 1;
 	mouse.max_x = 639;
 	mouse.min_x = 0;
 	mouse.min_y = 0;
@@ -648,7 +667,6 @@ void Mouse_NewVideoMode(void) {
 
 	mouse.hotx		 = 0;
 	mouse.hoty		 = 0;
-	mouse.background = false;
 	mouse.screenMask = defaultScreenMask;
 	mouse.cursorMask = defaultCursorMask;
 	mouse.textAndMask= defaultTextAndMask;
@@ -660,9 +678,8 @@ void Mouse_NewVideoMode(void) {
 	mouse.updateRegion_y[0] = 1;
 	mouse.updateRegion_x[1] = 1;
 	mouse.updateRegion_y[1] = 1;
-	mouse.cursorType = 0;
+	mouse.cursorType = 0; //Test
 	mouse.enabled=true;
-	mouse.oldhidden=1;
 
 	oldmouseX = static_cast<Bit16s>(mouse.x);
 	oldmouseY = static_cast<Bit16s>(mouse.y);
@@ -672,12 +689,8 @@ void Mouse_NewVideoMode(void) {
 
 //Much too empty, Mouse_NewVideoMode contains stuff that should be in here
 static void Mouse_Reset(void) {
-	/* Remove drawn mouse Legends of Valor */
-	if (CurMode->type!=M_TEXT) RestoreCursorBackground();
-	else RestoreCursorBackgroundText();
-	mouse.hidden = 1;
-
-	Mouse_NewVideoMode();
+	Mouse_BeforeNewVideoMode(false);
+	Mouse_AfterNewVideoMode(false);
 	Mouse_SetMickeyPixelRate(8,16);
 
 	mouse.mickey_x = 0;
@@ -801,9 +814,14 @@ static Bitu INT33_Handler(void) {
 		}
 		break;
 	case 0x0a:	/* Define Text Cursor */
-		mouse.cursorType = reg_bx;
+		mouse.cursorType = (reg_bx?1:0);
 		mouse.textAndMask = reg_cx;
 		mouse.textXorMask = reg_dx;
+		if (reg_bx) {
+			INT10_SetCursorShape(reg_cl,reg_dl);
+			LOG(LOG_MOUSE,LOG_NORMAL)("Hardware Text cursor selected");
+		}
+		DrawCursor();
 		break;
 	case 0x0b:	/* Read Motion Data */
 		reg_cx=static_cast<Bit16s>(mouse.mickey_x);
@@ -1024,6 +1042,7 @@ static Bitu INT74_Handler(void) {
 			reg_ip = mouse.sub_ofs;
 			if(mouse.in_UIR) LOG(LOG_MOUSE,LOG_ERROR)("Already in UIR!");
 			mouse.in_UIR = true;
+			//LOG(LOG_MOUSE,LOG_ERROR)("INT 74 %X",mouse.event_queue[mouse.events].type );
 		} else if (useps2callback) {
 			CPU_Push16(RealSeg(CALLBACK_RealPointer(int74_ret_callback)));
 			CPU_Push16(RealOff(CALLBACK_RealPointer(int74_ret_callback)));
@@ -1031,10 +1050,12 @@ static Bitu INT74_Handler(void) {
 		} else {
 			SegSet16(cs, RealSeg(CALLBACK_RealPointer(int74_ret_callback)));
 			reg_ip = RealOff(CALLBACK_RealPointer(int74_ret_callback));
+			//LOG(LOG_MOUSE,LOG_ERROR)("INT 74 not interested"); 
 		}
 	} else {
 		SegSet16(cs, RealSeg(CALLBACK_RealPointer(int74_ret_callback)));
 		reg_ip = RealOff(CALLBACK_RealPointer(int74_ret_callback));
+		//LOG(LOG_MOUSE,LOG_ERROR)("INT 74 no events");
 	}
 	return CBRET_NONE;
 }

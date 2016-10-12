@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@
 #include "regs.h"
 #include "inout.h"
 #include "int10.h"
+#include "mouse.h"
 #include "setup.h"
 
 Int10Data int10;
@@ -47,10 +48,13 @@ static Bitu INT10_Handler(void) {
 		break;
 	}
 #endif
+	INT10_SetCurMode();
 
 	switch (reg_ah) {
 	case 0x00:								/* Set VideoMode */
+		Mouse_BeforeNewVideoMode(true);
 		INT10_SetVideoMode(reg_al);
+		Mouse_AfterNewVideoMode(true);
 		break;
 	case 0x01:								/* Set TextMode Cursor Shape */
 		INT10_SetCursorShape(reg_ch,reg_cl);
@@ -202,19 +206,20 @@ static Bitu INT10_Handler(void) {
 	case 0x11:								/* Character generator functions */
 		if (!IS_EGAVGA_ARCH) 
 			break;
+		if ((reg_al&0xf0)==0x10) Mouse_BeforeNewVideoMode(false);
 		switch (reg_al) {
 /* Textmode calls */
 		case 0x00:			/* Load user font */
 		case 0x10:
-			INT10_LoadFont(SegPhys(es)+reg_bp,reg_al==0x10,reg_cx,reg_dx,reg_bl,reg_bh);
+			INT10_LoadFont(SegPhys(es)+reg_bp,reg_al==0x10,reg_cx,reg_dx,reg_bl&0x7f,reg_bh);
 			break;
 		case 0x01:			/* Load 8x14 font */
 		case 0x11:
-			INT10_LoadFont(Real2Phys(int10.rom.font_14),reg_al==0x11,256,0,reg_bl,14);
+			INT10_LoadFont(Real2Phys(int10.rom.font_14),reg_al==0x11,256,0,reg_bl&0x7f,14);
 			break;
 		case 0x02:			/* Load 8x8 font */
 		case 0x12:
-			INT10_LoadFont(Real2Phys(int10.rom.font_8_first),reg_al==0x12,256,0,reg_bl,8);
+			INT10_LoadFont(Real2Phys(int10.rom.font_8_first),reg_al==0x12,256,0,reg_bl&0x7f,8);
 			break;
 		case 0x03:			/* Set Block Specifier */
 			IO_Write(0x3c4,0x3);IO_Write(0x3c5,reg_bl);
@@ -222,7 +227,7 @@ static Bitu INT10_Handler(void) {
 		case 0x04:			/* Load 8x16 font */
 		case 0x14:
 			if (!IS_VGA_ARCH) break;
-			INT10_LoadFont(Real2Phys(int10.rom.font_16),reg_al==0x14,256,0,reg_bl,16);
+			INT10_LoadFont(Real2Phys(int10.rom.font_16),reg_al==0x14,256,0,reg_bl&0x7f,16);
 			break;
 /* Graphics mode calls */
 		case 0x20:			/* Set User 8x8 Graphics characters */
@@ -284,7 +289,6 @@ graphics_chars:
 				reg_bp=RealOff(int10.rom.font_8_second);
 				break;
 			case 0x05:	/* alpha alternate 9x14 */
-				if (!IS_VGA_ARCH) break;
 				SegSet16(es,RealSeg(int10.rom.font_14_alternate));
 				reg_bp=RealOff(int10.rom.font_14_alternate);
 				break;
@@ -311,6 +315,7 @@ graphics_chars:
 			LOG(LOG_INT10,LOG_ERROR)("Function 11:Unsupported character generator call %2X",reg_al);
 			break;
 		}
+		if ((reg_al&0xf0)==0x10) Mouse_AfterNewVideoMode(false);
 		break;
 	case 0x12:								/* alternate function select */
 		if (!IS_EGAVGA_ARCH) 
@@ -536,8 +541,10 @@ graphics_chars:
 			reg_ah=VESA_GetSVGAModeInformation(reg_cx,SegValue(es),reg_di);
 			break;
 		case 0x02:							/* Set videomode */
+			Mouse_BeforeNewVideoMode(true);
 			reg_al=0x4f;
 			reg_ah=VESA_SetSVGAMode(reg_bx);
+			Mouse_AfterNewVideoMode(true);
 			break;
 		case 0x03:							/* Get videomode */
 			reg_al=0x4f;
@@ -708,6 +715,8 @@ static void INT10_Seg40Init(void) {
 	real_writeb(BIOSMEM_SEG,BIOSMEM_MODESET_CTL,0x51);
 	// Set the  default MSR
 	real_writeb(BIOSMEM_SEG,BIOSMEM_CURRENT_MSR,0x09);
+	// Set the pointer to video save pointer table
+	real_writed(BIOSMEM_SEG,BIOSMEM_VS_POINTER,int10.rom.video_save_pointers);
 }
 
 
@@ -757,7 +766,5 @@ void INT10_Init(Section* /*sec*/) {
 	//Init the 0x40 segment and init the datastructures in the the video rom area
 	INT10_SetupRomMemory();
 	INT10_Seg40Init();
-	INT10_SetupVESA();
-	INT10_SetupRomMemoryChecksum();//SetupVesa modifies the rom as well.
 	INT10_SetVideoMode(0x3);
 }

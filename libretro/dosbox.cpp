@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -209,6 +209,14 @@ increaseticks:
 					if (new_cmax<CPU_CYCLES_LOWER_LIMIT)
 						new_cmax=CPU_CYCLES_LOWER_LIMIT;
 
+					/*
+					LOG_MSG("cyclelog: current %6d   cmax %6d   ratio  %5d  done %3d   sched %3d",
+						CPU_CycleMax,
+						new_cmax,
+						ratio,
+						ticksDone,
+						ticksScheduled);
+					*/  
 					/* ratios below 1% are considered to be dropouts due to
 					   temporary load imbalance, the cycles adjusting is skipped */
 					if (ratio>10) {
@@ -236,6 +244,7 @@ increaseticks:
 			}
 		} else {
 			ticksAdded = 0;
+			SDL_Delay(1);
 			ticksDone -= GetTicks() - ticksNew;
 			if (ticksDone < 0)
 				ticksDone = 0;
@@ -300,7 +309,6 @@ static void DOSBOX_RealInit(Section * sec) {
 	std::string mtype(section->Get_string("machine"));
 	int10.vesa_nolfb = false;
 	int10.vesa_oldvbe = false;
-
 	if      (mtype == "cga")      { machine = MCH_CGA; }
 	else if (mtype == "tandy")    { machine = MCH_TANDY; }
 	else if (mtype == "pcjr")     { machine = MCH_PCJR; }
@@ -538,7 +546,7 @@ void DOSBOX_Init(void) {
 	Pbool = secprop->Add_bool("sbmixer",Property::Changeable::WhenIdle,true);
 	Pbool->Set_help("Allow the soundblaster mixer to modify the DOSBox mixer.");
 
-	const char* oplmodes[]={ "auto", "cms", "opl2", "dualopl2", "opl3", "none", 0};
+	const char* oplmodes[]={ "auto", "cms", "opl2", "dualopl2", "opl3", "opl3gold", "none", 0};
 	Pstring = secprop->Add_string("oplmode",Property::Changeable::WhenIdle,"auto");
 	Pstring->Set_values(oplmodes);
 	Pstring->Set_help("Type of OPL emulation. On 'auto' the mode is determined by sblaster type. All OPL modes are Adlib-compatible, except for 'cms'.");
@@ -629,7 +637,7 @@ void DOSBOX_Init(void) {
 	Pbool = secprop->Add_bool("swap34",Property::Changeable::WhenIdle,false);
 	Pbool->Set_help("swap the 3rd and the 4th axis. can be useful for certain joysticks.");
 
-	Pbool = secprop->Add_bool("buttonwrap",Property::Changeable::WhenIdle,true);
+	Pbool = secprop->Add_bool("buttonwrap",Property::Changeable::WhenIdle,false);
 	Pbool->Set_help("enable button wrapping at the number of emulated buttons.");
 
 	secprop=control->AddSection_prop("serial",&SERIAL_Init,true);

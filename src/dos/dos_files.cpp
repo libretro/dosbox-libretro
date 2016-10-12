@@ -446,7 +446,6 @@ bool DOS_FindFirst(char * search,Bit16u attr,bool fcb_findfirst) {
 		return true;
 	}
    
-	bool r=Drives[drive]->FindFirst(dir,dta,fcb_findfirst);
 	if (Drives[drive]->FindFirst(dir,dta,fcb_findfirst)) return true;
 	
 	return false;
@@ -537,10 +536,10 @@ bool DOS_CloseFile(Bit16u entry, bool fcb) {
 	if (Files[handle]->IsOpen()) {
 		Files[handle]->Close();
 	}
-	
+
 	DOS_PSP psp(dos.psp());
 	if (!fcb) psp.SetFileHandle(entry,0xff);
-	
+
 	if (Files[handle]->RemoveRef()<=0) {
 		delete Files[handle];
 		Files[handle]=0;

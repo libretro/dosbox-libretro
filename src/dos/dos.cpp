@@ -115,11 +115,10 @@ static Bitu DOS_21Handler(void) {
 
 	char name1[DOSNAMEBUF+2+DOS_NAMELENGTH_ASCII];
 	char name2[DOSNAMEBUF+2+DOS_NAMELENGTH_ASCII];
-	char *p;
+   char *p;
 	
 	static Bitu time_start = 0; //For emulating temporary time changes.
 
-	//if (reg_ah != 0x0b && reg_ah != 0x02) printf("DOS_21Handler: %04x\n",reg_ax);
 	switch (reg_ah) {
 	case 0x00:		/* Terminate Program */
 		DOS_Terminate(mem_readw(SegPhys(ss)+reg_sp+2),false,0);

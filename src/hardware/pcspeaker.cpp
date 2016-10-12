@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -192,7 +192,7 @@ void PCSPEAKER_SetCounter(Bitu cntr,Bitu mode) {
 		spkr.pit_max=(1000.0f/PIT_TICK_RATE)*cntr;
 		break;
 	case 3:		/* Square wave generator */
-		if (cntr<spkr.min_tr) {
+		if (cntr==0 || cntr<spkr.min_tr) {
 			/* skip frequencies that can't be represented */
 			spkr.pit_last=0;
 			spkr.pit_mode=0;
@@ -332,7 +332,8 @@ public:
 		spkr.last_ticks=0;
 		spkr.last_index=0;
 		spkr.rate=section->Get_int("pcrate");
-		spkr.pit_max=(1000.0f/PIT_TICK_RATE)*65535;
+		spkr.pit_mode=3;
+		spkr.pit_max=(1000.0f/PIT_TICK_RATE)*1320;
 		spkr.pit_half=spkr.pit_max/2;
 		spkr.pit_new_max=spkr.pit_max;
 		spkr.pit_new_half=spkr.pit_half;

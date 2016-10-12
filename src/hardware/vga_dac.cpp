@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -96,6 +96,7 @@ static void write_p3c8(Bitu port,Bitu val,Bitu iolen) {
 	vga.dac.write_index=val;
 	vga.dac.pel_index=0;
 	vga.dac.state=DAC_WRITE;
+	vga.dac.read_index= val - 1;
 }
 
 static Bitu read_p3c8(Bitu port, Bitu iolen){

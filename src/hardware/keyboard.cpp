@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -339,7 +339,10 @@ void KEYBOARD_AddKey(KBD_KEYS keytype,bool pressed) {
 		KEYBOARD_AddBuffer(69|(pressed?0:0x80));
 		return;
 	case KBD_printscreen:
-		/* Not handled yet. But usuable in mapper for special events */
+		KEYBOARD_AddBuffer(0xe0);
+		KEYBOARD_AddBuffer(42|(pressed?0:0x80));
+		KEYBOARD_AddBuffer(0xe0);
+		KEYBOARD_AddBuffer(55|(pressed?0:0x80));
 		return;
 	default:
 		E_Exit("Unsupported key press");

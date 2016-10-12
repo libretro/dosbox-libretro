@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,9 +22,6 @@
 #include <stddef.h>
 #include "dosbox.h"
 #include "cpu.h"
-#ifndef __LIBRETRO__ // memory.h: Not on wii, not needed anyway?
-#include "memory.h"
-#endif
 #include "debug.h"
 #include "mapper.h"
 #include "setup.h"
@@ -1568,7 +1565,7 @@ void CPU_SET_CRX(Bitu cr,Bitu value) {
 					GFX_SetTitle(CPU_CyclePercUsed,-1,false);
 					if(!printed_cycles_auto_info) {
 						printed_cycles_auto_info = true;
-						LOG_MSG("DOSBox switched to max cycles, because of the setting: cycles=auto. If the game runs too fast try a fixed cycles amount in DOSBox's options.");
+						LOG_MSG("DOSBox has switched to max cycles, because of the setting: cycles=auto.\nIf the game runs too fast, try a fixed cycles amount in DOSBox's options.");
 					}
 				} else {
 					GFX_SetTitle(-1,-1,false);
@@ -2027,15 +2024,15 @@ bool CPU_CPUID(void) {
 			reg_ecx=0;			/* No features */
 			reg_edx=0x00000001;	/* FPU */
 		} else if (CPU_ArchitectureType==CPU_ARCHTYPE_PENTIUMSLOW) {
-         reg_eax=0x513;		/* intel pentium */
-         reg_ebx=0;			/* Not Supported */
-         reg_ecx=0;			/* No features */
-         reg_edx=0x00000011;	/* FPU+TimeStamp/RDTSC */
+			reg_eax=0x513;		/* intel pentium */
+			reg_ebx=0;			/* Not Supported */
+			reg_ecx=0;			/* No features */
+			reg_edx=0x00000011;	/* FPU+TimeStamp/RDTSC */
       } else if (CPU_ArchitectureType==CPU_ARCHTYPE_P55CSLOW) {
-         reg_eax=0x543;		/* intel pentium mmx (P55C) */
-         reg_ebx=0;			/* Not Supported */
-         reg_ecx=0;			/* No features */
-         reg_edx=0x00800011;	/* FPU+TimeStamp/RDTSC+MMX */
+			reg_eax=0x543;		/* intel pentium mmx (P55C) */
+			reg_ebx=0;			/* Not Supported */
+			reg_ecx=0;			/* No features */
+			reg_edx=0x00800011;	/* FPU+TimeStamp/RDTSC+MMX */
       } else {
 			return false;
 		}
@@ -2395,11 +2392,11 @@ public:
 			}
 		} else if (cputype == "pentium_slow") {
 			CPU_ArchitectureType = CPU_ARCHTYPE_PENTIUMSLOW;
-      } else if (cputype == "pentium") {
-         CPU_ArchitectureType = CPU_ARCHTYPE_PENTIUMSLOW;
-      } else if (cputype == "pentium_mmx") {
-         CPU_ArchitectureType = CPU_ARCHTYPE_P55CSLOW;
-      }
+		} else if (cputype == "pentium") {
+			CPU_ArchitectureType = CPU_ARCHTYPE_PENTIUMSLOW;
+		} else if (cputype == "pentium_mmx") {
+			CPU_ArchitectureType = CPU_ARCHTYPE_P55CSLOW;
+		}
 
 		if (CPU_ArchitectureType>=CPU_ARCHTYPE_486NEWSLOW) CPU_extflags_toggle=(FLAG_ID|FLAG_AC);
 		else if (CPU_ArchitectureType>=CPU_ARCHTYPE_486OLDSLOW) CPU_extflags_toggle=(FLAG_AC);
