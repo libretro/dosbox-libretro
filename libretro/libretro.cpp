@@ -45,6 +45,8 @@
 #define PATH_MAX_LENGTH 4096
 #endif
 
+#define CORE_VERSION "0.74"
+
 /*bool enable_core_options = false;*/
 
 
@@ -618,9 +620,9 @@ void retro_get_system_info(struct retro_system_info *info)
 {
    info->library_name = "DOSBox";
 #ifdef GIT_VERSION
-   info->library_version = GIT_VERSION;
+   info->library_version = CORE_VERSION GIT_VERSION;
 #else
-   info->library_version = "GIT";
+   info->library_version = CORE_VERSION;
 #endif
    info->valid_extensions = "exe|com|bat|conf";
    info->need_fullpath = true;
