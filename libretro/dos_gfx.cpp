@@ -10,25 +10,17 @@ Bit8u RDOSGFXbuffer[1024*768*4];
 Bitu RDOSGFXwidth, RDOSGFXheight, RDOSGFXpitch;
 unsigned RDOSGFXcolorMode = RETRO_PIXEL_FORMAT_0RGB1555;
 void* RDOSGFXhaveFrame;
-static Bitu (*getRGB)(Bit8u red, Bit8u green, Bit8u blue);
 
-// Color Getters
-template<int R, int G, int B, int RLOSS, int GLOSS, int BLOSS>
-static Bitu getRGB_t(Bit8u red, Bit8u green, Bit8u blue)
-{
-    return ((red >> RLOSS) << R) | ((green >> GLOSS) << G) | ((blue >> BLOSS) << B);
-}
 
-// GFX
+
 Bitu GFX_GetBestMode(Bitu flags)
 {
-   getRGB = &getRGB_t<16, 8, 0, 0, 0, 0>;
    return GFX_CAN_32 | GFX_RGBONLY;
 }
 
 Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue)
 {
-    return getRGB(red, green, blue);
+   return (red << 16) | (green << 8) | (blue << 0);
 }
 
 Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,GFX_CallBack_t cb)
