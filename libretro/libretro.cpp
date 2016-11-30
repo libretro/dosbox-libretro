@@ -631,9 +631,8 @@ void retro_get_system_info(struct retro_system_info *info)
 
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
-   // TODO
-   info->geometry.base_width = RDOSGFXwidth == 0 ? 320 : RDOSGFXwidth;
-   info->geometry.base_height = RDOSGFXheight == 0 ? 200 : RDOSGFXheight;
+   info->geometry.base_width = 320;//vga default width
+   info->geometry.base_height = 200;//vga default height
    info->geometry.max_width = 1024;
    info->geometry.max_height = 768;
    info->geometry.aspect_ratio = (float)4/3;
@@ -737,7 +736,7 @@ char slash;
 
 bool retro_load_game_special(unsigned game_type, const struct retro_game_info *info, size_t num_info)
 {
-   if(2 == num_info)
+   if(num_info == 2)
    {
       configPath = normalizePath(info[1].path);
       return retro_load_game(&info[0]);
@@ -756,6 +755,8 @@ void retro_run (void)
          currentWidth, currentHeight, RDOSGFXwidth, RDOSGFXheight);
       struct retro_system_av_info new_av_info;
       retro_get_system_av_info(&new_av_info);
+      new_av_info.geometry.base_width = RDOSGFXwidth;
+      new_av_info.geometry.base_height = RDOSGFXheight;
       environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &new_av_info);
       currentWidth = RDOSGFXwidth;
       currentHeight = RDOSGFXheight;
