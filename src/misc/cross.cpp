@@ -128,7 +128,7 @@ dir_information* open_directory(const char* dirname)
 
 	safe_strncpy(dir.base_path,dirname,CROSS_LEN);
 
-	return dir.dir ? &dir : NULL;
+	return dir.dir && dir.dir->directory ? &dir : NULL;
 }
 
 bool read_directory_next(dir_information* dirp, char* entry_name, char* entry_sname, bool& is_directory)
