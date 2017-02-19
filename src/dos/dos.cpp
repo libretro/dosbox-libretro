@@ -1369,6 +1369,11 @@ static Bitu DOS_21Handler(void) {
 						CALLBACK_SCF(true);
 						break;
 					}
+					if (!Devices[handle]) {
+						reg_ax=dos.errorcode;
+						CALLBACK_SCF(true);
+						break;
+					}
 					Files[handle]=new DOS_Device(*Devices[handle]);
 					Files[handle]->AddRef();
 					psp.SetFileHandle(entry,handle);
