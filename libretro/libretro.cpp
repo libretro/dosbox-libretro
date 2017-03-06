@@ -47,8 +47,6 @@
 
 #define CORE_VERSION "0.74"
 
-/*bool enable_core_options = false;*/
-
 
 int cycles_0 = 0;
 int cycles_1 = 1;
@@ -61,7 +59,7 @@ extern Bit32s CPU_CycleLimit;
 extern bool CPU_CycleAutoAdjust;
 extern bool CPU_SkipCycleAutoAdjust;
 
-MachineType machine=MCH_VGA;
+MachineType machine = MCH_VGA;
 SVGACards svgaCard = SVGA_None;
 
 int current_port;
@@ -273,9 +271,6 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 
 void check_variables()
 {
-
-   /*if(!enable_core_options)
-     return;*/
 
    struct retro_variable var = {0};
 
@@ -540,17 +535,6 @@ static void retro_start_emulator(void)
    control=&myconf;
    bool ret;
 
-   /*if( access( configPath.c_str(), F_OK ) != -1 )
-   {
-      enable_core_options = false;
-      log_cb(RETRO_LOG_INFO, "Configuration found at %s, ignoring core options\n", configPath.c_str());
-   }
-   else
-   {
-      enable_core_options = true;
-      log_cb(RETRO_LOG_INFO, "No configuration found, using core options\n");
-   }*/
-
    check_variables();
    /* Init the configuration system and add default values */
    DOSBOX_Init();
@@ -565,7 +549,6 @@ static void retro_start_emulator(void)
    /* Init the keyMapper */
    //MAPPER_Init();
 
-   /*if (enable_core_options)*/
    check_variables();
 
    /* Init done, go back to the main thread */
@@ -788,8 +771,6 @@ void retro_run (void)
    {
       RETROLOG("retro_run called when there is no emulator thread.");
    }
-
-   /*enable_core_options = true;*/
 
 }
 

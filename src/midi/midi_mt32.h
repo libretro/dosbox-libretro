@@ -2,6 +2,9 @@
 #include "mixer.h"
 #include "control.h"
 
+//fix for functions that are not the same in all versions of libc
+#include "nonlibc.h"
+
 //get system dir
 #include "retrodos.h"
 
@@ -176,7 +179,7 @@ void MidiHandler_mt32::MT32ReportHandler::printDebug(const char *fmt, va_list li
 	if (midiHandler_mt32.noise) {
 		char s[1024];
 		strcpy(s, "MT32: ");
-		vsnprintf(s + 6, 1017, fmt, list);
+		portable_vsnprintf(s + 6, 1017, fmt, list);
 		//LOG_MSG(s);
 	}
 }

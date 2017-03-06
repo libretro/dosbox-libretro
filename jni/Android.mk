@@ -63,10 +63,6 @@ endif
 
 include $(CORE_DIR)/Makefile.common
 
-#fix defective vsnprintf
-INCFLAGS += -I$(CORE_DIR)/libretro/androidpatch
-SOURCES_CXX += $(CORE_DIR)/libretro/androidpatch/snprintf.cpp
-
 LOCAL_SRC_FILES := $(SOURCES_C) $(SOURCES_CXX) $(SOURCES_ASM)
 LOCAL_CFLAGS += $(APP_OPTIM) $(COMMONFLAGS) -D__LIBRETRO__ -DFRONTEND_SUPPORTS_RGB565 $(INCFLAGS) -DGIT_VERSION=\"$(GIT_VERSION)\" -DC_HAVE_MPROTECT="1"
 LOCAL_CPP_FEATURES += rtti exceptions

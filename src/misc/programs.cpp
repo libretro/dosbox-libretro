@@ -34,6 +34,9 @@
 #include "control.h"
 #include "shell.h"
 
+//fix for functions that are not the same in all versions of libc
+#include "nonlibc.h"
+
 Bitu call_program;
 
 /* This registers a file on the virtual drive and creates the correct structure for it*/
@@ -136,7 +139,7 @@ void Program::WriteOut(const char * format,...) {
 	va_list msg;
 	
 	va_start(msg,format);
-	vsnprintf(buf,2047,format,msg);
+	portable_vsnprintf(buf,2047,format,msg);
 	va_end(msg);
 
 	Bit16u size = (Bit16u)strlen(buf);
