@@ -129,7 +129,7 @@ void Descriptor:: Save(PhysPt address) {
 	Bit32u* data = (Bit32u*)&saved;
 	mem_writed(address,*data);
 	mem_writed(address+4,*(data+1));
-	cpu.mpl=03;
+	cpu.mpl=3;
 }
 
 
@@ -1606,7 +1606,7 @@ bool CPU_WRITE_CRX(Bitu cr,Bitu value) {
 	/* Check if privileged to access control registers */
 	if (cpu.pmode && (cpu.cpl>0)) return CPU_PrepareException(EXCEPTION_GP,0);
 	if ((cr==1) || (cr>4)) return CPU_PrepareException(EXCEPTION_UD,0);
-	if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) {
+	if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) {
 		if (cr==4) return CPU_PrepareException(EXCEPTION_UD,0);
 	}
 	CPU_SET_CRX(cr,value);
@@ -1616,8 +1616,8 @@ bool CPU_WRITE_CRX(Bitu cr,Bitu value) {
 Bitu CPU_GET_CRX(Bitu cr) {
 	switch (cr) {
 	case 0:
-		if (CPU_ArchitectureType>=CPU_ARCHTYPE_PENTIUMSLOW) return cpu.cr0;
-		else if (CPU_ArchitectureType>=CPU_ARCHTYPE_486OLDSLOW) return (cpu.cr0 & 0xe005003f);
+		if (CPU_ArchitectureType>=CPU_ARCHTYPE_PENTIUM) return cpu.cr0;
+		else if (CPU_ArchitectureType>=CPU_ARCHTYPE_486OLD) return (cpu.cr0 & 0xe005003f);
 		else return (cpu.cr0 | 0x7ffffff0);
 	case 2:
 		return paging.cr2;
@@ -1655,7 +1655,7 @@ bool CPU_WRITE_DRX(Bitu dr,Bitu value) {
 		break;
 	case 5:
 	case 7:
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMSLOW) {
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUM) {
 			cpu.drx[7]=(value|0x400) & 0xffff2fff;
 		} else {
 			cpu.drx[7]=(value|0x400);
@@ -2008,7 +2008,7 @@ bool CPU_PopSeg(SegNames seg,bool use32) {
 }
 
 bool CPU_CPUID(void) {
-	if (CPU_ArchitectureType<CPU_ARCHTYPE_486NEWSLOW) return false;
+	if (CPU_ArchitectureType<CPU_ARCHTYPE_486NEW) return false;
 	switch (reg_eax) {
 	case 0:	/* Vendor ID String and maximum level? */
 		reg_eax=1;  /* Maximum level */ 
@@ -2017,23 +2017,27 @@ bool CPU_CPUID(void) {
 		reg_ecx='n' | ('t' << 8) | ('e' << 16) | ('l'<< 24); 
 		break;
 	case 1:	/* get processor type/family/model/stepping and feature flags */
-		if ((CPU_ArchitectureType==CPU_ARCHTYPE_486NEWSLOW) ||
+		if ((CPU_ArchitectureType==CPU_ARCHTYPE_486NEW) ||
 			(CPU_ArchitectureType==CPU_ARCHTYPE_MIXED)) {
 			reg_eax=0x402;		/* intel 486dx */
 			reg_ebx=0;			/* Not Supported */
 			reg_ecx=0;			/* No features */
 			reg_edx=0x00000001;	/* FPU */
-		} else if (CPU_ArchitectureType==CPU_ARCHTYPE_PENTIUMSLOW) {
+		} else if (CPU_ArchitectureType==CPU_ARCHTYPE_PENTIUM) {
 			reg_eax=0x513;		/* intel pentium */
 			reg_ebx=0;			/* Not Supported */
 			reg_ecx=0;			/* No features */
 			reg_edx=0x00000011;	/* FPU+TimeStamp/RDTSC */
-      } else if (CPU_ArchitectureType==CPU_ARCHTYPE_P55CSLOW) {
+			reg_edx |= 0x20; /* ModelSpecific/MSR */
+            reg_edx |= 0x100; /* CMPXCHG8B */
+      } else if (CPU_ArchitectureType==CPU_ARCHTYPE_P55C) {
 			reg_eax=0x543;		/* intel pentium mmx (P55C) */
 			reg_ebx=0;			/* Not Supported */
 			reg_ecx=0;			/* No features */
-			reg_edx=0x00800011;	/* FPU+TimeStamp/RDTSC+MMX */
-      } else {
+			reg_edx=0x00800011;	/* FPU+TimeStamp/RDTSC+MMX+ModelSpecific/MSR */
+            reg_edx |= 0x20; /* ModelSpecific/MSR */
+			reg_edx |= 0x100; /* CMPXCHG8B */
+		} else {
 			return false;
 		}
 		break;
@@ -2215,7 +2219,7 @@ public:
 			cpu.drx[i]=0;
 			cpu.trx[i]=0;
 		}
-		if (CPU_ArchitectureType==CPU_ARCHTYPE_PENTIUMSLOW) {
+		if (CPU_ArchitectureType==CPU_ARCHTYPE_PENTIUM) {
 			cpu.drx[6]=0xffff0ff0;
 		} else {
 			cpu.drx[6]=0xffff1ff0;
@@ -2376,10 +2380,12 @@ public:
 			}
 		} else if (cputype == "386_slow") {
 			CPU_ArchitectureType = CPU_ARCHTYPE_386SLOW;
+      } else if (cputype == "486") {
+         CPU_ArchitectureType = CPU_ARCHTYPE_486NEW;
 		} else if (cputype == "486_slow") {
-			CPU_ArchitectureType = CPU_ARCHTYPE_486NEWSLOW;
+			CPU_ArchitectureType = CPU_ARCHTYPE_486NEW;
 		} else if (cputype == "486_prefetch") {
-			CPU_ArchitectureType = CPU_ARCHTYPE_486NEWSLOW;
+			CPU_ArchitectureType = CPU_ARCHTYPE_486NEW;
 			if (core == "normal") {
 				cpudecoder=&CPU_Core_Prefetch_Run;
 				CPU_PrefetchQueueSize = 32;
@@ -2391,15 +2397,15 @@ public:
 				E_Exit("prefetch queue emulation requires the normal core setting.");
 			}
 		} else if (cputype == "pentium_slow") {
-			CPU_ArchitectureType = CPU_ARCHTYPE_PENTIUMSLOW;
+			CPU_ArchitectureType = CPU_ARCHTYPE_PENTIUM;
 		} else if (cputype == "pentium") {
-			CPU_ArchitectureType = CPU_ARCHTYPE_PENTIUMSLOW;
+			CPU_ArchitectureType = CPU_ARCHTYPE_PENTIUM;
 		} else if (cputype == "pentium_mmx") {
-			CPU_ArchitectureType = CPU_ARCHTYPE_P55CSLOW;
+			CPU_ArchitectureType = CPU_ARCHTYPE_P55C;
 		}
 
-		if (CPU_ArchitectureType>=CPU_ARCHTYPE_486NEWSLOW) CPU_extflags_toggle=(FLAG_ID|FLAG_AC);
-		else if (CPU_ArchitectureType>=CPU_ARCHTYPE_486OLDSLOW) CPU_extflags_toggle=(FLAG_AC);
+		if (CPU_ArchitectureType>=CPU_ARCHTYPE_486NEW) CPU_extflags_toggle=(FLAG_ID|FLAG_AC);
+		else if (CPU_ArchitectureType>=CPU_ARCHTYPE_486OLD) CPU_extflags_toggle=(FLAG_AC);
 		else CPU_extflags_toggle=0;
 
 
@@ -2430,3 +2436,35 @@ void CPU_Init(Section* sec) {
 }
 //initialize static members
 bool CPU::inited=false;
+/* NTS: Hopefully by implementing this Windows ME can stop randomly crashing when cputype=pentium */
+void CPU_CMPXCHG8B(PhysPt eaa) {
+    uint32_t hi,lo;
+
+    /* NTS: We assume that, if reading doesn't cause a page fault, writing won't either */
+    hi = (uint32_t)mem_readd(eaa+(PhysPt)4);
+    lo = (uint32_t)mem_readd(eaa);
+
+    LOG_MSG("Experimental CMPXCHG8B implementation executed. EDX:EAX=0x%08lx%08lx ECX:EBX=0x%08lx%08lx EA=0x%08lx MEM64=0x%08lx%08lx",
+        (unsigned long)reg_edx,
+        (unsigned long)reg_eax,
+        (unsigned long)reg_ecx,
+        (unsigned long)reg_ebx,
+        (unsigned long)eaa,
+        (unsigned long)hi,
+        (unsigned long)lo);
+
+    /* Compare EDX:EAX with 64-bit DWORD at memaddr 'eaa'.
+     * if they match, ZF=1 and write ECX:EBX to memaddr 'eaa'.
+     * else, ZF=0 and load memaddr 'eaa' into EDX:EAX */
+    if (reg_edx == hi && reg_eax == lo) {
+        mem_writed(eaa+(PhysPt)4,reg_ecx);
+        mem_writed(eaa,          reg_ebx);
+		SETFLAGBIT(ZF,true);
+    }
+    else {
+		SETFLAGBIT(ZF,false);
+        reg_edx = hi;
+        reg_eax = lo;
+    }
+}
+

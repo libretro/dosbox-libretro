@@ -234,9 +234,9 @@ static INLINE bool InitPage_CheckUseraccess(Bitu u1,Bitu u2) {
 	case CPU_ARCHTYPE_386FAST:
 	default:
 		return ((u1)==0) && ((u2)==0);
-	case CPU_ARCHTYPE_486OLDSLOW:
-	case CPU_ARCHTYPE_486NEWSLOW:
-	case CPU_ARCHTYPE_PENTIUMSLOW:
+	case CPU_ARCHTYPE_486OLD:
+	case CPU_ARCHTYPE_486NEW:
+	case CPU_ARCHTYPE_PENTIUM:
 		return ((u1)==0) || ((u2)==0);
 	}
 }
@@ -339,9 +339,9 @@ public:
 //						priv_check=0;	// default
 						break;
 					case CPU_ARCHTYPE_386SLOW:
-					case CPU_ARCHTYPE_486OLDSLOW:
-					case CPU_ARCHTYPE_486NEWSLOW:
-					case CPU_ARCHTYPE_PENTIUMSLOW:
+					case CPU_ARCHTYPE_486OLD:
+					case CPU_ARCHTYPE_486NEW:
+					case CPU_ARCHTYPE_PENTIUM:
 						priv_check=1;
 						break;
 					}
@@ -357,9 +357,9 @@ public:
 //						priv_check=0;	// default
 						break;
 					case CPU_ARCHTYPE_386SLOW:
-					case CPU_ARCHTYPE_486OLDSLOW:
-					case CPU_ARCHTYPE_486NEWSLOW:
-					case CPU_ARCHTYPE_PENTIUMSLOW:
+					case CPU_ARCHTYPE_486OLD:
+					case CPU_ARCHTYPE_486NEW:
+					case CPU_ARCHTYPE_PENTIUM:
 						priv_check=2;
 						break;
 					}
