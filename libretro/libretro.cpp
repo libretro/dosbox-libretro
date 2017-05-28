@@ -576,10 +576,10 @@ static void retro_wrap_emulator(void)
    retro_start_emulator();
 
    // Exit comes from DOSBox, tell the frontend
-   /*if(DOSBOXwantsExit)
+   if(DOSBOXwantsExit)
    {
       environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
-   }*/
+   }
 
    // Were done here
    co_switch(mainThread);
