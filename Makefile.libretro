@@ -171,6 +171,17 @@ else ifeq ($(platform), wii)
 	COMMONFLAGS += -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DWORDS_BIGENDIAN=1
 	STATIC_LINKING = 1
 
+# Wii U
+else ifeq ($(platform), wiiu)
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
+	CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
+	AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
+	COMMONFLAGS += -DGEKKO -DWIIU -DHW_RVL -mwup -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DMSB_FIRST -DWORDS_BIGENDIAN=1
+	COMMONFLAGS += -U__INT32_TYPE__ -U __UINT32_TYPE__ -D__INT32_TYPE__=int
+	STATIC_LINKING = 1
+	WITH_DYNAREC=
+
 else ifeq ($(platform), emscripten)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).bc
 	STATIC_LINKING = 1
