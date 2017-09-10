@@ -23,11 +23,8 @@ extern retro_log_printf_t log_cb;
 
 JoystickType joystick_type;
 extern bool connected[16];
-extern bool mapper[16];
 extern bool gamepad[16];
 extern bool emulated_mouse;
-
-extern unsigned mapper_keys[12];
 
 static bool keyboardState[KBD_LAST];
 
@@ -252,33 +249,6 @@ void keyboard_event(bool down, unsigned keycode, uint32_t character, uint16_t ke
         }
     }
 }
-
-struct EmulatedKeyPress : public Processable
-{
-    unsigned retroPort;
-    unsigned retroID;
-    unsigned keyID;
-
-    InputItem<EmulatedKeyPress> item;
-
-    EmulatedKeyPress(unsigned rP, unsigned rID, unsigned kID) :
-        retroPort(rP), retroID(rID), keyID(kID){ }
-
-    void process()       { item.process(*this, input_cb(retroPort, RDEV(JOYPAD), 0, retroID)); }
-    void press() const
-    {
-            if (keyID > 0)
-            /* compensate for the "empty key" offset by substracting 1*/
-               KEYBOARD_AddKey(keyMap[keyID - 1].dosboxID, true);
-    }
-    void release() const
-    {
-            if (keyID > 0)
-            /* compensate for the "empty key" offset by substracting 1*/
-               KEYBOARD_AddKey(keyMap[keyID - 1].dosboxID, false);
-    }
-
-};
 
 void MAPPER_Init()
 {
@@ -543,45 +513,7 @@ void MAPPER_Init()
          }
       }
     }
-    else
-    {
-      joytype=JOY_NONE;
-      JOYSTICK_Enable(0, false);
-      JOYSTICK_Enable(1, false);
-      if (mapper[0])
-      {
-         log_cb(RETRO_LOG_INFO, "Port 0 mapper\n");
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_Y),      mapper_keys[0]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_X),      mapper_keys[1]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_B),      mapper_keys[2]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_A),      mapper_keys[3]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_L),      mapper_keys[4]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_R),      mapper_keys[5]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_UP),     mapper_keys[6]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_DOWN),   mapper_keys[7]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_LEFT),   mapper_keys[8]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_RIGHT),  mapper_keys[9]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT), mapper_keys[10]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),  mapper_keys[11]));
-      }
 
-      if (mapper[1])
-      {
-         log_cb(RETRO_LOG_INFO, "Port 1 mapper\n");
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_Y),      mapper_keys[0]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_X),      mapper_keys[1]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_B),      mapper_keys[2]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_A),      mapper_keys[3]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_L),      mapper_keys[4]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_R),      mapper_keys[5]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_UP),     mapper_keys[6]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_DOWN),   mapper_keys[7]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_LEFT),   mapper_keys[8]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_RIGHT),  mapper_keys[9]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_SELECT), mapper_keys[10]));
-        inputList.push_back(new EmulatedKeyPress(0, RDID(JOYPAD_START),  mapper_keys[11]));
-      }
-    }
     if (emulated_mouse)
     {
        for (j=0;  desc_emulated_mouse[j].port == 0; i++)

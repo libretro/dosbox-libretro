@@ -39,7 +39,7 @@
 
 #define RETRO_DEVICE_GAMEPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
 #define RETRO_DEVICE_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
-#define RETRO_DEVICE_MAPPER RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 2)
+#define RETRO_DEVICE_MAPPER RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_KEYBOARD, 2)
 
 #ifndef PATH_MAX_LENGTH
 #define PATH_MAX_LENGTH 4096
@@ -66,58 +66,7 @@ int current_port;
 
 bool gamepad[16]; /* true means gamepad, false means joystick */
 bool connected[16];
-bool mapper[16];
 bool emulated_mouse;
-
-unsigned mapper_keys[12];
-
-
-const char* keyDesc[] = {
-   "null", /*disables input for that button, needs an offset in the input code */
-   "1","2","3","4",
-   "5","6","7","8",
-   "9","0","a","b",
-   "c","d","e","f",
-   "g","h","i","j",
-   "k","l","m","n",
-   "o","p","q","r",
-   "s","t","u","v",
-   "w","x","y","z",
-   "F1","F2", "F3", "F4",
-   "F5","F6", "F7", "F8",
-   "F9","F10","F11","F12",
-   "Escape","Tab","Bkspace",
-   "Enter","Space","Left Alt",
-   "Right Alt","Left Ctrl","Right Ctrl",
-   "Left Shift","Right Shift","Caps Lock",
-   "Scroll Lock","Num Lock"
-   "-","=","\\",
-   "[","]",";",
-   "\"",".",",",
-   "/","SysRq","PrtScn",
-   "Pause","Insert","Home",
-   "Page Up","Page Down","Delete",
-   "End","Left","Up",
-   "Down","Right",
-   "KeyPad 1","KeyPad 2","KeyPad 3",
-   "KeyPad 4","KeyPad 5","KeyPad 6",
-   "KeyPad 7","KeyPad 8","KeyPad 9",
-   "KeyPad 0","KeyPad /","KeyPad *",
-   "KeyPad -","KeyPad +","KeyPad Enter",
-   "KeyPad .", NULL
-};
-
-int keyId(const char *val)
-{
-   int i=0;
-   while (keyDesc[i]!=NULL)
-   {
-      if (!strcmp(keyDesc[i],val))
-         return i;
-      i++;
-   }
-   return 0;
-}
 
 std::string retro_save_directory;
 std::string retro_system_directory;
@@ -146,18 +95,6 @@ static struct retro_variable vars[] = {
    { "dosbox_cpu_cycles_1", "CPU cycles x 10000; 0|1|2|3|4|5|6|7|8|9" },
    { "dosbox_cpu_cycles_2", "CPU cycles x 1000; 1|2|3|4|5|6|7|8|9|0" },
    { "dosbox_cpu_cycles_3", "CPU cycles x 100; 0|1|2|3|4|5|6|7|8|9" },
-   { "dosbox_mapper_y", buf[0] },
-   { "dosbox_mapper_x", buf[1] },
-   { "dosbox_mapper_b", buf[2] },
-   { "dosbox_mapper_a", buf[3] },
-   { "dosbox_mapper_l", buf[4] },
-   { "dosbox_mapper_r", buf[5] },
-   { "dosbox_mapper_up", buf[6] },
-   { "dosbox_mapper_down", buf[7] },
-   { "dosbox_mapper_left", buf[8] },
-   { "dosbox_mapper_right", buf[9] },
-   { "dosbox_mapper_select", buf[10] },
-   { "dosbox_mapper_start", buf[11] },
    { NULL, NULL },
 };
 
@@ -168,41 +105,13 @@ void retro_set_environment(retro_environment_t cb)
    bool allow_no_game = true;
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
 
-   char keys[PATH_MAX_LENGTH];
-   int i=0;
-   while (keyDesc[i]!=NULL)
-   {
-      if (i == 0)
-         strcpy (keys, keyDesc[i]);
-      else
-         strcat (keys, keyDesc[i]);
-      if (keyDesc[i+1]!=NULL)
-         strcat (keys, "|");
-      i++;
-   }
-
-   snprintf(buf[0],sizeof(buf[0]), "RetroPad Y; %s",     keys);
-   snprintf(buf[1],sizeof(buf[1]), "RetroPad X; %s",     keys);
-   snprintf(buf[2],sizeof(buf[2]), "RetroPad B; %s",     keys);
-   snprintf(buf[3],sizeof(buf[3]), "RetroPad A; %s",     keys);
-   snprintf(buf[4],sizeof(buf[4]), "RetroPad L; %s",     keys);
-   snprintf(buf[5],sizeof(buf[5]), "RetroPad R; %s",     keys);
-   snprintf(buf[6],sizeof(buf[6]), "RetroPad Up; %s",    keys);
-   snprintf(buf[7],sizeof(buf[7]), "RetroPad Down; %s",   keys);
-   snprintf(buf[8],sizeof(buf[8]), "RetroPad Left; %s",   keys);
-   snprintf(buf[9],sizeof(buf[9]), "RetroPad Right; %s",  keys);
-   snprintf(buf[10],sizeof(buf[10]),"RetroPad Select; %s", keys);
-   snprintf(buf[11],sizeof(buf[11]),"RetroPad Start; %s",  keys);
-
-
-
    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
    static const struct retro_controller_description pads[] =
    {
       { "Gamepad",  RETRO_DEVICE_GAMEPAD },
       { "Joystick", RETRO_DEVICE_JOYSTICK },
-      { "Mapper",   RETRO_DEVICE_MAPPER },
+      { "Keyboard",   RETRO_DEVICE_MAPPER },
       { 0 },
    };
 
@@ -240,30 +149,24 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 {
    connected[port] = false;
    gamepad[port]   = false;
-   mapper[port]    = false;
+   
    switch (device)
    {
       case RETRO_DEVICE_JOYPAD:
       case RETRO_DEVICE_GAMEPAD:
          connected[port] = true;
          gamepad[port] = true;
-         mapper[port] = false;
-         break;
+            break;
       case RETRO_DEVICE_ANALOG:
       case RETRO_DEVICE_JOYSTICK:
          connected[port] = true;
          gamepad[port] = false;
-         mapper[port] = false;
          break;
       case RETRO_DEVICE_MAPPER:
-         connected[port] = false;
-         gamepad[port] = false;
-         mapper[port] = true;
-         break;
+      case RETRO_DEVICE_KEYBOARD:
       default:
          connected[port] = false;
          gamepad[port] = false;
-         mapper[port] = false;
          break;
    }
    MAPPER_Init();
@@ -371,78 +274,6 @@ void check_variables()
    }
    update_cycles = false;
 
-   var.key = "dosbox_mapper_y";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[0] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_x";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-     mapper_keys[1] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_b";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[2] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_a";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[3] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_l";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[4] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_r";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[5] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_up";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[6] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_down";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[7] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_left";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[8] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_right";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[9] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_select";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[10] = keyId(var.value);
-   }
-   var.key = "dosbox_mapper_start";
-   var.value = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      mapper_keys[11] = keyId(var.value);
-   }
    /* Init the keyMapper */
    MAPPER_Init();
 }
