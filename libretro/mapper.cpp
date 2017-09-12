@@ -243,6 +243,9 @@ void keyboard_event(bool down, unsigned keycode, uint32_t character, uint16_t ke
     {
         if (keyMap[i].retroID == keycode)
         {
+            if (keyboardState[keyMap[i].dosboxID] == down)
+              return;
+
             keyboardState[keyMap[i].dosboxID] = down;
             KEYBOARD_AddKey(keyMap[i].dosboxID, down);
             return;
