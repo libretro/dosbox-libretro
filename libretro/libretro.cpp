@@ -37,7 +37,6 @@
 #include "pic.h"
 #include "joystick.h"
 
-#define RETRO_DEVICE_GAMEPAD RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
 #define RETRO_DEVICE_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
 #define RETRO_DEVICE_MAPPER RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_KEYBOARD, 2)
 
@@ -109,7 +108,7 @@ void retro_set_environment(retro_environment_t cb)
 
    static const struct retro_controller_description pads[] =
    {
-      { "Gamepad",  RETRO_DEVICE_GAMEPAD },
+      { "Gamepad",  RETRO_DEVICE_JOYPAD },
       { "Joystick", RETRO_DEVICE_JOYSTICK },
       { "Keyboard",   RETRO_DEVICE_MAPPER },
       { 0 },
@@ -153,11 +152,9 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
    switch (device)
    {
       case RETRO_DEVICE_JOYPAD:
-      case RETRO_DEVICE_GAMEPAD:
          connected[port] = true;
          gamepad[port] = true;
             break;
-      case RETRO_DEVICE_ANALOG:
       case RETRO_DEVICE_JOYSTICK:
          connected[port] = true;
          gamepad[port] = false;
