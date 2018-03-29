@@ -495,10 +495,6 @@ void retro_deinit(void)
       co_delete(emuThread);
       emuThread = 0;
    }
-   else
-   {
-      RETROLOG("retro_deinit called when there is no emulator thread.");
-   }
 }
 
 bool retro_load_game(const struct retro_game_info *game)
@@ -563,6 +559,12 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 
 void retro_run (void)
 {
+   if (DOSBOXwantsExit && emuThread) {
+      co_delete(emuThread);
+      emuThread = NULL;
+      environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
+      return;
+   }
 
    if (RDOSGFXwidth != currentWidth || RDOSGFXheight != currentHeight)
    {
