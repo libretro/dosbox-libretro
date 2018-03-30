@@ -16,6 +16,14 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+// Modern kernels map memory non-executable by default
+#ifdef __GENODE__
+extern "C" void *malloc_exec(size_t size);
+extern "C" void free_exec(void *ptr);
+#else
+#define malloc_exec malloc
+#define free_exec free
+#endif
 
 class CodePageHandlerDynRec;	// forward
 
@@ -591,7 +599,7 @@ static void cache_init(bool enable) {
 			if (!cache_code_start_ptr)
 				cache_code_start_ptr=(Bit8u*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
 #else
-			cache_code_start_ptr=(Bit8u*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
+			cache_code_start_ptr=(Bit8u*)malloc_exec(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
 #endif
 			if(!cache_code_start_ptr) E_Exit("Allocating dynamic cache failed");
 
@@ -656,7 +664,7 @@ static void cache_close(void) {
 	if (cache_code_start_ptr != NULL) {
 		### care: under windows VirtualFree() has to be used if
 		###       VirtualAlloc was used for memory allocation
-		free(cache_code_start_ptr);
+		free_exec(cache_code_start_ptr);
 		cache_code_start_ptr = NULL;
 	}
 	cache_code = NULL;

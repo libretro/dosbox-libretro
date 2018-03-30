@@ -468,7 +468,11 @@ void retro_init (void)
    if(!emuThread && !mainThread)
    {
       mainThread = co_active();
+#ifdef __GENODE__
+      emuThread = co_create((1<<18)*sizeof(void*), retro_wrap_emulator);
+#else
       emuThread = co_create(65536*sizeof(void*)*16, retro_wrap_emulator);
+#endif
    }
    else
    {
@@ -490,10 +494,6 @@ void retro_deinit(void)
 
       co_delete(emuThread);
       emuThread = 0;
-   }
-   else
-   {
-      RETROLOG("retro_deinit called when there is no emulator thread.");
    }
 }
 
@@ -559,6 +559,12 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 
 void retro_run (void)
 {
+   if (DOSBOXwantsExit && emuThread) {
+      co_delete(emuThread);
+      emuThread = NULL;
+      environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
+      return;
+   }
 
    if (RDOSGFXwidth != currentWidth || RDOSGFXheight != currentHeight)
    {

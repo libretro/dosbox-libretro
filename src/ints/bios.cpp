@@ -33,7 +33,7 @@
 #include "serialport.h"
 #include <time.h>
 
-#if !(defined(GEKKO) || defined(VITA) || defined(_3DS) || defined(ANDROID)) // No ftime support
+#if !(defined(GEKKO) || defined(VITA) || defined(_3DS) || defined(ANDROID) || defined (__GENODE__)) // No ftime support
 #include <sys/timeb.h>
 #endif
 
@@ -493,7 +493,7 @@ static Bitu INT11_Handler(void) {
 
 
 //android removed ftime in ndks >= android-ndk-r10
-#if defined(GEKKO) || defined(VITA) || defined(_3DS) || (defined(ANDROID)) // No ftime support
+#if defined(GEKKO) || defined(VITA) || defined(_3DS) || (defined(ANDROID) || defined(__GENODE__)) // No ftime support
 struct FAKEtimeb
 {
    time_t time;
