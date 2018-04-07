@@ -1647,7 +1647,6 @@ void DOS_SetupPrograms(void) {
 		"\033[33;1mCTRL-F7\033[0m     : Decrease frameskip.\n"
 		"\033[33;1mCTRL-F8\033[0m     : Increase frameskip.\n"
 		"\033[33;1mCTRL-F9\033[0m     : Kill DOSBox.\n"
-		"\033[33;1mCTRL-F10\033[0m    : Capture/Release the mouse.\n"
 		"\033[33;1mCTRL-F11\033[0m    : Slow down emulation (Decrease DOSBox Cycles).\n"
 		"\033[33;1mCTRL-F12\033[0m    : Speed up emulation (Increase DOSBox Cycles).\n"
 		"\033[33;1mALT-F12\033[0m     : Unlock speed (turbo button/fast forward).\n"
