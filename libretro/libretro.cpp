@@ -108,9 +108,9 @@ void retro_set_environment(retro_environment_t cb)
 
    static const struct retro_controller_description pads[] =
    {
-      { "Gamepad",  RETRO_DEVICE_JOYPAD },
-      { "Joystick", RETRO_DEVICE_JOYSTICK },
-      { "Keyboard",   RETRO_DEVICE_MAPPER },
+      { "Gamepad",        RETRO_DEVICE_JOYPAD },
+      { "Joystick",       RETRO_DEVICE_JOYSTICK },
+      { "Keyboard+Mouse", RETRO_DEVICE_MAPPER },
       { 0 },
    };
 
@@ -265,7 +265,6 @@ void check_variables()
    if(update_cycles)
    {
       int cycles = cycles_0 + cycles_1 + cycles_2 + cycles_3;
-      char cycles_val[16];
 
       CPU_CycleMax=cycles;
    }
@@ -356,7 +355,6 @@ static void retro_start_emulator(void)
    CommandLine com_line(loadPath.empty() ? 1 : 2, argv);
    Config myconf(&com_line);
    control=&myconf;
-   bool ret;
 
    check_variables();
    /* Init the configuration system and add default values */
@@ -364,7 +362,7 @@ static void retro_start_emulator(void)
 
    /* Load config */
    if(!configPath.empty())
-      ret = control->ParseConfigFile(configPath.c_str());
+      control->ParseConfigFile(configPath.c_str());
 
    /* Init all the sections */
    control->Init();
@@ -522,7 +520,6 @@ char slash;
             }
             else if(configPath.empty())
             {
-               const char* systemDir = 0;
                configPath = normalizePath(retro_system_directory + slash + "DOSbox" + slash + "dosbox-libretro.conf");
                log_cb(RETRO_LOG_INFO, "Loading default configuration %s\n", configPath.c_str());
             }
