@@ -16,13 +16,9 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-// Modern kernels map memory non-executable by default
-#ifdef __GENODE__
-extern "C" void *malloc_exec(size_t size);
-extern "C" void free_exec(void *ptr);
-#else
-#define malloc_exec malloc
-#define free_exec free
+#ifdef HAVE_MMAP
+// Use anonymous mmap to allocate executable memory pages
+#include <sys/mman.h>
 #endif
 
 class CodePageHandlerDynRec;	// forward
@@ -570,6 +566,8 @@ static void dyn_run_code(void);
 #define PAGESIZE_TEMP 4096
 #endif
 
+enum { CACHE_CODE_SIZE = CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP };
+
 static bool cache_initialized = false;
 
 static void cache_init(bool enable) {
@@ -598,8 +596,12 @@ static void cache_init(bool enable) {
 				MEM_COMMIT,PAGE_EXECUTE_READWRITE);
 			if (!cache_code_start_ptr)
 				cache_code_start_ptr=(Bit8u*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
+#elif defined (HAVE_MMAP)
+			cache_code_start_ptr=(Bit8u*)mmap(
+				0, CACHE_CODE_SIZE,
+				PROT_READ|PROT_WRITE|PROT_EXEC, MAP_ANON, -1, 0);
 #else
-			cache_code_start_ptr=(Bit8u*)malloc_exec(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
+			cache_code_start_ptr=(Bit8u*)malloc(CACHE_CODE_SIZE);
 #endif
 			if(!cache_code_start_ptr) E_Exit("Allocating dynamic cache failed");
 
@@ -664,7 +666,11 @@ static void cache_close(void) {
 	if (cache_code_start_ptr != NULL) {
 		### care: under windows VirtualFree() has to be used if
 		###       VirtualAlloc was used for memory allocation
-		free_exec(cache_code_start_ptr);
+#if defined (HAVE_MMAP)
+		munmap(cache_code_start_ptr, CACHE_CODE_SIZE);
+#else
+		free(cache_code_start_ptr);
+#endif
 		cache_code_start_ptr = NULL;
 	}
 	cache_code = NULL;

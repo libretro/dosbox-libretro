@@ -127,7 +127,7 @@ struct MouseButton : public Processable
 
     MouseButton(unsigned retro, unsigned dosbox) : retroButton(retro), dosboxButton(dosbox) { }
 
-    void process()       { item.process(*this, input_cb(1, RDEV(MOUSE), 0, retroButton)); }
+    void process()       { item.process(*this, input_cb(0, RDEV(MOUSE), 0, retroButton)); }
     void press() const   { Mouse_ButtonPressed(dosboxButton); }
     void release() const { Mouse_ButtonReleased(dosboxButton); }
 };
@@ -261,6 +261,7 @@ void MAPPER_Init()
     inputList.clear();
     inputList.push_back(new MouseButton(RDID(MOUSE_LEFT), 0));
     inputList.push_back(new MouseButton(RDID(MOUSE_RIGHT), 1));
+    inputList.push_back(new MouseButton(RDID(MOUSE_MIDDLE), 2));
 
     if (emulated_mouse)
     {
@@ -539,8 +540,8 @@ void MAPPER_Run(bool pressed)
     poll_cb();
 
     // Mouse movement
-    int16_t mouseX = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_X));
-    int16_t mouseY = input_cb(1, RDEV(MOUSE), 0, RDID(MOUSE_Y));
+    int16_t mouseX = input_cb(0, RDEV(MOUSE), 0, RDID(MOUSE_X));
+    int16_t mouseY = input_cb(0, RDEV(MOUSE), 0, RDID(MOUSE_Y));
 
     const int deadzone = 30;
     const int speed = 8;
