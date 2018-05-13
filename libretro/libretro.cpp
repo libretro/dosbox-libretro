@@ -106,17 +106,25 @@ void retro_set_environment(retro_environment_t cb)
 
    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
-   static const struct retro_controller_description pads[] =
+   static const struct retro_controller_description fullPad[] =
    {
       { "Gamepad",        RETRO_DEVICE_JOYPAD },
       { "Joystick",       RETRO_DEVICE_JOYSTICK },
       { "Keyboard+Mouse", RETRO_DEVICE_MAPPER },
       { 0 },
    };
+   static const struct retro_controller_description onlyKeyboardPad[] =
+   {
+      { "Keyboard+Mouse", RETRO_DEVICE_MAPPER },
+      { 0 },
+   };
 
    static const struct retro_controller_info ports[] = {
-      { pads, 3 },
-      { pads, 3 },
+      { fullPad, 3 },
+      { fullPad, 3 },
+      { onlyKeyboardPad, 1 },
+      { onlyKeyboardPad, 1 },
+      { onlyKeyboardPad, 1 },
       { 0 },
    };
    environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
