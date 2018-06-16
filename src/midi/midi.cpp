@@ -104,7 +104,22 @@ MidiHandler Midi_none;
 
 DB_Midi midi;
 
+struct retro_midi_interface *Midi_retro_interface;
+Bit64u Midi_write_time;
+
 void MIDI_RawOutByte(Bit8u data) {
+	if (Midi_retro_interface && Midi_retro_interface->output_enabled()) {
+		Bit64u current_time = GetTicks() * 1000;
+		Bit64u delta_time;
+		if (Midi_write_time == 0)
+			Midi_write_time = current_time;
+		delta_time = current_time - Midi_write_time;
+		Midi_write_time = current_time;
+		if (delta_time > 0xFFFFFFFF)
+			delta_time = 0;
+		Midi_retro_interface->write(data, (uint32_t)delta_time);
+	}
+
 	if (midi.sysex.start) {
 		Bit32u passed_ticks = GetTicks() - midi.sysex.start;
 		if (passed_ticks < midi.sysex.delay) SDL_Delay(midi.sysex.delay - passed_ticks);
