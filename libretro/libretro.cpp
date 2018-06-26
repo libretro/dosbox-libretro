@@ -107,25 +107,26 @@ void retro_set_environment(retro_environment_t cb)
 
    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
-   static const struct retro_controller_description fullPad[] =
+   static const struct retro_controller_description ports_default[] =
    {
-      { "Gamepad",        RETRO_DEVICE_JOYPAD },
-      { "Joystick",       RETRO_DEVICE_JOYSTICK },
-      { "Keyboard+Mouse", RETRO_DEVICE_MAPPER },
+      { "Gamepad",          RETRO_DEVICE_JOYPAD },
+      { "Joystick",         RETRO_DEVICE_JOYSTICK },
+      { "Keyboard + Mouse", RETRO_DEVICE_MAPPER },
       { 0 },
    };
-   static const struct retro_controller_description onlyKeyboardPad[] =
+   static const struct retro_controller_description ports_extended[] =
    {
-      { "Keyboard+Mouse", RETRO_DEVICE_MAPPER },
+      { "Keyboard + Mouse", RETRO_DEVICE_MAPPER },
       { 0 },
    };
 
    static const struct retro_controller_info ports[] = {
-      { fullPad, 3 },
-      { fullPad, 3 },
-      { onlyKeyboardPad, 1 },
-      { onlyKeyboardPad, 1 },
-      { onlyKeyboardPad, 1 },
+      { ports_default, 3 },
+      { ports_default, 3 },
+      { ports_extended, 1 },
+      { ports_extended, 1 },
+      { ports_extended, 1 },
+      { ports_extended, 1 },
       { 0 },
    };
    environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
@@ -157,7 +158,6 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 {
    connected[port] = false;
    gamepad[port]   = false;
-   
    switch (device)
    {
       case RETRO_DEVICE_JOYPAD:
