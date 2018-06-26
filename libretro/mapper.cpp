@@ -290,7 +290,7 @@ void MAPPER_Init()
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Button 4" },
         { 255, 255, 255, 255, "" },
     };
-    
+
     struct retro_input_descriptor desc_joystick_4button[] = {
         { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Left Analog X" },
         { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Left Analog Y" },
@@ -312,7 +312,7 @@ void MAPPER_Init()
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 2" },
         { 255, 255, 255, 255, "" },
     };
-    
+
     struct retro_input_descriptor desc_joystick_2button_p1[] = {
         { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Left Analog X" },
         { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Left Analog Y" },
@@ -330,7 +330,7 @@ void MAPPER_Init()
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Button 2" },
         { 255, 255, 255, 255, "" },
     };
-    
+
     struct retro_input_descriptor desc_joystick_2button_p2[] = {
         { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Left Analog X" },
         { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Left Analog Y" },
@@ -354,7 +354,7 @@ void MAPPER_Init()
     int i = 0;
     int j = 0;
 
-    for(i=0;i<64;i++)
+    for(i=0; i<64; i++)
         desc[i] = empty;
     i=0;
 
@@ -417,7 +417,6 @@ void MAPPER_Init()
            log_cb(RETRO_LOG_INFO, "Map: %s\n", desc[i].description);
          }
          log_cb(RETRO_LOG_INFO, "Map: %d\n", desc[i++].port);
-         
       }
       else
       {
@@ -439,6 +438,7 @@ void MAPPER_Init()
       {
          log_cb(RETRO_LOG_INFO, "Port 0 connected\n");
          joytype=JOY_4AXIS;
+         /* gravis gamepad was a hack basically needs both joytsticks to be enabled to function */
          JOYSTICK_Enable(0, true);
          JOYSTICK_Enable(1, true);
 
@@ -447,7 +447,7 @@ void MAPPER_Init()
          inputList.push_back(new JoystickButton(0, RDID(JOYPAD_X), 0, 1));
          inputList.push_back(new JoystickButton(0, RDID(JOYPAD_B), 1, 0));
          inputList.push_back(new JoystickButton(0, RDID(JOYPAD_A), 1, 1));
-         
+
          if (gamepad[0])
          {
             log_cb(RETRO_LOG_INFO, "Port 0 gamepad\n");
@@ -480,8 +480,9 @@ void MAPPER_Init()
       if (connected[1])
       {
          log_cb(RETRO_LOG_INFO, "Port 1 connected\n");
-         joytype=JOY_2AXIS;
-         JOYSTICK_Enable(0, false);
+         joytype=JOY_4AXIS_2;
+         /* gravis gamepad was a hack basically needs both joytsticks to be enabled to function */
+         JOYSTICK_Enable(0, true);
          JOYSTICK_Enable(1, true);
 
          /* buttons*/
@@ -501,7 +502,7 @@ void MAPPER_Init()
               log_cb(RETRO_LOG_INFO, "Map: %s\n", desc[i].description);
             }
             log_cb(RETRO_LOG_INFO, "Map: %d\n", desc[i++].port);
-            
+
          }
          else
          {
