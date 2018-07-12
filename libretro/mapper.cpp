@@ -107,8 +107,8 @@ struct EventHandler : public Processable
 
     void process()
     {
-        const uint32_t modsList = keyboardState[eventMOD1] ? 1 : 0 |
-                                  keyboardState[eventMOD2] ? 1 : 0;
+        const uint32_t modsList =   keyboardState[eventMOD1] ? 1 : 0 |
+                                    keyboardState[eventMOD2] ? 1 : 0;
         item.process(*this, (mods == modsList) && keyboardState[key]);
     }
 
@@ -242,7 +242,7 @@ void keyboard_event(bool down, unsigned keycode, uint32_t character, uint16_t ke
         if (keyMap[i].retroID == keycode)
         {
             if (keyboardState[keyMap[i].dosboxID] == down)
-              return;
+                return;
 
             keyboardState[keyMap[i].dosboxID] = down;
             KEYBOARD_AddKey(keyMap[i].dosboxID, down);
@@ -549,21 +549,21 @@ void MAPPER_Run(bool pressed)
 
     if (emulated_mouse)
     {
-       int16_t emulated_mouseX = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X);
-       int16_t emulated_mouseY = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y);
+        int16_t emulated_mouseX = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X);
+        int16_t emulated_mouseY = input_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y);
 
        if (abs(emulated_mouseX) <= deadzone * 32768 / 100)
-          emulated_mouseX = 0;
+            emulated_mouseX = 0;
        if (abs(emulated_mouseY) <= deadzone * 32768 / 100)
-          emulated_mouseY = 0;
+            emulated_mouseY = 0;
 
        emulated_mouseX = emulated_mouseX * speed / 32768;
        emulated_mouseY = emulated_mouseY * speed / 32768;
 
-       Mouse_CursorMoved(emulated_mouseX, emulated_mouseY, 0, 0, true);
+        Mouse_CursorMoved(emulated_mouseX, emulated_mouseY, 0, 0, true);
     }
     if(mouseX || mouseY)
-      Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
+        Mouse_CursorMoved(mouseX, mouseY, 0, 0, true);
     for (std::vector<Processable*>::iterator i = inputList.begin(); i != inputList.end(); i ++)
         (*i)->process();
 }
