@@ -47,7 +47,7 @@
 #define PATH_MAX_LENGTH 4096
 #endif
 
-#define CORE_VERSION "0.74-SVN"
+#define CORE_VERSION "0.74"
 
 #ifndef PATH_SEPARATOR
 #if defined(WINDOWS_PATH_STYLE) || defined(_WIN32)
@@ -203,6 +203,7 @@ void check_variables()
             emulated_mouse = false;
     }
 
+/*
     var.key = "dosbox_cpu_cycles_mode";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -218,17 +219,29 @@ void check_variables()
             update_dosbox_variable("cpu", "cycles", s);
         }
     }
-
+*/
     var.key = "dosbox_cpu_cycles";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
         cycles = atoi(var.value);
+
+        char s[8];
+        snprintf(s, sizeof(s), "%d", cycles * cycles_multiplier);
+        update_dosbox_variable("cpu", "cycles", s);
+    }
 
 
     var.key = "dosbox_cpu_cycles_multiplier";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
         cycles_multiplier = atoi(var.value);
+
+       char s[8];
+        snprintf(s, sizeof(s), "%d", cycles * cycles_multiplier);
+        update_dosbox_variable("cpu", "cycles", s);
+    }
 
 
     var.key = "dosbox_scaler";
@@ -369,7 +382,7 @@ static struct retro_variable vars[] = {
     { "dosbox_emulated_mouse",        "Gamepad emulated mouse; enable|disable" },
     { "dosbox_cpu_core",              "CPU core; auto|dynamic|normal|simple" },
     { "dosbox_cpu_type",              "CPU type; auto|386|386_slow|486|486_slow|pentium_slow|pentium|pentium_mmx|386_prefetch" },
-    { "dosbox_cpu_cycles_mode",       "CPU cycle mode; auto|fixed|max" },
+    //{ "dosbox_cpu_cycles_mode",       "CPU cycle mode; fixed" },//
     { "dosbox_cpu_cycles_multiplier", "CPU cycle multiplier; 1000|10000|100000|100" },
     { "dosbox_cpu_cycles",            "CPU cycles; 1|2|3|4|5|6|7|8|9" },
     { NULL, NULL },
@@ -467,6 +480,8 @@ void retro_get_system_info(struct retro_system_info *info)
     info->library_name = "DOSBox";
 #if defined(GIT_VERSION) && defined(SVN_VERSION)
     info->library_version = CORE_VERSION SVN_VERSION GIT_VERSION;
+elif defined(GIT_VERSION)
+    info->library_version = CORE_VERSION SVN_VERSION
 #else
     info->library_version = CORE_VERSION;
 #endif
