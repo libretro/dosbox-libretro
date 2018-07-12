@@ -238,7 +238,7 @@ void check_variables()
     {
         cycles_multiplier = atoi(var.value);
 
-       char s[8];
+        char s[8];
         snprintf(s, sizeof(s), "%d", cycles * cycles_multiplier);
         update_dosbox_variable("cpu", "cycles", s);
     }
@@ -380,8 +380,8 @@ static struct retro_variable vars[] = {
     { "dosbox_machine_type",          "Emulated machine; svga_s3|svga_et3000|svga_et4000|svga_paradise|vesa_nolfb|vesa_oldvbe|hercules|cga|tandy|pcjr|ega|vgaonly" },
     { "dosbox_scaler",                "Scaler; none|normal2x|normal3x|advmame2x|advmame3x|advinterp2x|advinterp3x|hq2x|hq3x|2xsai|super2xsai|supereagle|tv2x|tv3x|rgb2x|rgb3x|scan2x|scan3x" },
     { "dosbox_emulated_mouse",        "Gamepad emulated mouse; enable|disable" },
-    { "dosbox_cpu_core",              "CPU core; auto|dynamic|normal|simple" },
-    { "dosbox_cpu_type",              "CPU type; auto|386|386_slow|486|486_slow|pentium_slow|pentium|pentium_mmx|386_prefetch" },
+    //{ "dosbox_cpu_core",              "CPU core; auto|dynamic|normal|simple" },
+    //{ "dosbox_cpu_type",              "CPU type; auto|386|386_slow|486|486_slow|pentium_slow|pentium|pentium_mmx|386_prefetch" },
     //{ "dosbox_cpu_cycles_mode",       "CPU cycle mode; fixed" },//
     { "dosbox_cpu_cycles_multiplier", "CPU cycle multiplier; 1000|10000|100000|100" },
     { "dosbox_cpu_cycles",            "CPU cycles; 1|2|3|4|5|6|7|8|9" },
