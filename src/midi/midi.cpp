@@ -104,11 +104,11 @@ MidiHandler Midi_none;
 
 DB_Midi midi;
 
-struct retro_midi_interface *Midi_retro_interface;
+struct retro_midi_interface *retro_midi_interface;
 Bit64u Midi_write_time;
 
 void MIDI_RawOutByte(Bit8u data) {
-	if (Midi_retro_interface && Midi_retro_interface->output_enabled()) {
+	if (retro_midi_interface && retro_midi_interface->output_enabled()) {
 		Bit64u current_time = GetTicks() * 1000;
 		Bit64u delta_time;
 		if (Midi_write_time == 0)
@@ -117,7 +117,7 @@ void MIDI_RawOutByte(Bit8u data) {
 		Midi_write_time = current_time;
 		if (delta_time > 0xFFFFFFFF)
 			delta_time = 0;
-		Midi_retro_interface->write(data, (uint32_t)delta_time);
+		retro_midi_interface->write(data, (uint32_t)delta_time);
 	}
 
 	if (midi.sysex.start) {
