@@ -45,15 +45,39 @@ const char slash = '\\';
 const char slash = '/';
 #endif
 
-void Cross::GetPlatformConfigDir(std::string& in)
-{
-	in += retro_system_directory + slash + "DOSBox";
+void Cross::GetPlatformConfigDir(std::string& in) {
+#ifdef __LIBRETRO__
+	extern std::string retro_save_directory;
+	extern std::string retro_library_name;
+	char slash;
+#ifdef _WIN32
+	slash = '\\';
+#else
+	slash = '/';
+#endif
+	in = retro_save_directory + slash + retro_library_name;
+#elif WIN32
+	W32_ConfDir(in,false);
+	in += "\\DOSBox";
+#elif defined(MACOSX)
+	in = "~/Library/Preferences";
+	ResolveHomedir(in);
+#else
+	in = "~/.dosbox";
+	ResolveHomedir(in);
+#endif
 	in += CROSS_FILESPLIT;
 }
 
-void Cross::GetPlatformConfigName(std::string& in)
-{
-   in = "dosbox-libretro.conf";
+void Cross::GetPlatformConfigName(std::string& in) {
+#ifdef WIN32
+#define DEFAULT_CONFIG_FILE "dosbox-" VERSION ".conf"
+#elif defined(MACOSX)
+#define DEFAULT_CONFIG_FILE "DOSBox " VERSION " Preferences"
+#else /*linux freebsd*/
+#define DEFAULT_CONFIG_FILE "dosbox-" VERSION ".conf"
+#endif
+	in = DEFAULT_CONFIG_FILE;
 }
 
 void Cross::CreatePlatformConfigDir(std::string& in)

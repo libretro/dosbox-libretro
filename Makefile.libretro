@@ -28,21 +28,25 @@ TARGET_NAME := dosbox
 
 # system platform
 system_platform = unix
-ifeq ($(shell uname -a),)
-EXE_EXT = .exe
+ifneq ($(findstring MINGW,$(shell uname -s)),)
+	EXE_EXT = .exe
 	system_platform = win
+	ifneq ($(findstring MINGW32,$(shell uname -s)),)
+		WITH_DYNAREC=x86
+	else ifneq ($(findstring MINGW64,$(shell uname -s)),)
+		WITH_DYNAREC=x86_64
+	endif
 else ifneq ($(findstring Darwin,$(shell uname -a)),)
 	system_platform = osx
-else ifneq ($(findstring MINGW,$(shell uname -a)),)
-	system_platform = win
-endif
 
-ifeq ($(firstword $(filter x86_64,$(UNAME))),x86_64)
-	WITH_DYNAREC=x86_64
-else ifeq ($(firstword $(filter amd64,$(UNAME))),amd64)
-	WITH_DYNAREC=x86_64
-else ifeq ($(firstword $(filter amd64,$(UNAME))),x86)
-	WITH_DYNAREC=x86
+ifeq ($(platform),unix)
+	else ifneq ($(findstring Linux,$(shell uname -s)),)
+		ifneq ($(findstring i686,$(shell uname -a)),)
+			WITH_DYNAREC=x86
+		else ifneq ($(findstring x86_64,$(shell uname -a)),)
+			WITH_DYNAREC=x86_64
+		endif
+	endif
 endif
 
 ifeq ($(platform), unix)
