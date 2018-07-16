@@ -63,9 +63,6 @@ cothread_t emuThread;
 Bit32u MIXER_RETRO_GetFrequency();
 void MIXER_CallBack(void * userdata, uint8_t *stream, int len);
 
-unsigned cycles;
-unsigned cycles_multiplier;
-
 extern Config * control;
 MachineType machine = MCH_VGA;
 SVGACards svgaCard = SVGA_None;
@@ -76,11 +73,14 @@ bool autofire;
 bool gamepad[16]; /* true means gamepad, false means joystick */
 bool connected[16];
 bool emulated_mouse;
+static bool use_core_options;
+static bool adv_core_options;
 
 /* directories */
 std::string retro_save_directory;
 std::string retro_system_directory;
 std::string retro_content_directory;
+std::string retro_library_name = "DOSBox";
 
 /* libretro variables */
 retro_video_refresh_t video_cb;
@@ -133,11 +133,98 @@ bool update_dosbox_variable(std::string section_string, std::string var_string, 
     return ret;
 }
 
+/* libretro core implementation */
+struct retro_variable vars[] = {
+    { "dosbox_use_options",           "Enable core-options; true|false"},
+    { "dosbox_adv_options",           "Enable advanced core-options; false|true"},
+    { "dosbox_machine_type",          "Emulated machine; svga_s3|svga_et3000|svga_et4000|svga_paradise|vesa_nolfb|vesa_oldvbe|hercules|cga|tandy|pcjr|ega|vgaonly" },
+    { "dosbox_scaler",                "Scaler; none|normal2x|normal3x" },
+    { "dosbox_emulated_mouse",        "Gamepad emulated mouse; enable|disable" },
+#if defined(C_DYNREC) || defined(C_DYNAMIC_X86)
+    { "dosbox_cpu_core",              "CPU core; auto|dynamic|normal|simple" },
+#else
+    { "dosbox_cpu_core",              "CPU core; auto|normal|simple" },
+#endif
+    { "dosbox_cpu_type",              "CPU type; auto|386|386_slow|486|486_slow|pentium_slow|386_prefetch" },
+    { "dosbox_cpu_cycles_mode",       "CPU cycle mode; fixed" },
+    { "dosbox_cpu_cycles_multiplier", "CPU cycle multiplier; 1000|10000|100000|100" },
+    { "dosbox_cpu_cycles",            "CPU cycles; 1|2|3|4|5|6|7|8|9" },
+    { "dosbox_sblaster_type",         "Sound Blaster type; sb16|sb1|sb2|sbpro1|sbpro2|gb|none" },
+    { "dosbox_pcspeaker",             "Enable PC-Speaker; false|true" },
+#if defined(C_IPX)
+    { "dosbox_ipx",                   "Enable IPX over UDP; false|true" },
+#endif
+    { NULL, NULL },
+};
+
+struct retro_variable vars_advanced[] = {
+    { "dosbox_use_options",           "Enable core-options; true|false"},
+    { "dosbox_adv_options",           "Enable advanced core-options; false|true"},
+    { "dosbox_machine_type",          "Emulated machine; svga_s3|svga_et3000|svga_et4000|svga_paradise|vesa_nolfb|vesa_oldvbe|hercules|cga|tandy|pcjr|ega|vgaonly" },
+    { "dosbox_scaler",                "Scaler; none|normal2x|normal3x" },
+    { "dosbox_emulated_mouse",        "Gamepad emulated mouse; enable|disable" },
+#if defined(C_DYNREC) || defined(C_DYNAMIC_X86)
+    { "dosbox_cpu_core",              "CPU core; auto|dynamic|normal|simple" },
+#else
+    { "dosbox_cpu_core",              "CPU core; auto|normal|simple" },
+#endif
+    { "dosbox_cpu_type",              "CPU type; auto|386|386_slow|486|486_slow|pentium_slow|386_prefetch" },
+    { "dosbox_cpu_cycles_mode",       "CPU cycle mode; fixed" },
+    { "dosbox_cpu_cycles_multiplier", "CPU cycle multiplier; 1000|10000|100000|100" },
+    { "dosbox_cpu_cycles",            "CPU cycles; 1|2|3|4|5|6|7|8|9" },
+    { "dosbox_sblaster_type",         "Sound Blaster type; sb16|sb1|sb2|sbpro1|sbpro2|gb|none" },
+    { "dosbox_sblaster_base",         "Sound Blaster base address; 220|240|260|280|2a0|2c0|2e0|300" },
+    { "dosbox_sblaster_irq",          "Sound Blaster IRQ; 5|7|9|10|11|12|3" },
+    { "dosbox_sblaster_dma",          "Sound Blaster DMA; 1|3|5|6|7|0" },
+    { "dosbox_sblaster_hdma",         "Sound Blaster High DMA; 7|0|1|3|5|6" },
+    { "dosbox_sblaster_opl_mode",     "Sound Blaster OPL Mode; auto|cms|op12|dualop12|op13|op13gold|none" },
+    { "dosbox_sblaster_opl_emu",      "Sound Blaster OPL Provider; default|compat|fast|mame" },
+    { "dosbox_pcspeaker",             "Enable PC-Speaker; false|true" },
+    { "dosbox_tandy",                 "Enable Tandy Sound System; auto|on|off" },
+    { "dosbox_disney",                "Enable Disney Sound Source; false|true" },
+#if defined(C_IPX)
+    { "dosbox_ipx",                   "Enable IPX over UDP; false|true" },
+#endif
+    { NULL, NULL },
+};
+
+
 void check_variables()
 {
     struct retro_variable var = {0};
+    static unsigned cycles;
+    static unsigned cycles_multiplier;
+    static bool update_cycles = false;
+    char   cycles_mode[12];
 
-    bool update_cycles = false;
+    var.key = "dosbox_use_options";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        if (strcmp(var.value, "true") == 0)
+            use_core_options = true;
+        else
+            use_core_options = false;
+    }
+
+    var.key = "dosbox_adv_options";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        if (strcmp(var.value, "true") == 0)
+        {
+            adv_core_options = true;
+            environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars_advanced);
+        }
+        else
+        {
+            adv_core_options = false;
+            environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
+        }
+    }
+
+    if (!use_core_options)
+        return;
 
     var.key = "dosbox_machine_type";
     var.value = NULL;
@@ -201,55 +288,121 @@ void check_variables()
             emulated_mouse = true;
         else
             emulated_mouse = false;
+        MAPPER_Init();
     }
 
-/*
     var.key = "dosbox_cpu_cycles_mode";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
-        if (strcmp(var.value, "auto") == 0)
-            update_dosbox_variable("cpu", "cycles", "auto");
-        else if (strcmp(var.value, "max") == 0)
-            update_dosbox_variable("cpu", "cycles", "max");
-        else
-        {
-            char s[8];
-            snprintf(s, sizeof(s), "%d", cycles * cycles_multiplier);
-            update_dosbox_variable("cpu", "cycles", s);
-        }
+        snprintf(cycles_mode, sizeof(cycles_mode), "%s", var.value);
+        update_cycles = true;
     }
-*/
+
     var.key = "dosbox_cpu_cycles";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
         cycles = atoi(var.value);
-
-        char s[8];
-        snprintf(s, sizeof(s), "%d", cycles * cycles_multiplier);
-        update_dosbox_variable("cpu", "cycles", s);
+        update_cycles = true;
     }
-
 
     var.key = "dosbox_cpu_cycles_multiplier";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
     {
         cycles_multiplier = atoi(var.value);
-
-        char s[8];
-        snprintf(s, sizeof(s), "%d", cycles * cycles_multiplier);
-        update_dosbox_variable("cpu", "cycles", s);
+        update_cycles = true;
     }
 
+    var.key = "dosbox_cpu_type";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        update_dosbox_variable("cpu", "cputype", var.value);
+
+    var.key = "dosbox_cpu_core";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        update_dosbox_variable("cpu", "core", var.value);
 
     var.key = "dosbox_scaler";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
         update_dosbox_variable("render", "scaler", var.value);
-    /* TO-DO: Only Reinit Mapper on Mouse Core option */
-    MAPPER_Init();
+
+    if (update_cycles)
+    {
+        if (!strcmp(cycles_mode, "fixed"))
+        {
+            char s[8];
+            snprintf(s, sizeof(s), "%d", cycles * cycles_multiplier);
+            update_dosbox_variable("cpu", "cycles", s);
+        }
+        else
+            update_dosbox_variable("cpu", "cycles", cycles_mode);
+
+        update_cycles = false;
+    }
+
+    var.key = "dosbox_sblaster_type";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        update_dosbox_variable("sblaster", "sbtype", var.value);
+
+    var.key = "dosbox_pcspeaker";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        update_dosbox_variable("speaker", "pcspeaker", var.value);
+
+#if defined(IPX)
+    var.key = "dosbox_ipx";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        update_dosbox_variable("ipx", "ipx", var.value);
+#endif
+
+    if (adv_core_options)
+    {
+        var.key = "dosbox_sblaster_base";
+        var.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+            update_dosbox_variable("sblaster", "sbbase", var.value);
+
+        var.key = "dosbox_sblaster_irq";
+        var.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+            update_dosbox_variable("sblaster", "irq", var.value);
+
+        var.key = "dosbox_sblaster_dma";
+        var.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+            update_dosbox_variable("sblaster", "dma", var.value);
+
+        var.key = "dosbox_sblaster_hdma";
+        var.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+            update_dosbox_variable("sblaster", "hdma", var.value);
+
+        var.key = "dosbox_sblaster_opl_mode";
+        var.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+            update_dosbox_variable("sblaster", "oplmode", var.value);
+
+        var.key = "dosbox_sblaster_opl_emu";
+        var.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+            update_dosbox_variable("sblaster", "oplemu", var.value);
+
+        var.key = "dosbox_tandy";
+        var.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+            update_dosbox_variable("speaker", "tandy", var.value);
+
+        var.key = "dosbox_disney";
+        var.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+            update_dosbox_variable("speaker", "disney", var.value);
+    }
 }
 
 static void leave_thread(Bitu)
@@ -375,19 +528,6 @@ std::string normalize_path(const std::string& aPath)
     return result;
 }
 
-/* libretro core implementation */
-static struct retro_variable vars[] = {
-    { "dosbox_machine_type",          "Emulated machine; svga_s3|svga_et3000|svga_et4000|svga_paradise|vesa_nolfb|vesa_oldvbe|hercules|cga|tandy|pcjr|ega|vgaonly" },
-    { "dosbox_scaler",                "Scaler; none|normal2x|normal3x" },
-    { "dosbox_emulated_mouse",        "Gamepad emulated mouse; enable|disable" },
-    //{ "dosbox_cpu_core",              "CPU core; auto|dynamic|normal|simple" },
-    //{ "dosbox_cpu_type",              "CPU type; auto|386|386_slow|486|486_slow|pentium_slow|pentium|pentium_mmx|386_prefetch" },
-    //{ "dosbox_cpu_cycles_mode",       "CPU cycle mode; fixed" },//
-    { "dosbox_cpu_cycles_multiplier", "CPU cycle multiplier; 1000|10000|100000|100" },
-    { "dosbox_cpu_cycles",            "CPU cycles; 1|2|3|4|5|6|7|8|9" },
-    { NULL, NULL },
-};
-
 unsigned retro_api_version(void)
 {
     return RETRO_API_VERSION;
@@ -398,8 +538,8 @@ void retro_set_environment(retro_environment_t cb)
     environ_cb = cb;
 
     bool allow_no_game = true;
-    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
 
+    cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
     static const struct retro_controller_description ports_default[] =
@@ -430,30 +570,25 @@ void retro_set_environment(retro_environment_t cb)
 
     const char *system_dir = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) && system_dir)
-        retro_system_directory=system_dir;
+        retro_system_directory = system_dir;
     if (log_cb)
         log_cb(RETRO_LOG_INFO, "SYSTEM_DIRECTORY: %s\n", retro_system_directory.c_str());
 
     const char *save_dir = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir) && save_dir)
         retro_save_directory = save_dir;
-    else
-        retro_save_directory=retro_system_directory;
     if (log_cb)
         log_cb(RETRO_LOG_INFO, "SAVE_DIRECTORY: %s\n", retro_save_directory.c_str());
 
     const char *content_dir = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY, &content_dir) && content_dir)
-        retro_content_directory=content_dir;
+        retro_content_directory = content_dir;
     if (log_cb)
         log_cb(RETRO_LOG_INFO, "CONTENT_DIRECTORY: %s\n", retro_content_directory.c_str());
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
 {
-
-    if (port > 0)
-        return;
     connected[port] = false;
     gamepad[port]	= false;
     switch (device)
@@ -477,11 +612,9 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 
 void retro_get_system_info(struct retro_system_info *info)
 {
-    info->library_name = "DOSBox";
-#if defined(GIT_VERSION) && defined(SVN_VERSION)
-    info->library_version = CORE_VERSION SVN_VERSION GIT_VERSION;
-elif defined(GIT_VERSION)
-    info->library_version = CORE_VERSION SVN_VERSION
+    info->library_name = retro_library_name.c_str();
+#if defined(GIT_VERSION)
+    info->library_version = CORE_VERSION GIT_VERSION;
 #else
     info->library_version = CORE_VERSION;
 #endif

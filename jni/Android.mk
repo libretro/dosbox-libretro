@@ -7,19 +7,19 @@ COMMONFLAGS :=
 
 WITH_DYNAREC :=
 ifeq ($(TARGET_ARCH_ABI), armeabi)
-  WITH_DYNAREC := oldarm
+    WITH_DYNAREC := oldarm
 else ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
-  WITH_DYNAREC := arm
+    WITH_DYNAREC := arm
 else ifeq ($(TARGET_ARCH_ABI), arm64-v8a)
-  WITH_DYNAREC := arm64 # doesn't exist
+    WITH_DYNAREC := arm64
 else ifeq ($(TARGET_ARCH_ABI), x86)
-  WITH_DYNAREC := x86
+    WITH_DYNAREC := x86
 else ifeq ($(TARGET_ARCH_ABI), x86_64)
-  WITH_DYNAREC := x86_64
+    WITH_DYNAREC := x86_64
 else ifeq ($(TARGET_ARCH_ABI), mips)
-  WITH_DYNAREC := mips
+    WITH_DYNAREC := mips
 else ifeq ($(TARGET_ARCH_ABI), mips64)
-  WITH_DYNAREC := mips64 # doesn't exist
+    WITH_DYNAREC := mips64
 endif
 
 include $(CORE_DIR)/Makefile.common
@@ -28,7 +28,7 @@ COMMONFLAGS += -D__LIBRETRO__ -DFRONTEND_SUPPORTS_RGB565 $(INCFLAGS) -DC_HAVE_MP
 
 GIT_VERSION := " $(shell git rev-parse --short HEAD || echo unknown)"
 ifneq ($(GIT_VERSION)," unknown")
-  COMMONFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
+    COMMONFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 endif
 
 include $(CLEAR_VARS)
