@@ -172,6 +172,9 @@ struct retro_variable vars_advanced[] = {
     { "dosbox_cpu_cycles_mode",       "CPU cycle mode; fixed" },
     { "dosbox_cpu_cycles_multiplier", "CPU cycle multiplier; 1000|10000|100000|100" },
     { "dosbox_cpu_cycles",            "CPU cycles; 1|2|3|4|5|6|7|8|9" },
+    { "dosbox_cpu_cycles_multiplier_fine",
+                                          "CPU fine cycles multiplier; 100|1|10" },
+    { "dosbox_cpu_cycles_fine",       "CPU fine cycles; 1|2|3|4|5|6|7|9" },
     { "dosbox_sblaster_type",         "Sound Blaster type; sb16|sb1|sb2|sbpro1|sbpro2|gb|none" },
     { "dosbox_sblaster_base",         "Sound Blaster base address; 220|240|260|280|2a0|2c0|2e0|300" },
     { "dosbox_sblaster_irq",          "Sound Blaster IRQ; 5|7|9|10|11|12|3" },
@@ -192,8 +195,8 @@ struct retro_variable vars_advanced[] = {
 void check_variables()
 {
     struct retro_variable var = {0};
-    static unsigned cycles;
-    static unsigned cycles_multiplier;
+    static unsigned cycles, cycles_fine;
+    static unsigned cycles_multiplier, cycles_multiplier_fine;
     static bool update_cycles = false;
     char   cycles_mode[12];
 
@@ -315,6 +318,23 @@ void check_variables()
         update_cycles = true;
     }
 
+    var.key = "dosbox_cpu_cycles_fine";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        cycles_fine = atoi(var.value);
+        update_cycles = true;
+    }
+
+    var.key = "dosbox_cpu_cycles_multiplier_fine";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        cycles_multiplier_fine = atoi(var.value);
+        update_cycles = true;
+    }
+
+
     var.key = "dosbox_cpu_type";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -335,7 +355,7 @@ void check_variables()
         if (!strcmp(cycles_mode, "fixed"))
         {
             char s[8];
-            snprintf(s, sizeof(s), "%d", cycles * cycles_multiplier);
+            snprintf(s, sizeof(s), "%d", cycles * cycles_multiplier + cycles_fine * cycles_multiplier_fine);
             update_dosbox_variable("cpu", "cycles", s);
         }
         else
