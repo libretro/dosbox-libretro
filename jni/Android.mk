@@ -1,5 +1,4 @@
 LOCAL_PATH := $(call my-dir)
-
 CORE_DIR := $(LOCAL_PATH)/..
 
 INCFLAGS    :=
@@ -38,4 +37,5 @@ LOCAL_CFLAGS       := $(COMMONFLAGS)
 LOCAL_CPPFLAGS     := $(COMMONFLAGS)
 LOCAL_LDFLAGS      := -Wl,-version-script=$(CORE_DIR)/libretro/link.T
 LOCAL_CPP_FEATURES := rtti exceptions
+LOCAL_DISABLE_FATAL_LINKER_WARNINGS := true
 include $(BUILD_SHARED_LIBRARY)

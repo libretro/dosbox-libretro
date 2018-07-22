@@ -1,59 +1,60 @@
-DEBUG=0
+DEBUG := 0
 GIT_VERSION := " $(shell git rev-parse --short HEAD)"
 
+UNAME=$(shell uname -s)
+UNAMEM=$(shell uname -m)
 
-UNAME=$(shell uname -a)
-
-ifeq ($(platform),)
 platform = unix
-ifeq ($(shell uname -a),)
-	platform = win
-else ifneq ($(findstring MINGW,$(UNAME)),)
+ifneq ($(findstring MINGW,$(UNAME)),)
 	platform = win
 else ifneq ($(findstring Darwin,$(UNAME)),)
 	platform = osx
 else ifneq ($(findstring win,$(UNAME)),)
 	platform = win
 endif
-endif
-
-prefix := /usr
-libdir := $(prefix)/lib
 
 LIBRETRO_DIR := libretro
-
+TARGET_NAME  := dosbox
 WITH_DYNAREC :=
-DYNAFLAGS :=
-TARGET_NAME := dosbox
 
-# system platform
-system_platform = unix
-ifneq ($(findstring MINGW,$(shell uname -s)),)
-	EXE_EXT = .exe
-	system_platform = win
-	ifneq ($(findstring MINGW32,$(shell uname -s)),)
+# try to guess the dynarec based on the host system, unreliable
+ifeq ($(platform),win)
+	ifneq ($(findstring MINGW32,$(UNAME)),)
 		WITH_DYNAREC=x86
-	else ifneq ($(findstring MINGW64,$(shell uname -s)),)
+	else ifneq ($(findstring MINGW64,$(UNAME)),)
 		WITH_DYNAREC=x86_64
 	endif
-else ifneq ($(findstring Darwin,$(shell uname -a)),)
-	system_platform = osx
-
-ifeq ($(platform),unix)
-	else ifneq ($(findstring Linux,$(shell uname -s)),)
-		ifneq ($(findstring i686,$(shell uname -a)),)
-			WITH_DYNAREC=x86
-		else ifneq ($(findstring x86_64,$(shell uname -a)),)
-			WITH_DYNAREC=x86_64
-		endif
+else ifeq ($(platform),unix)
+	ifneq ($(findstring i686,$(UNAMEM)),)
+		WITH_DYNAREC=x86
+	else ifneq ($(findstring x86_64,$(UNAMEM)),)
+		WITH_DYNAREC=x86_64
+	endif
+else ifeq ($(platform),osx)
+	ifneq ($(findstring i686,$(UNAMEM)),)
+		WITH_DYNAREC=x86
+	else ifneq ($(findstring x86_64,$(UNAMEM)),)
+		WITH_DYNAREC=x86_64
 	endif
 endif
 
+# defines for sbcs
+ifeq ($(target), cpi)
+	COMMONFLAGS += -marm -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard
+	WITH_DYNAREC = arm
+else ifeq ($(target), nintendoc)
+	COMMONFLAGS += -marm -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard
+	WITH_DYNAREC = arm
+endif
+
+# flags
 ifeq ($(platform), unix)
+	COMMONFLAGS += -DC_HAVE_MPROTECT="1"
 	TARGET := $(TARGET_NAME)_libretro.so
 	LDFLAGS += -shared -Wl,--version-script=libretro/link.T
 	fpic = -fPIC
 else ifeq ($(platform), osx)
+	COMMONFLAGS += -DC_HAVE_MPROTECT="1"
 	TARGET := $(TARGET_NAME)_libretro.dylib
 	LDFLAGS += -dynamiclib
 	fpic = -fPIC
@@ -63,74 +64,36 @@ else ifeq ($(platform), osx)
 	OSXVER = `sw_vers -productVersion | cut -d. -f 2`
 	OSX_LT_MAVERICKS = `(( $(OSXVER) <= 9)) && echo "YES"`
 	fpic += -mmacosx-version-min=10.1
-ifndef ($(UNIVERSAL))
-	CFLAGS += $(ARCHFLAGS)
-	CXXFLAGS += $(ARCHFLAGS)
-	LDFLAGS += $(ARCHFLAGS)
-endif
-
-# iOS
+	ifndef ($(UNIVERSAL))
+		CFLAGS += $(ARCHFLAGS)
+		CXXFLAGS += $(ARCHFLAGS)
+		LDFLAGS += $(ARCHFLAGS)
+	endif
 else ifneq (,$(findstring ios,$(platform)))
 	TARGET := $(TARGET_NAME)_libretro_ios.dylib
 	COMMONFLAGS += -DHAVE_POSIX_MEMALIGN=1 -marm
 	fpic = -fPIC
 	LDFLAGS += -dynamiclib
-
 	ifeq ($(IOSSDK),)
 		IOSSDK := $(shell xcodebuild -version -sdk iphoneos Path)
 	endif
-ifeq ($(platform),ios-arm64)
-	CC = cc -arch arm64 -isysroot $(IOSSDK)
-	CXX = c++ -arch arm64 -isysroot $(IOSSDK)
-	# No dynarec for arm64 yet
-	WITH_DYNAREC = 
-else
-	CC = cc -arch armv7 -isysroot $(IOSSDK)
-	CXX = c++ -arch armv7 -isysroot $(IOSSDK)
-	WITH_DYNAREC = arm
-endif
+	ifeq ($(platform),ios-arm64)
+		CC = cc -arch arm64 -isysroot $(IOSSDK)
+		CXX = c++ -arch arm64 -isysroot $(IOSSDK)
+		WITH_DYNAREC = arm64
+	else
+		CC = cc -arch armv7 -isysroot $(IOSSDK)
+		CXX = c++ -arch armv7 -isysroot $(IOSSDK)
+		WITH_DYNAREC = arm
+	endif
 	COMMONFLAGS += -DIOS
-ifeq ($(platform),$(filter $(platform),ios9 ios-arm64))
-	CC += -miphoneos-version-min=8.0
-	COMMONFLAGS += -miphoneos-version-min=8.0
-else
-	CC += -miphoneos-version-min=5.0
-	COMMONFLAGS += -miphoneos-version-min=5.0
-endif
-else ifeq ($(platform), theos_ios)
-DEPLOYMENT_IOSVERSION = 5.0
-TARGET = iphone:latest:$(DEPLOYMENT_IOSVERSION)
-ARCHS = armv7 armv7s
-TARGET_IPHONEOS_DEPLOYMENT_VERSION=$(DEPLOYMENT_IOSVERSION)
-THEOS_BUILD_DIR := objs
-WITH_DYNAREC = arm
-COMMONFLAGS += -DIOS
-COMMONFLAGS += -DHAVE_POSIX_MEMALIGN=1 -marm
-include $(THEOS)/makefiles/common.mk
-
-LIBRARY_NAME = $(TARGET_NAME)_libretro_ios
-
-else ifeq ($(platform), qnx)
-	TARGET := $(TARGET_NAME)_libretro_$(platform).so
-	fpic := -fPIC
-	SHARED := -lcpp -lm -shared -Wl,-version-script=link.T
-	CC = qcc -Vgcc_ntoarmv7le
-	CC_AS = qcc -Vgcc_ntoarmv7le
-	CXX = QCC -Vgcc_ntoarmv7le_cpp
-	AR = QCC -Vgcc_ntoarmv7le
-	PLATFORM_DEFINES := -D__BLACKBERRY_QNX__ -fexceptions -marm -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=softfp
-
-else ifeq ($(platform), android)
-	TARGET := $(TARGET_NAME)_libretro.so
-	COMMONFLAGS += -fpermissive
-	LDFLAGS += -shared -Wl,--version-script=libretro/link.T
-
-	CC = arm-linux-androideabi-gcc
-	CXX = arm-linux-androideabi-g++
-
-	fpic = -fPIC
-
-# PSP
+	ifeq ($(platform),$(filter $(platform),ios9 ios-arm64))
+		CC += -miphoneos-version-min=8.0
+		COMMONFLAGS += -miphoneos-version-min=8.0
+	else
+		CC += -miphoneos-version-min=5.0
+		COMMONFLAGS += -miphoneos-version-min=5.0
+	endif
 else ifeq ($(platform), psp1)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	CC = psp-gcc$(EXE_EXT)
@@ -139,8 +102,6 @@ else ifeq ($(platform), psp1)
 	WITH_DYNAREC = mips
 	COMMONFLAGS += -DPSP -G0
 	STATIC_LINKING = 1
-
-# Vita
 else ifeq ($(platform), vita)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	CC = arm-vita-eabi-gcc$(EXE_EXT)
@@ -152,8 +113,6 @@ else ifeq ($(platform), vita)
 	COMMONFLAGS += -mword-relocations
 	COMMONFLAGS += -fno-optimize-sibling-calls
 	STATIC_LINKING = 1
-
-# CTR
 else ifeq ($(platform), ctr)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	CC = $(DEVKITARM)/bin/arm-none-eabi-gcc$(EXE_EXT)
@@ -168,17 +127,6 @@ else ifeq ($(platform), ctr)
 	COMMONFLAGS += -fomit-frame-pointer -fstrict-aliasing -ffast-math
 	COMMONFLAGS += -DDISABLE_EXCEPTIONS
 	STATIC_LINKING = 1
-	IS_X86 := 0
-	NEED_BPP := 16
-
-# Nintendo Classics (Hakchi)
-else ifeq ($(platform), nintendoc)
-	TARGET := $(TARGET_NAME)_libretro.so
-	LDFLAGS += -shared -Wl,--version-script=libretro/link.T
-	COMMONFLAGS += -marm -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard
-	fpic = -fPIC
-
-# Wii
 else ifeq ($(platform), wii)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
@@ -186,33 +134,31 @@ else ifeq ($(platform), wii)
 	AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
 	COMMONFLAGS += -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DWORDS_BIGENDIAN=1
 	STATIC_LINKING = 1
-
-# Wii U
 else ifeq ($(platform), wiiu)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
 	CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
 	AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
-	COMMONFLAGS += -DGEKKO -DWIIU -DHW_RVL -mwup -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DMSB_FIRST -DWORDS_BIGENDIAN=1
+	COMMONFLAGS += -DGEKKO -DWIIU -DHW_RVL -mwup -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DMSB_FIRST -DWORDS_BIGENDIAN=1 -I./deps/include/
 	COMMONFLAGS += -U__INT32_TYPE__ -U __UINT32_TYPE__ -D__INT32_TYPE__=int
+	WITH_EMBEDDED_SDL = 1
 	STATIC_LINKING = 1
-	WITH_DYNAREC=
-
+	WITH_DYNAREC =
 else ifeq ($(platform), emscripten)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).bc
 	STATIC_LINKING = 1
 	COMMONFLAGS += -DEMSCRIPTEN
-
-else
+	WITH_EMBEDDED_SDL = 1
+else ifeq ($(platform), win)
 	COMMONFLAGS += -mno-ms-bitfields
 	TARGET := $(TARGET_NAME)_libretro.dll
-	LDFLAGS += -shared -static-libgcc -static-libstdc++ -Wl,--version-script=libretro/link.T -lwinmm
+	LDFLAGS += -shared -static-libgcc -static-libstdc++ -Wl,--version-script=libretro/link.T -lwinmm -Wl,-Bstatic `sdl-config --static-libs` -Wl,-Bdynamic
 endif
 
 ifeq ($(DEBUG), 1)
-COMMONFLAGS += -O0 -g
+	COMMONFLAGS += -O0 -g
 else
-COMMONFLAGS += -O3 -DNDEBUG -DGIT_VERSION=\"$(GIT_VERSION)\"
+	COMMONFLAGS += -O3 -DNDEBUG -DGIT_VERSION=\"$(GIT_VERSION)\" -DSVN_VERSION=\"$(SVN_VERSION)\"
 endif
 
 CORE_DIR    := .
@@ -227,29 +173,13 @@ CXXFLAGS += -D__LIBRETRO__ $(fpic) $(INCFLAGS) $(COMMONFLAGS)
 CFLAGS   += -D__LIBRETRO__ $(fpic) $(INCFLAGS) $(COMMONFLAGS)
 LDFLAGS  += -lm $(fpic)
 
-
-ifeq ($(platform), theos_ios)
-COMMON_FLAGS := -DIOS -DARM $(COMMON_DEFINES) $(INCFLAGS) -I$(THEOS_INCLUDE_PATH) -Wno-error
-$(LIBRARY_NAME)_CFLAGS += $(CFLAGS) $(COMMON_FLAGS)
-$(LIBRARY_NAME)_CXXFLAGS += $(CXXFLAGS) $(COMMON_FLAGS)
-${LIBRARY_NAME}_FILES = $(SOURCES_CXX) $(SOURCES_C)
-include $(THEOS_MAKE_PATH)/library.mk
-else
 all: $(TARGET)
 $(TARGET): $(OBJECTS)
+
 ifeq ($(STATIC_LINKING), 1)
 	$(AR) rcs $@ $(OBJECTS)
 else
 	$(CXX) -o $@ $(OBJECTS) $(LDFLAGS)
-endif
-
-ifeq ($(platform),nintendoc)
-	@echo "** BUILDING HAKCHI HMOD PACKAGE **"
-	mkdir -p hakchi/etc/libretro/core/ hakchi/etc/libretro/info/ hakchi/etc/preinit.d/
-	rm -f hakchi/etc/libretro/info/*
-	cp $(TARGET_NAME)_libretro.so hakchi/etc/libretro/core/
-	cd hakchi/etc/libretro/info/; wget https://buildbot.libretro.com/assets/frontend/info/$(TARGET_NAME)_libretro.info
-	cd hakchi/; tar -czvf "CORE_$(TARGET_NAME).hmod" *
 endif
 
 %.o: %.c
@@ -258,15 +188,7 @@ endif
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
-
 clean:
-	rm -f $(OBJECTS) $(TARGET) hakchi/CORE_$(TARGET_NAME).hmod
-
-install:
-	install -D -m 755 $(TARGET) $(DESTDIR)$(libdir)/$(LIBRETRO_DIR)/$(TARGET)
-
-uninstall:
-	rm $(DESTDIR)$(libdir)/$(LIBRETRO_DIR)/$(TARGET)
+	rm -f $(OBJECTS) $(TARGET)
 
 .PHONY: clean install uninstall
-endif
