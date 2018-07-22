@@ -72,8 +72,6 @@ SOURCES_CXX := \
 	$(CORE_DIR)/src/hardware/disney.cpp \
 	$(CORE_DIR)/src/hardware/gus.cpp \
 	$(CORE_DIR)/src/hardware/mpu401.cpp \
-	$(CORE_DIR)/src/hardware/ipx.cpp \
-	$(CORE_DIR)/src/hardware/ipxserver.cpp \
 	$(CORE_DIR)/src/hardware/dbopl.cpp \
 	$(CORE_DIR)/src/ints/mouse.cpp \
 	$(CORE_DIR)/src/ints/xms.cpp \
@@ -135,16 +133,11 @@ SOURCES_CXX := \
 	$(CORE_DIR)/src/midi/munt/TVP.cpp \
 	$(CORE_DIR)/src/midi/munt/sha1/sha1.cpp
 
-
 SOURCES_C := $(LIBRETRO_COMM_DIR)/libco/libco.c
 
 ifneq ($(STATIC_LINKING), 1)
 SOURCES_C += $(LIBRETRO_COMM_DIR)/file/retro_dirent.c \
 				 $(LIBRETRO_COMM_DIR)/file/retro_stat.c
-endif
-
-ifneq (,$(filter $(platform),unix osx))
-COMMONFLAGS += -DC_HAVE_MPROTECT="1"
 endif
 
 ifeq ($(WITH_DYNAREC), arm)
@@ -154,6 +147,7 @@ else ifeq ($(WITH_DYNAREC), arm64)
 else ifeq ($(WITH_DYNAREC), oldarm)
 	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="ARMV4LE"
 else ifeq ($(WITH_DYNAREC), x86_64)
+	# dynarec currently broken in x86_64
 	ifneq ($(platform),win)
 		COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="X86_64"
 	endif
@@ -162,11 +156,5 @@ else ifeq ($(WITH_DYNAREC), x86)
 else ifeq ($(WITH_DYNAREC), ppc)
 	COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="POWERPC"
 else ifeq ($(WITH_DYNAREC), mips)
-	#COMMONFLAGS += -DC_DYNREC="1" -DC_TARGETCPU="MIPSEL"
-endif
-
-
-ifeq ($(WANT_FLUIDSYNTH), 1)
-	COMMONFLAGS += -DC_FLUIDSYNTH
-	LDFLAGS += -lfluidsynth
+	COMMONFLAGS += -DC_DYNREC="0" -DC_TARGETCPU="MIPSEL"
 endif
