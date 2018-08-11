@@ -536,6 +536,7 @@ void PreparePCJRCartRom(void) {
 }
 
 HostPt GetMemBase(void) { return MemBase; }
+Bitu g_memsize = 0;
 
 class MEMORY:public Module_base{
 private:
@@ -560,6 +561,7 @@ public:
 			LOG_MSG("Stick with the default values unless you are absolutely certain.");
 		}
 		MemBase = new Bit8u[memsize*1024*1024];
+		g_memsize = memsize*1024*1024 ;
 		if (!MemBase) E_Exit("Can't allocate main memory of %d MB",memsize);
 		/* Clear the memory, as new doesn't always give zeroed memory
 		 * (Visual C debug mode). We want zeroed memory though. */
