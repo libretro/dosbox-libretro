@@ -40,6 +40,7 @@
 #include "pic.h"
 #include "joystick.h"
 #include "ints/int10.h"
+#include "mem.h"
 
 #define RETRO_DEVICE_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
 
@@ -64,6 +65,7 @@ Bit32u MIXER_RETRO_GetFrequency();
 void MIXER_CallBack(void * userdata, uint8_t *stream, int len);
 
 extern Config * control;
+extern Bitu g_memsize ;
 MachineType machine = MCH_VGA;
 SVGACards svgaCard = SVGA_None;
 
@@ -811,8 +813,18 @@ void retro_reset (void)
 }
 
 /* Stubs */
-void *retro_get_memory_data(unsigned type) { return 0; }
-size_t retro_get_memory_size(unsigned type) { return 0; }
+void *retro_get_memory_data(unsigned type) 
+{ 
+    if ( type == RETRO_MEMORY_SYSTEM_RAM )
+        return MemBase;
+    return 0; 
+}
+size_t retro_get_memory_size(unsigned type) 
+{
+    if ( type == RETRO_MEMORY_SYSTEM_RAM )
+        return g_memsize;
+    return 0; 
+}
 size_t retro_serialize_size (void) { return 0; }
 bool retro_serialize(void *data, size_t size) { return false; }
 bool retro_unserialize(const void * data, size_t size) { return false; }
