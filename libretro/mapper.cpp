@@ -61,7 +61,7 @@ static const struct { unsigned retroID; KBD_KEYS dosboxID; } keyMap[] =
     {RETROK_KP9, KBD_kp9}, {RETROK_KP0, KBD_kp0}, {RETROK_KP_DIVIDE, KBD_kpdivide},
     {RETROK_KP_MULTIPLY, KBD_kpmultiply}, {RETROK_KP_MINUS, KBD_kpminus},
     {RETROK_KP_PLUS, KBD_kpplus}, {RETROK_KP_ENTER, KBD_kpenter}, {RETROK_KP_PERIOD, KBD_kpperiod},
-    {RETROK_BACKQUOTE, KBD_grave}, { 0 }
+    {RETROK_BACKQUOTE, KBD_grave}, {RETROK_OEM_102, KBD_extra_lt_gt}, { 0 }
 };
 
 static const unsigned eventKeyMap[] =
