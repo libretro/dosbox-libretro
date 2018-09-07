@@ -1252,23 +1252,6 @@ struct retro_hw_render_context_negotiation_interface
                                             * so it will be used after SET_HW_RENDER, but before the context_reset callback.
                                             */
 
-#define RETRO_ENVIRONMENT_GET_MIDI_INTERFACE (48 | RETRO_ENVIRONMENT_EXPERIMENTAL)
-
-typedef bool (RETRO_CALLCONV *retro_midi_input_enabled_t)(void);
-typedef bool (RETRO_CALLCONV *retro_midi_output_enabled_t)(void);
-typedef bool (RETRO_CALLCONV *retro_midi_read_t)(uint8_t *byte);
-typedef bool (RETRO_CALLCONV *retro_midi_write_t)(uint8_t byte, uint32_t delta_time);
-typedef bool (RETRO_CALLCONV *retro_midi_flush_t)(void);
-
-struct retro_midi_interface
-{
-   retro_midi_input_enabled_t input_enabled;
-   retro_midi_output_enabled_t output_enabled;
-   retro_midi_read_t read;
-   retro_midi_write_t write;
-   retro_midi_flush_t flush;
-};
-
 /* Serialized state is incomplete in some way. Set if serialization is
  * usable in typical end-user cases but should not be relied upon to
  * implement frame-sensitive frontend features such as netplay or
