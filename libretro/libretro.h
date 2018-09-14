@@ -1253,7 +1253,7 @@ struct retro_hw_render_context_negotiation_interface
    enum retro_hw_render_context_negotiation_interface_type interface_type;
    unsigned interface_version;
 };
-ENENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE (43 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+#define RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE (43 | RETRO_ENVIRONMENT_EXPERIMENTAL)
                                            /* const struct retro_hw_render_context_negotiation_interface * --
                                             * Sets an interface which lets the libretro core negotiate with frontend how a context is created.
                                             * The semantics of this interface depends on which API is used in SET_HW_RENDER earlier.
