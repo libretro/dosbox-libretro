@@ -1210,6 +1210,15 @@ typedef bool (RETRO_CALLCONV *retro_midi_write_t)(uint8_t byte, uint32_t delta_t
  * Returns true if successful, false otherwise. */
 typedef bool (RETRO_CALLCONV *retro_midi_flush_t)(void);
 
+struct retro_midi_interface
+{
+   retro_midi_input_enabled_t input_enabled;
+   retro_midi_output_enabled_t output_enabled;
+   retro_midi_read_t read;
+   retro_midi_write_t write;
+   retro_midi_flush_t flush;
+};
+	
 #define RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE (41 | RETRO_ENVIRONMENT_EXPERIMENTAL)
                                            /* const struct retro_hw_render_interface ** --
                                             * Returns an API specific rendering interface for accessing API specific data.
@@ -1244,7 +1253,7 @@ struct retro_hw_render_context_negotiation_interface
    enum retro_hw_render_context_negotiation_interface_type interface_type;
    unsigned interface_version;
 };
-#define RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE (43 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+ENENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE (43 | RETRO_ENVIRONMENT_EXPERIMENTAL)
                                            /* const struct retro_hw_render_context_negotiation_interface * --
                                             * Sets an interface which lets the libretro core negotiate with frontend how a context is created.
                                             * The semantics of this interface depends on which API is used in SET_HW_RENDER earlier.
