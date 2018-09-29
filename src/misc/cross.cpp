@@ -98,7 +98,7 @@ void Cross::ResolveHomedir(std::string & temp_line)
       if(home)
          temp_line.replace(0,1,std::string(home));
    }
-#if defined HAVE_SYS_TYPES_H && defined HAVE_PWD_H
+#if defined HAVE_SYS_TYPES_H && defined HAVE_PWD_H && !defined(__SWITCH__)
    else
    {
       struct passwd *pass;
