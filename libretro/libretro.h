@@ -1189,6 +1189,14 @@ struct retro_led_interface
                                             * Returns a MIDI interface that can be used for raw data I/O.
                                             */
 
+#define RETRO_ENVIRONMENT_GET_FASTFORWARDING (49 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+                                            /* bool * --
+                                            * Boolean value that indicates whether or not the frontend is in
+                                            * fastforwarding mode.
+                                            */
+
+
+
 /* Retrieves the current state of the MIDI input.
  * Returns true if it's enabled, false otherwise. */
 typedef bool (RETRO_CALLCONV *retro_midi_input_enabled_t)(void);
@@ -1209,6 +1217,15 @@ typedef bool (RETRO_CALLCONV *retro_midi_write_t)(uint8_t byte, uint32_t delta_t
 /* Flushes previously written data.
  * Returns true if successful, false otherwise. */
 typedef bool (RETRO_CALLCONV *retro_midi_flush_t)(void);
+
+struct retro_midi_interface
+{
+   retro_midi_input_enabled_t input_enabled;
+   retro_midi_output_enabled_t output_enabled;
+   retro_midi_read_t read;
+   retro_midi_write_t write;
+   retro_midi_flush_t flush;
+};
 
 #define RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE (41 | RETRO_ENVIRONMENT_EXPERIMENTAL)
                                            /* const struct retro_hw_render_interface ** --
