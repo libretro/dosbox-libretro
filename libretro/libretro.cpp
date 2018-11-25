@@ -500,7 +500,7 @@ void init_threads(void)
     {
         mainThread = co_active();
 #ifdef __GENODE__
-        emuThread = co_create((1<<18)*sizeof(void*), wrap_dosbox);
+        emuThread = co_create((1<<16)*sizeof(void*), wrap_dosbox);
 #else
         emuThread = co_create(65536*sizeof(void*)*16, wrap_dosbox);
 #endif
