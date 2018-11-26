@@ -500,7 +500,7 @@ void init_threads(void)
     {
         mainThread = co_active();
 #ifdef __GENODE__
-        emuThread = co_create((1<<18)*sizeof(void*), wrap_dosbox);
+        emuThread = co_create((1<<16)*sizeof(void*), wrap_dosbox);
 #else
         emuThread = co_create(65536*sizeof(void*)*16, wrap_dosbox);
 #endif
@@ -645,12 +645,15 @@ void retro_get_system_info(struct retro_system_info *info)
     info->block_extract = false;
 }
 
+#define DOS_MAX_WIDTH 1024
+#define DOS_MAX_HEIGHT 768
+
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
     info->geometry.base_width = 320;
     info->geometry.base_height = 200;
-    info->geometry.max_width = 1024;
-    info->geometry.max_height = 768;
+    info->geometry.max_width = DOS_MAX_WIDTH;
+    info->geometry.max_height = DOS_MAX_HEIGHT;
     info->geometry.aspect_ratio = (float)4/3;
     info->timing.fps = 60.0;
     info->timing.sample_rate = (double)MIXER_RETRO_GetFrequency();
@@ -774,6 +777,9 @@ void retro_run (void)
         retro_get_system_av_info(&new_av_info);
         new_av_info.geometry.base_width = RDOSGFXwidth;
         new_av_info.geometry.base_height = RDOSGFXheight;
+        new_av_info.geometry.max_width = DOS_MAX_WIDTH;
+        new_av_info.geometry.max_height = DOS_MAX_HEIGHT;
+        new_av_info.geometry.aspect_ratio = (float)4/3;
         environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &new_av_info);
         currentWidth = RDOSGFXwidth;
         currentHeight = RDOSGFXheight;
