@@ -544,7 +544,7 @@ void MAPPER_Run(bool pressed)
     int16_t mouseX = input_cb(0, RDEV(MOUSE), 0, RDID(MOUSE_X));
     int16_t mouseY = input_cb(0, RDEV(MOUSE), 0, RDID(MOUSE_Y));
 
-    const int deadzone = 30;
+    const int deadzone = 5;
     const int speed = 8;
 
     if (emulated_mouse)
