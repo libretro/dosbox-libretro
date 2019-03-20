@@ -25,6 +25,7 @@ JoystickType joystick_type;
 extern bool connected[16];
 extern bool gamepad[16];
 extern bool emulated_mouse;
+extern unsigned deadzone;
 
 static bool keyboardState[KBD_LAST];
 
@@ -544,7 +545,6 @@ void MAPPER_Run(bool pressed)
     int16_t mouseX = input_cb(0, RDEV(MOUSE), 0, RDID(MOUSE_X));
     int16_t mouseY = input_cb(0, RDEV(MOUSE), 0, RDID(MOUSE_Y));
 
-    const int deadzone = 5;
     const int speed = 8;
 
     if (emulated_mouse)
