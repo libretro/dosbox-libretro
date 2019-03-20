@@ -75,6 +75,8 @@ bool autofire;
 bool gamepad[16]; /* true means gamepad, false means joystick */
 bool connected[16];
 bool emulated_mouse;
+unsigned deadzone;
+
 static bool use_core_options;
 static bool adv_core_options;
 
@@ -142,6 +144,7 @@ struct retro_variable vars[] = {
     { "dosbox_machine_type",          "Emulated machine; svga_s3|svga_et3000|svga_et4000|svga_paradise|vesa_nolfb|vesa_oldvbe|hercules|cga|tandy|pcjr|ega|vgaonly" },
     { "dosbox_scaler",                "Scaler; none|normal2x|normal3x" },
     { "dosbox_emulated_mouse",        "Gamepad emulated mouse; enable|disable" },
+    { "dosbox_emulated_mouse_deadzone", "Gamepad emulated deadzone; 5%|10%|15%|20%|25%|30%|0%" },
 #if defined(C_DYNREC) || defined(C_DYNAMIC_X86)
     { "dosbox_cpu_core",              "CPU core; auto|dynamic|normal|simple" },
 #else
@@ -165,6 +168,7 @@ struct retro_variable vars_advanced[] = {
     { "dosbox_machine_type",          "Emulated machine; svga_s3|svga_et3000|svga_et4000|svga_paradise|vesa_nolfb|vesa_oldvbe|hercules|cga|tandy|pcjr|ega|vgaonly" },
     { "dosbox_scaler",                "Scaler; none|normal2x|normal3x" },
     { "dosbox_emulated_mouse",        "Gamepad emulated mouse; enable|disable" },
+    { "dosbox_emulated_mouse_deadzone", "Gamepad emulated deadzone; 5%|10%|15%|20%|25%|30%|0%" },
 #if defined(C_DYNREC) || defined(C_DYNAMIC_X86)
     { "dosbox_cpu_core",              "CPU core; auto|dynamic|normal|simple" },
 #else
@@ -294,6 +298,17 @@ void check_variables()
         else
             emulated_mouse = false;
         MAPPER_Init();
+    }
+
+    var.key = "dosbox_emulated_mouse_deadzone";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        unsigned prev = deadzone;
+        deadzone = atoi(var.value);
+
+        if (prev != deadzone)
+            MAPPER_Init();
     }
 
     var.key = "dosbox_cpu_cycles_mode";
