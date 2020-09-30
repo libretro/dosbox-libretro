@@ -421,6 +421,57 @@ bool localDrive::RemoveDir(char * dir) {
 	return (temp==0);
 }
 
+ifeq ($(platform), wii)
+int access (const char *file, int type)
+{
+struct stat stbuf;
+gid_t gid;
+uid_t uid;
+
+if (file == NULL || (type & ~(R_OK|W_OK|X_OK|F_OK)) != 0) {
+	errno = EINVAL;
+	return -1;
+}
+if(stat(file, &stbuf) == -1)
+	return -1;
+
+// No getgid() and getuid()? Well, we are God!
+
+// gid = getgid();
+// uid = getuid();
+uid = stbuf.st_uid;
+gid = stbuf.st_gid;
+
+if(uid == stbuf.st_uid) {
+	if( ((type & R_OK) && !(stbuf.st_mode & S_IRUSR) ) ||
+		((type & W_OK) && !(stbuf.st_mode & S_IWUSR) ) ||
+		((type & X_OK) && !(stbuf.st_mode & S_IXUSR) ) ) {
+		errno = EACCES;
+		return -1;
+	}
+}
+else if(gid == stbuf.st_gid) {
+	if( ((type & R_OK) && !(stbuf.st_mode & S_IRGRP) ) ||
+		((type & W_OK) && !(stbuf.st_mode & S_IWGRP) ) ||
+		((type & X_OK) && !(stbuf.st_mode & S_IXGRP) ) ) {
+		errno = EACCES;
+		return -1;
+	}
+}
+else {
+	if( ((type & R_OK) && !(stbuf.st_mode & S_IROTH) ) ||
+		((type & W_OK) && !(stbuf.st_mode & S_IWOTH) ) ||
+		((type & X_OK) && !(stbuf.st_mode & S_IXOTH) ) ) {
+		errno = EACCES;
+		return -1;
+	}
+}
+
+return 0;
+
+}
+#endif
+
 bool localDrive::TestDir(char * dir) {
 	char newdir[CROSS_LEN];
 	strcpy(newdir,basedir);
