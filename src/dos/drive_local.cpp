@@ -421,7 +421,7 @@ bool localDrive::RemoveDir(char * dir) {
 	return (temp==0);
 }
 
-ifeq ($(platform), wii)
+#ifdef WII
 int access (const char *file, int type)
 {
 struct stat stbuf;
