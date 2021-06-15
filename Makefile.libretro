@@ -13,6 +13,9 @@ else ifneq ($(findstring win,$(UNAME)),)
 	platform = win
 endif
 
+prefix := /usr
+libdir := $(prefix)/lib
+
 LIBRETRO_DIR := libretro
 TARGET_NAME  := dosbox
 WITH_DYNAREC :=
@@ -235,5 +238,11 @@ endif
 
 clean:
 	rm -f $(OBJECTS) $(TARGET)
+
+install:
+	install -D -m 755 $(TARGET) $(DESTDIR)$(libdir)/$(LIBRETRO_DIR)/$(TARGET)
+
+uninstall:
+	rm $(DESTDIR)$(libdir)/$(LIBRETRO_DIR)/$(TARGET)
 
 .PHONY: clean install uninstall
