@@ -856,3 +856,19 @@ unsigned retro_get_region (void) { return RETRO_REGION_NTSC; }
 
 bool startup_state_capslock;
 bool startup_state_numlock;
+
+#if defined(__PS3__)
+int gettimeofday(timeval* tv, void* /*tz*/)
+{
+    int64_t time = sys_time_get_system_time();
+
+    tv->tv_sec = time / 1000000;
+    tv->tv_usec = time - (tv->tv_sec * 1000000);  // implicit rounding will take care of this for us
+    return 0;
+}
+int access(const char *fpath, int /*mode*/)
+{
+    struct stat buffer;   
+    return stat(fpath, &buffer); 
+}
+#endif

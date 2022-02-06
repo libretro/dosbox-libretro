@@ -53,7 +53,7 @@
 #  include <unistd.h>
 #endif
 
-#ifdef __CELLOS_LV2__
+#ifdef __PS3__
 #include <cell/cell_fs.h>
 #endif
 
@@ -68,7 +68,7 @@ struct RDIR
 #elif defined(VITA) || defined(PSP)
    SceUID directory;
    SceIoDirent entry;
-#elif defined(__CELLOS_LV2__)
+#elif defined(__PS3__)
    CellFsErrno error;
    int directory;
    CellFsDirent entry;

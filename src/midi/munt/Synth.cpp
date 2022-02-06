@@ -32,6 +32,8 @@
 #include "ROMInfo.h"
 #include "TVA.h"
 
+using namespace std;
+
 namespace MT32Emu {
 
 // MIDI interface data transfer rate in samples. Used to simulate the transfer delay.

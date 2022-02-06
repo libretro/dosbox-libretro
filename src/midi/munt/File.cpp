@@ -22,6 +22,8 @@
 #include "File.h"
 #include "sha1/sha1.h"
 
+using namespace std;
+
 namespace MT32Emu {
 
 AbstractFile::AbstractFile() : sha1DigestCalculated(false) {

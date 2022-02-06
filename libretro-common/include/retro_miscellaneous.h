@@ -26,7 +26,7 @@
 #include <stdint.h>
 #include <math.h>
 
-#if defined(__CELLOS_LV2__) && !defined(__PSL1GHT__)
+#if defined(__PS3__) && !defined(__PSL1GHT__)
 #include <sys/timer.h>
 #elif defined(XENON)
 #include <time/time.h>
@@ -88,7 +88,7 @@
  **/
 static INLINE void retro_sleep(unsigned msec)
 {
-#if defined(__CELLOS_LV2__) && !defined(__PSL1GHT__)
+#if defined(__PS3__) && !defined(__PSL1GHT__)
    sys_timer_usleep(1000 * msec);
 #elif defined(PSP) || defined(VITA)
    sceKernelDelayThread(1000 * msec);
@@ -190,5 +190,10 @@ typedef struct
 #define BIT128_CLEAR(a, bit) ((a).data[(bit) >> 5] &= ~(1 << ((bit) & 31)))
 #define BIT128_GET(a, bit)   ((a).data[(bit) >> 5] &   (1 << ((bit) & 31)))
 #define BIT128_CLEAR_ALL(a)  memset(&(a), 0, sizeof(a));
+
+#ifdef __PS3__
+int gettimeofday(struct timeval* tv, void* /*tz*/);
+int access(const char *fpath, int /*mode*/);
+#endif
 
 #endif

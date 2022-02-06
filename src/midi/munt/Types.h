@@ -18,7 +18,9 @@
 #ifndef MT32EMU_TYPES_H
 #define MT32EMU_TYPES_H
 
+#ifdef __cplusplus
 namespace MT32Emu {
+#endif
 
 typedef unsigned int       Bit32u;
 typedef   signed int       Bit32s;
@@ -27,6 +29,8 @@ typedef   signed short int Bit16s;
 typedef unsigned char      Bit8u;
 typedef   signed char      Bit8s;
 
+#ifdef __cplusplus
 }
+#endif
 
 #endif

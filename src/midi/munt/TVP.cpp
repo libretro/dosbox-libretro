@@ -26,6 +26,8 @@
 #include "Synth.h"
 #include "TVA.h"
 
+using namespace std;
+
 namespace MT32Emu {
 
 // FIXME: Add Explanation
