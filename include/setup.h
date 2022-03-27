@@ -20,6 +20,8 @@
 #ifndef DOSBOX_SETUP_H
 #define DOSBOX_SETUP_H
 
+#include <stdio.h>
+
 #ifdef _MSC_VER
 #pragma warning ( disable : 4786 )
 #pragma warning ( disable : 4290 )

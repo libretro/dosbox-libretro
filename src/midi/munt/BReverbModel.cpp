@@ -22,6 +22,8 @@
 #include "BReverbModel.h"
 #include "Synth.h"
 
+using namespace std;
+
 // Analysing of state of reverb RAM address lines gives exact sizes of the buffers of filters used. This also indicates that
 // the reverb model implemented in the real devices consists of three series allpass filters preceded by a non-feedback comb (or a delay with a LPF)
 // and followed by three parallel comb filters

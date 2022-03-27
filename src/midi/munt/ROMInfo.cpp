@@ -21,6 +21,8 @@
 
 #include "ROMInfo.h"
 
+using namespace std;
+
 namespace MT32Emu {
 
 static const ROMInfo *getKnownROMInfoFromList(Bit32u index) {

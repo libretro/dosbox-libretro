@@ -26,6 +26,8 @@
 #include "Poly.h"
 #include "Synth.h"
 
+using namespace std;
+
 namespace MT32Emu {
 
 static const Bit8u PartialStruct[13] = {

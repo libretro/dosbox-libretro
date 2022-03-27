@@ -32,7 +32,7 @@
 #include "support.h"
 #include "setup.h"
 
-#if !defined(WIN32)
+#if !defined(WIN32) && !defined(__PS3__)
 #include <libgen.h>
 #else
 #include <string.h>
@@ -421,7 +421,7 @@ bool CDROM_Interface_Image::CanReadPVD(TrackFile *file, int sectorSize, bool mod
 			(pvd[8] == 1 && !strncmp((char*)(&pvd[9]), "CDROM", 5) && pvd[14] == 1));
 }
 
-#if defined(WIN32) || (defined(__LIBRETRO__) && (defined(GEKKO) || defined(VITA) || defined(_3DS) || defined(__SWITCH__))) // __LIBRETRO__: No dirname on wii
+#if defined(WIN32) || (defined(__LIBRETRO__) && (defined(GEKKO) || defined(VITA) || defined(_3DS) || defined(__SWITCH__) || defined(__PS3__))) // __LIBRETRO__: No dirname on wii
 static string FAKEdirname(char * file) {
 	char * sep = strrchr(file, '\\');
 	if (sep == NULL)

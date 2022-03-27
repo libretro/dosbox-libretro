@@ -20,6 +20,8 @@
 
 #include <cmath>
 
+using namespace std;
+
 namespace MT32Emu {
 
 // Mathematical constants

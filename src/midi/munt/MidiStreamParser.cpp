@@ -23,6 +23,8 @@
 #include "MidiStreamParser.h"
 #include "Synth.h"
 
+using namespace std;
+
 using namespace MT32Emu;
 
 DefaultMidiStreamParser::DefaultMidiStreamParser(Synth &useSynth, Bit32u initialStreamBufferCapacity) :

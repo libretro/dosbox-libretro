@@ -57,7 +57,7 @@
 #include <kernel/image.h>
 #endif
 
-#if defined(__CELLOS_LV2__)
+#if defined(__PS3__)
 #include <cell/cell_fs.h>
 #endif
 
@@ -65,7 +65,7 @@
 #define FIO_S_ISDIR SCE_S_ISDIR
 #endif
 
-#if (defined(__CELLOS_LV2__) && !defined(__PSL1GHT__)) || defined(__QNX__) || defined(PSP)
+#if (defined(__PS3__) && !defined(__PSL1GHT__)) || defined(__QNX__) || defined(PSP)
 #include <unistd.h> /* stat() is defined here */
 #endif
 
@@ -95,7 +95,7 @@ static bool path_stat(const char *path, enum stat_mode mode, int32_t *size)
    }
    free(tmp);
 
-#elif defined(__CELLOS_LV2__)
+#elif defined(__PS3__)
     CellFsStat buf;
     if (cellFsStat(path, &buf) < 0)
        return false;
@@ -124,7 +124,7 @@ static bool path_stat(const char *path, enum stat_mode mode, int32_t *size)
       case IS_DIRECTORY:
 #if defined(VITA) || defined(PSP)
          return FIO_S_ISDIR(buf.st_mode);
-#elif defined(__CELLOS_LV2__)
+#elif defined(__PS3__)
          return ((buf.st_mode & S_IFMT) == S_IFDIR);
 #elif defined(_WIN32)
          return (file_info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
@@ -132,7 +132,7 @@ static bool path_stat(const char *path, enum stat_mode mode, int32_t *size)
          return S_ISDIR(buf.st_mode);
 #endif
       case IS_CHARACTER_SPECIAL:
-#if defined(VITA) || defined(PSP) || defined(__CELLOS_LV2__) || defined(_WIN32)
+#if defined(VITA) || defined(PSP) || defined(__PS3__) || defined(_WIN32)
          return false;
 #else
          return S_ISCHR(buf.st_mode);

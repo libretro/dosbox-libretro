@@ -22,6 +22,8 @@
 #include "Analog.h"
 #include "Synth.h"
 
+using namespace std;
+
 namespace MT32Emu {
 
 #if MT32EMU_USE_FLOAT_SAMPLES
