@@ -11,7 +11,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#ifndef IOS
+#ifndef __APPLE__
 #include <malloc.h>
 #endif
 
@@ -126,4 +126,3 @@ void co_switch(cothread_t handle)
 #ifdef __cplusplus
 }
 #endif
-
