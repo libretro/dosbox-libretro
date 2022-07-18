@@ -42,6 +42,8 @@ else ifeq ($(platform),osx)
 		WITH_DYNAREC=x86
 	else ifneq ($(findstring x86_64,$(UNAMEM)),)
 		WITH_DYNAREC=x86_64
+	else ifneq ($(findstring arm64,$(UNAMEM)),)
+		WITH_DYNAREC=arm64
 	endif
 endif
 
@@ -62,6 +64,9 @@ ifeq ($(platform), unix)
 	fpic = -fPIC
 else ifeq ($(platform), osx)
 	COMMONFLAGS += -DC_HAVE_MPROTECT="1"
+	ifneq ($(findstring arm64,$(UNAMEM)),)
+		COMMONFLAGS += -DHAVE_POSIX_MEMALIGN=1
+	endif
 	TARGET := $(TARGET_NAME)_libretro.dylib
 	LDFLAGS += -dynamiclib
 	fpic = -fPIC
