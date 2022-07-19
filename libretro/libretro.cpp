@@ -460,6 +460,10 @@ static void start_dosbox(void)
     control = &myconf;
     check_variables();
 
+    /* Change current directory to config directory */
+    if(!configPath.empty())
+        chdir(configPath.substr(0, configPath.find_last_of(PATH_SEPARATOR)).c_str());
+
     /* Init the configuration system and add default values */
     DOSBOX_Init();
 
