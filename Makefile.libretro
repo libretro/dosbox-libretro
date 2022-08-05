@@ -57,11 +57,14 @@ else ifeq ($(target), nintendoc)
 endif
 
 # flags
-ifeq ($(platform), unix)
+ifneq ($(findstring unix,$(platform)),)
 	COMMONFLAGS += -DC_HAVE_MPROTECT="1"
 	TARGET := $(TARGET_NAME)_libretro.so
 	LDFLAGS += -shared -Wl,--version-script=libretro/link.T
 	fpic = -fPIC
+	ifneq ($(findstring armv,$(platform)),)
+		WITH_DYNAREC = arm
+	endif
 else ifeq ($(platform), osx)
 	COMMONFLAGS += -DC_HAVE_MPROTECT="1"
 	ifneq ($(findstring arm64,$(UNAMEM)),)
