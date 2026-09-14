@@ -89,7 +89,8 @@ static void SN76496Update(Bitu length) {
 	}
 	const Bitu MAX_SAMPLES = 2048;
 	if (length > MAX_SAMPLES)
-		return;
+		// DBP: Replaced return with clamping to avoid infinite loop in MixerChannel::Mix // return;
+		length = MAX_SAMPLES;
 	Bit16s buffer[MAX_SAMPLES];
 	Bit16s* outputs = buffer;
 
