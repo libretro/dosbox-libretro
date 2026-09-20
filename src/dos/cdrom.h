@@ -236,7 +236,7 @@ typedef	std::vector<Track>::iterator	track_it;
 	Bit8u	subUnit;
 };
 
-#if defined (WIN32)	/* Win 32 */
+#if defined(WIN32) && !defined(__LIBRETRO__) /* Win 32 */
 
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 
