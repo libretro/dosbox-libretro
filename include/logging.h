@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #ifndef DOSBOX_LOGGING_H
@@ -56,10 +56,14 @@ void DEBUG_ShowMsg(char const* format,...) GCC_ATTRIBUTE(__format__(__printf__, 
 #define LOG_MSG DEBUG_ShowMsg
 
 #else  //C_DEBUG
-
+//#include <stdarg.h>
+//#include <stdio.h>
 struct LOG
 {
-	LOG(LOG_TYPES , LOG_SEVERITIES )										{ }
+	INLINE LOG(LOG_TYPES , LOG_SEVERITIES )										{ }
+#if 1 // DBP replaced to avoid warnings
+	INLINE void operator() (char const* buf, ...) {} //{va_list va;va_start(va, buf);vprintf(buf, va);printf("\n");va_end(va);}
+#else
 	void operator()(char const* )													{ }
 	void operator()(char const* , double )											{ }
 	void operator()(char const* , double , double )								{ }
@@ -79,6 +83,8 @@ struct LOG
 	void operator()(char const* , char const*, char const*)				{ }
 
 	void operator()(char const* , double , double , double , char const* )					{ }
+	void operator()(char const* , double, char const*, double, double )				{}
+#endif
 }; //add missing operators to here
 	//try to avoid anything smaller than bit32...
 void GFX_ShowMsg(char const* format,...) GCC_ATTRIBUTE(__format__(__printf__, 1, 2));

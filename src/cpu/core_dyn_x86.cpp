@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -65,6 +65,7 @@
 
 #if C_FPU
 #define CPU_FPU 1                                               //Enable FPU escape instructions
+#define X86_DYNFPU_DH_ENABLED
 #endif
 
 enum {
@@ -113,12 +114,10 @@ enum BlockReturn {
 	BR_Cycles,
 	BR_Link1,BR_Link2,
 	BR_Opcode,
-#if (C_DEBUG)
-	BR_OpcodeFull,
-#endif
 	BR_Iret,
 	BR_CallBack,
-	BR_SMCBlock
+	BR_SMCBlock,
+	BR_Trap
 };
 
 #define SMC_CURRENT_BLOCK	0xffff
@@ -132,7 +131,6 @@ enum BlockReturn {
 #define DYNFLG_ACTIVE		0x20	//Register has an active value
 
 class GenReg;
-class CodePageHandler;
 
 struct DynReg {
 	Bitu flags;
@@ -154,31 +152,52 @@ static DynReg DynRegs[G_MAX];
 #define DREG(_WHICH_) &DynRegs[G_ ## _WHICH_ ]
 
 static struct {
-	Bitu ea,tmpb,tmpd,stack,shift,newesp;
+	Bit32u ea,tmpb,tmpd,stack,shift,newesp;
 } extra_regs;
 
-static void IllegalOption(const char* msg) {
-	E_Exit("DynCore: illegal option in %s",msg);
-}
+#define IllegalOption(msg) E_Exit("DYNX86: illegal option in " msg)
 
-#include "core_dyn_x86/cache.h" 
+#define dyn_return(a,b) gen_return(a)
+#include "dyn_cache.h"
+typedef CacheBlockDynRec CacheBlock;
+typedef CodePageHandlerDynRec CodePageHandler;
 
 static struct {
 	Bitu callback;
-	Bit32u readdata;
+	Bitu readdata;
 } core_dyn;
 
-static struct {
-	Bit32u		state[32];
+#if defined(X86_DYNFPU_DH_ENABLED)
+static struct dyn_dh_fpu {
+	Bit16u		cw,host_cw;
+	bool		state_used;
+	// some fields expanded here for alignment purposes
+	struct {
+		Bit32u cw;
+		Bit32u sw;
+		Bit32u tag;
+		Bit32u ip;
+		Bit32u cs;
+		Bit32u ea;
+		Bit32u ds;
+		Bit8u st_reg[8][10];
+	} state;
 	FPU_P_Reg	temp,temp2;
 	Bit32u		dh_fpu_enabled;
-	Bit32u		state_used;
-	Bit32u		cw,host_cw;
 	Bit8u		temp_state[128];
 } dyn_dh_fpu;
+#endif
 
+#define X86         0x01
+#define X86_64      0x02
 
+#if C_TARGETCPU == X86_64
+#include "core_dyn_x86/risc_x64.h"
+#elif C_TARGETCPU == X86
 #include "core_dyn_x86/risc_x86.h"
+#else
+#error DYN_X86 core not supported for this CPU target.
+#endif
 
 struct DynState {
 	DynReg regs[G_MAX];
@@ -233,31 +252,19 @@ static void dyn_restoreregister(DynReg * src_reg, DynReg * dst_reg) {
 
 #include "core_dyn_x86/decoder.h"
 
-#if defined (_MSC_VER)
-#define DH_FPU_SAVE_REINIT				\
-{										\
-	__asm {								\
-	__asm	fnsave	dyn_dh_fpu.state[0]	\
-	}									\
-	dyn_dh_fpu.state_used=false;		\
-	dyn_dh_fpu.state[0]|=0x3f;			\
-}
-#else
-#define DH_FPU_SAVE_REINIT				\
-{										\
-	__asm__ volatile (					\
-		"fnsave		%0			\n"		\
-		:	"=m" (dyn_dh_fpu.state[0])	\
-		:								\
-		:	"memory"					\
-	);									\
-	dyn_dh_fpu.state_used=false;		\
-	dyn_dh_fpu.state[0]|=0x3f;			\
-}
-#endif
-
-
 Bits CPU_Core_Dyn_X86_Run(void) {
+	// helper class to auto-save DH_FPU state on function exit
+	class auto_dh_fpu {
+	public:
+		~auto_dh_fpu(void) {
+#if defined(X86_DYNFPU_DH_ENABLED)
+			if (dyn_dh_fpu.state_used)
+				gen_dh_fpu_save();
+#endif
+		};
+	};
+	auto_dh_fpu fpu_saver;
+
 	/* Determine the linear address of CS:EIP */
 restart_core:
 	PhysPt ip_point=SegPhys(cs)+reg_eip;
@@ -272,7 +279,6 @@ restart_core:
 		goto restart_core;
 	}
 	if (!chandler) {
-		if (dyn_dh_fpu.state_used) DH_FPU_SAVE_REINIT
 		return CPU_Core_Normal_Run();
 	}
 	/* Find correct Dynamic Block to run */
@@ -281,12 +287,15 @@ restart_core:
 		if (!chandler->invalidation_map || (chandler->invalidation_map[ip_point&4095]<4)) {
 			block=CreateCacheBlock(chandler,ip_point,32);
 		} else {
-			Bitu old_cycles=CPU_Cycles;
+			Bit32s old_cycles=CPU_Cycles;
 			CPU_Cycles=1;
+			// manually save
+			fpu_saver = auto_dh_fpu();
 			Bits nc_retcode=CPU_Core_Normal_Run();
-			if (dyn_dh_fpu.state_used) DH_FPU_SAVE_REINIT
 			if (!nc_retcode) {
 				CPU_Cycles=old_cycles-1;
+				if (old_cycles <= 1)
+					return CBRET_NONE;
 				goto restart_core;
 			}
 			CPU_CycleLeft+=old_cycles;
@@ -296,26 +305,25 @@ restart_core:
 run_block:
 	cache.block.running=0;
 	BlockReturn ret=gen_runcode(block->cache.start);
+#if C_DEBUG
+	cycle_count += 32;
+#endif
 	switch (ret) {
 	case BR_Iret:
 #if C_DEBUG
 #if C_HEAVY_DEBUG
 		if (DEBUG_HeavyIsBreakpoint()) {
-			if (dyn_dh_fpu.state_used) DH_FPU_SAVE_REINIT
 			return debugCallback;
 		}
 #endif
 #endif
 		if (!GETFLAG(TF)) {
 			if (GETFLAG(IF) && PIC_IRQCheck) {
-				if (dyn_dh_fpu.state_used) DH_FPU_SAVE_REINIT
 				return CBRET_NONE;
 			}
 			goto restart_core;
 		}
 		cpudecoder=CPU_Core_Dyn_X86_Trap_Run;
-		if (!dyn_dh_fpu.state_used) return CBRET_NONE;
-		DH_FPU_SAVE_REINIT
 		return CBRET_NONE;
 	case BR_Normal:
 		/* Maybe check if we staying in the same page? */
@@ -331,12 +339,8 @@ run_block:
 		if (DEBUG_HeavyIsBreakpoint()) return debugCallback;
 #endif
 #endif
-		if (!dyn_dh_fpu.state_used) return CBRET_NONE;
-		DH_FPU_SAVE_REINIT
 		return CBRET_NONE;
 	case BR_CallBack:
-		if (!dyn_dh_fpu.state_used) return core_dyn.callback;
-		DH_FPU_SAVE_REINIT
 		return core_dyn.callback;
 	case BR_SMCBlock:
 //		LOG_MSG("selfmodification of running block at %x:%x",SegValue(cs),reg_eip);
@@ -345,21 +349,13 @@ run_block:
 	case BR_Opcode:
 		CPU_CycleLeft+=CPU_Cycles;
 		CPU_Cycles=1;
-		if (dyn_dh_fpu.state_used) DH_FPU_SAVE_REINIT
 		return CPU_Core_Normal_Run();
-#if (C_DEBUG)
-	case BR_OpcodeFull:
-		CPU_CycleLeft+=CPU_Cycles;
-		CPU_Cycles=1;
-		if (dyn_dh_fpu.state_used) DH_FPU_SAVE_REINIT
-		return CPU_Core_Full_Run();
-#endif
 	case BR_Link1:
 	case BR_Link2:
 		{
-			Bitu temp_ip=SegPhys(cs)+reg_eip;
+			Bit32u temp_ip=SegPhys(cs)+reg_eip;
 			CodePageHandler * temp_handler=(CodePageHandler *)get_tlb_readhandler(temp_ip);
-			if (temp_handler->flags & PFLAG_HASCODE) {
+			if (temp_handler->flags & (cpu.code.big ? PFLAG_HASCODE32:PFLAG_HASCODE16)) {
 				block=temp_handler->FindCacheBlock(temp_ip & 4095);
 				if (!block) goto restart_core;
 				cache.block.running->LinkTo(ret==BR_Link2,block);
@@ -367,18 +363,29 @@ run_block:
 			}
 		}
 		goto restart_core;
+	//DBP: Added trap flag emulation after POPF in dynamic core fix by koolkdev (https://sourceforge.net/p/dosbox/patches/291/)
+	case BR_Trap:
+		// trapflag is set, switch to the trap-aware decoder
+#if C_DEBUG
+#if C_HEAVY_DEBUG
+		if (DEBUG_HeavyIsBreakpoint()) {
+			return debugCallback;
+		}
+#endif
+#endif
+		cpudecoder=CPU_Core_Dyn_X86_Trap_Run;
+		return CBRET_NONE;
 	}
-	if (dyn_dh_fpu.state_used) DH_FPU_SAVE_REINIT
 	return CBRET_NONE;
 }
 
 Bits CPU_Core_Dyn_X86_Trap_Run(void) {
-	Bits oldCycles = CPU_Cycles;
+	Bit32s oldCycles = CPU_Cycles;
 	CPU_Cycles = 1;
 	cpu.trap_skip = false;
 
 	Bits ret=CPU_Core_Normal_Run();
-	if (!cpu.trap_skip) CPU_HW_Interrupt(1);
+	if (!cpu.trap_skip) CPU_DebugException(DBINT_STEP,reg_eip);
 	CPU_Cycles = oldCycles-1;
 	cpudecoder = &CPU_Core_Dyn_X86_Run;
 
@@ -446,25 +453,15 @@ void CPU_Core_Dyn_X86_Init(void) {
 	/* Init the generator */
 	gen_init();
 
+#if defined(X86_DYNFPU_DH_ENABLED)
 	/* Init the fpu state */
 	dyn_dh_fpu.dh_fpu_enabled=true;
 	dyn_dh_fpu.state_used=false;
 	dyn_dh_fpu.cw=0x37f;
-#if defined (_MSC_VER)
-	__asm {
-	__asm	finit
-	__asm	fsave	dyn_dh_fpu.state[0]
-	__asm	fstcw	dyn_dh_fpu.host_cw
-	}
-#else
-	__asm__ volatile (
-		"finit					\n"
-		"fsave		%0			\n"
-		"fstcw		%1			\n"
-		:	"=m" (dyn_dh_fpu.state[0]), "=m" (dyn_dh_fpu.host_cw)
-		:
-		:	"memory"
-	);
+	// FINIT
+	memset(&dyn_dh_fpu.state, 0, sizeof(dyn_dh_fpu.state));
+	dyn_dh_fpu.state.cw = 0x37F;
+	dyn_dh_fpu.state.tag = 0xFFFF;
 #endif
 
 	return;
@@ -472,69 +469,43 @@ void CPU_Core_Dyn_X86_Init(void) {
 
 void CPU_Core_Dyn_X86_Cache_Init(bool enable_cache) {
 	/* Initialize code cache and dynamic blocks */
-	cache_init(enable_cache);
+	//DBP: Fix turning dynamic core on and off
+	//cache_init(enable_cache);
+	if (enable_cache && cache_initialized) DBPSerialize_cache_reset();
+	else if (enable_cache && !cache_initialized) cache_init(true);
+	else if (!enable_cache && cache_initialized) { cache_close(); gen_init(); }
 }
 
-void CPU_Core_Dyn_X86_Cache_Close(void) {
-	cache_close();
-}
-
-void CPU_Core_Dyn_X86_Cache_Reset(void) {
-	cache_reset();
-}
+//void CPU_Core_Dyn_X86_Cache_Close(void) {
+//	cache_close();
+//	//DBP: gen_init needs to be called to reset gen_runcode, otherwise DOSBox crashes once cache is used again
+//	gen_init();
+//}
 
 void CPU_Core_Dyn_X86_SetFPUMode(bool dh_fpu) {
+#if defined(X86_DYNFPU_DH_ENABLED)
 	dyn_dh_fpu.dh_fpu_enabled=dh_fpu;
-}
-
-Bit32u fpu_state[32];
-
-void CPU_Core_Dyn_X86_SaveDHFPUState(void) {
-	if (dyn_dh_fpu.dh_fpu_enabled) {
-		if (dyn_dh_fpu.state_used!=0) {
-#if defined (_MSC_VER)
-			__asm {
-			__asm	fsave	fpu_state[0]
-			__asm	finit
-			}
-#else
-			__asm__ volatile (
-				"fsave		%0			\n"
-				"finit					\n"
-				:	"=m" (fpu_state[0])
-				:
-				:	"memory"
-			);
 #endif
-		}
-	}
 }
 
-void CPU_Core_Dyn_X86_RestoreDHFPUState(void) {
-	if (dyn_dh_fpu.dh_fpu_enabled) {
-		if (dyn_dh_fpu.state_used!=0) {
-#if defined (_MSC_VER)
-			__asm {
-			__asm	frstor	fpu_state[0]
-			}
-#else
-			__asm__ volatile (
-				"frstor		%0			\n"
-				:
-				:	"m" (fpu_state[0])
-				:
-			);
-#endif
-		}
-	}
-}
+#include <dbp_serialize.h>
 
-#else
+void DBPSerialize_CPU_Core_Dyn_X86(DBPArchive& ar)
+{
+	bool stored_initialized = cache_initialized;
+	ar
+		.Serialize(stored_initialized)
+		.Serialize(core_dyn)
+		.Serialize(extra_regs);
+	#if defined(X86_DYNFPU_DH_ENABLED)
+	ar.Serialize(dyn_dh_fpu);
+	#endif
 
-void CPU_Core_Dyn_X86_SaveDHFPUState(void) {
-}
+	//We are currently not serializing the state of DynRegs.
+	//It's not that simple (as it contains multiple pointers) but hopefully it isn't required to be serialized.
 
-void CPU_Core_Dyn_X86_RestoreDHFPUState(void) {
+	if (ar.mode == DBPArchive::MODE_LOAD)
+		CPU_Core_Dyn_X86_Cache_Init(stored_initialized);
 }
 
 #endif

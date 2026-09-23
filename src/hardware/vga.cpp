@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -87,7 +87,15 @@ void VGA_DetermineMode(void) {
 	}
 }
 
-void VGA_StartResize(Bitu delay /*=50*/) {
+//DBP: Incorporate "Resize VGA within half the current frame-time" patch from DOSBox Staging by kcgen
+//     Source: https://github.com/dosbox-staging/dosbox-staging/commit/d88230b
+void VGA_StartResize(float delay) {
+	if (delay<0) {
+		delay = (float)vga.draw.delay.vtotal * 0.5f;
+		if (delay < (500.0f /*ms*/ / 120 /*Hz*/)) delay = (500.0f /*ms*/ / 120 /*Hz*/);
+		//if (delay > (500.0f /*ms*/ /  50 /*Hz*/)) delay = (500.0f /*ms*/ /  50 /*Hz*/); // max suggested by patch
+		if (delay > 50.0f /* ms */) delay = 50.0f /* ms */; // use original DOSBox default as max
+	}
 	if (!vga.draw.resizing) {
 		vga.draw.resizing=true;
 		if (vga.mode==M_ERROR) delay = 5;
@@ -259,5 +267,44 @@ void SVGA_Setup_Driver(void) {
 	default:
 		vga.vmemsize = vga.vmemwrap = 256*1024;
 		break;
+	}
+}
+
+#include <dbp_serialize.h>
+#include <mem.h>
+
+DBP_SERIALIZE_SET_POINTER_LIST(PIC_EventHandler, VGA, VGA_SetupDrawing);
+
+void DBPSerialize_VGA(DBPArchive& ar)
+{
+	ar
+		.Serialize(vga.mode)
+		.Serialize(vga.misc_output)
+		.Serialize(vga.config)
+		.Serialize(vga.internal)
+		.Serialize(vga.seq)
+		.Serialize(vga.attr)
+		.Serialize(vga.crtc)
+		.Serialize(vga.gfx)
+		.Serialize(vga.dac)
+		.Serialize(vga.latch)
+		.Serialize(vga.s3)
+		.Serialize(vga.svga)
+		.Serialize(vga.herc)
+		.SerializeExcept(vga.tandy, vga.tandy.draw_base, vga.tandy.mem_base)
+		.Serialize(vga.other)
+		<< vga.lfb.page << vga.lfb.addr << vga.lfb.mask;
+
+	Bit32u tandy_drawbase_idx, tandy_membase_idx;
+	if (ar.mode == DBPArchive::MODE_SAVE)
+	{
+		tandy_drawbase_idx = (vga.tandy.draw_base == vga.mem.linear ? 0xffffffff : (Bit32u)(vga.tandy.draw_base - MemBase));
+		tandy_membase_idx  = (vga.tandy.mem_base  == vga.mem.linear ? 0xffffffff : (Bit32u)(vga.tandy.mem_base  - MemBase));
+	}
+	ar << tandy_drawbase_idx << tandy_membase_idx;
+	if (ar.mode == DBPArchive::MODE_LOAD)
+	{
+		vga.tandy.draw_base = (tandy_drawbase_idx == 0xffffffff ? vga.mem.linear : MemBase + tandy_drawbase_idx);
+		vga.tandy.mem_base  = (tandy_membase_idx  == 0xffffffff ? vga.mem.linear : MemBase + tandy_membase_idx );
 	}
 }

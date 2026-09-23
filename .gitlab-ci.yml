@@ -7,15 +7,20 @@
 # Core definitions
 .core-defs:
   variables:
-    # Not JNI_PATH: the android-jni template appends /jni to it itself, so
-    # naming the directory here made it look for jni/jni and stop before it
-    # compiled anything. The default, ".", is what this repository wants.
-    MAKEFILE: Makefile.libretro
+    JNI_PATH: .
     CORENAME: dosbox
 
 # Inclusion templates, required for the build to work
 include:
   ################################## DESKTOPS ################################
+  # Windows 64-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/windows-x64-mingw.yml'
+
+  # Windows 32-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/windows-i686-mingw.yml'
+
   # Linux 64-bit
   - project: 'libretro-infrastructure/ci-templates'
     file: '/linux-x64.yml'
@@ -24,26 +29,76 @@ include:
   - project: 'libretro-infrastructure/ci-templates'
     file: '/linux-i686.yml'
 
-  # Linux ARM 64-bit
+  # Linux 64-bit (ARM)
   - project: 'libretro-infrastructure/ci-templates'
     file: '/linux-aarch64.yml'
 
-  # Windows 64-bit
+  # MacOS 64-bit
   - project: 'libretro-infrastructure/ci-templates'
-    file: '/windows-x64-mingw.yml'
+    file: '/osx-x64.yml'
 
   # MacOS ARM 64-bit
   - project: 'libretro-infrastructure/ci-templates'
     file: '/osx-arm64.yml'
 
-  # webOS
-  - project: 'libretro-infrastructure/ci-templates'
-    file: '/webos-make.yml'
-
   ################################## CELLULAR ################################
   # Android
   - project: 'libretro-infrastructure/ci-templates'
     file: '/android-jni.yml'
+
+  # iOS
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ios-arm64.yml'
+
+  # iOS (armv7)
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ios9.yml'
+
+  ################################## CONSOLES ################################
+  # Nintendo 3DS
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ctr-static.yml'
+
+  # Nintendo WiiU
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/wiiu-static.yml'
+
+  # Nintendo Switch
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/libnx-static.yml'
+
+  # PlayStation Vita
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/vita-static.yml'
+
+  # Nintendo GameCube
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ngc-static.yml'
+
+  # Nintendo Wii
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/wii-static.yml'
+
+  # OpenDingux
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/dingux-mips32.yml'
+
+  # OpenDingux (ARM)
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/dingux-arm32.yml'
+
+  # tvOS (AppleTV)
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/tvos-arm64.yml'
+
+  #################################### MISC ##################################
+  # webOS 32-bit (LGTV)
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/webos-make.yml'
+
+##############################################################################
+#################################### STAGES ##################################
+##############################################################################
 
 # Stages for building
 stages:
@@ -51,11 +106,23 @@ stages:
   - build-shared
   - build-static
 
-##############################################################################
-#################################### STAGES ##################################
-##############################################################################
-#
 ################################### DESKTOPS #################################
+# Windows 64-bit
+libretro-build-windows-x64:
+  extends:
+    - .libretro-windows-x64-mingw-make-default
+    - .core-defs
+  variables:
+    ISWIN: 1
+
+# Windows 32-bit
+libretro-build-windows-i686:
+  extends:
+    - .libretro-windows-i686-mingw-make-default
+    - .core-defs
+  variables:
+    ISWIN: 1
+
 # Linux 64-bit
 libretro-build-linux-x64:
   extends:
@@ -68,45 +135,29 @@ libretro-build-linux-i686:
     - .libretro-linux-i686-make-default
     - .core-defs
 
-# Linux ARM 64-bit
-# No dynarec: this fork only carries the armv4le, x86, x86_64 and mipsel
-# backends, so aarch64 runs the interpreter.
+# Linux 64-bit (ARM)
 libretro-build-linux-aarch64:
   extends:
     - .libretro-linux-aarch64-make-default
     - .core-defs
 
-# Windows 64-bit
-# The makefile knows platform=win, not win64, and cannot guess the dynarec
-# when it is cross compiled from Linux.
-libretro-build-windows-x64:
+# MacOS 64-bit
+libretro-build-osx-x64:
   extends:
-    - .libretro-windows-x64-mingw-make-default
+    - .libretro-osx-x64-make-default
     - .core-defs
   variables:
-    platform: win
-    WITH_DYNAREC: x86_64
+    ISMAC: 1
 
 # MacOS ARM 64-bit
 libretro-build-osx-arm64:
   extends:
     - .libretro-osx-arm64-make-default
     - .core-defs
-
-# webOS ARMv7a
-# The makefile guesses the dynarec from `uname -m` on platform=unix, which is
-# the build host here, so the target's own has to be named.
-libretro-build-webos-armv7a:
-  extends:
-    - .libretro-webos-armv7a-make-default
-    - .core-defs
   variables:
-    WITH_DYNAREC: arm
+    ISMAC: 1
 
 ################################### CELLULAR #################################
-# All four ABIs. The 32-bit two run the interpreter rather than a dynarec --
-# jni/Android.mk says why -- which is still a core where there was none.
-#
 # Android ARMv7a
 android-armeabi-v7a:
   extends:
@@ -119,14 +170,109 @@ android-arm64-v8a:
     - .libretro-android-jni-arm64-v8a
     - .core-defs
 
+# Android 64-bit x86
+android-x86_64:
+  extends:
+    - .libretro-android-jni-x86_64
+    - .core-defs
+
 # Android 32-bit x86
 android-x86:
   extends:
     - .libretro-android-jni-x86
     - .core-defs
 
-# Android 64-bit x86
-android-x86_64:
+# iOS
+libretro-build-ios-arm64:
   extends:
-    - .libretro-android-jni-x86_64
+    - .libretro-ios-arm64-make-default
+    - .core-defs
+
+# iOS (armv7) [iOS 9 and up]
+libretro-build-ios9:
+  extends:
+    - .libretro-ios9-make-default
+    - .core-defs
+    
+# tvOS
+libretro-build-tvos-arm64:
+  extends:
+    - .libretro-tvos-arm64-make-default
+    - .core-defs
+
+#################################### CONSOLES #################################
+## Nintendo 3DS
+## Still disabled: libctru declares a Thread type of its own, which collides
+## with this core's struct Thread, and that is a rename rather than a build fix.
+#libretro-build-ctr:
+#  extends:
+#    - .libretro-ctr-static-retroarch-master
+#    - .core-defs
+
+# Nintendo WiiU
+libretro-build-wiiu:
+  extends:
+    - .libretro-wiiu-static-retroarch-master
+    - .core-defs
+
+# Nintendo GameCube
+libretro-build-ngc:
+  extends:
+    - .libretro-ngc-static-retroarch-master
+    - .core-defs
+
+# Nintendo Wii
+libretro-build-wii:
+  extends:
+    - .libretro-wii-static-retroarch-master
+    - .core-defs
+
+# Nintendo Switch
+libretro-build-libnx-aarch64:
+  extends:
+    - .libretro-libnx-static-retroarch-master
+    - .core-defs
+
+# PlayStation Vita
+libretro-build-vita:
+  extends:
+    - .libretro-vita-static-retroarch-master
+    - .core-defs
+
+# OpenDingux
+libretro-build-dingux-mips32:
+  extends:
+    - .libretro-dingux-mips32-make-default
+    - .core-defs
+
+# OpenDingux Beta
+libretro-build-dingux-odbeta-mips32:
+  extends:
+    - .libretro-dingux-odbeta-mips32-make-default
+    - .core-defs
+
+# Miyoo
+libretro-build-miyoo-arm32:
+  extends:
+    - .libretro-miyoo-arm32-make-default
+    - .core-defs
+
+# RS90 and RetroFW fail with compile errors in risc_mipsel32.h so disable them
+## OpenDingux Beta
+#libretro-build-rs90-odbeta-mips32:
+#  extends:
+#    - .libretro-rs90-odbeta-mips32-make-default
+#    - .core-defs
+#
+## RetroFW
+#libretro-build-retrofw-mips32:
+#  extends:
+#    - .libretro-retrofw-mips32-make-default
+#    - .core-defs
+
+#################################### MISC ####################################
+# webOS 32-bit
+libretro-build-webos-armv7a:
+  extends:
+    - .libretro-webos-armv7a-make-default
     - .core-defs

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,22 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+
+#if defined(ANDROID) 
+// This define activates behavior that avoids frame pointer register 'ebp' modification by inline assembly code
+// On Android, without this, it will either fail to link or it will fail to load the output file with the error
+// dlopen failed: ".so" has text relocations (https://android.googlesource.com/platform/bionic/+/master/android-changes-for-ndk-developers.md#Text-Relocations-Enforced-for-API-level-23)
+#define RISC_X86_USE_GEN_RUNCODEINIT
+#endif 
+
+#if defined (_MSC_VER)
+#pragma warning(disable:4731) //frame pointer register 'ebp' modified by inline assembly code
+#endif
 
 static void gen_init(void);
 
@@ -84,7 +95,44 @@ public:
 	}
 };
 
-static BlockReturn gen_runcode(Bit8u * code) {
+#ifdef RISC_X86_USE_GEN_RUNCODEINIT
+static BlockReturn gen_runcodeInit(const Bit8u *code);
+static BlockReturn (*gen_runcode)(const Bit8u *code) = gen_runcodeInit;
+
+static BlockReturn gen_runcodeInit(const Bit8u *code) {
+	const Bit8u* oldpos = cache.pos;
+	cache.pos = &cache_code_link_blocks[128];
+	gen_runcode = (BlockReturn(*)(const Bit8u*))cache.pos;
+
+	cache_addb(0x53); // push ebx
+	cache_addb(0x57); // push edi
+	cache_addb(0x56); // push esi
+	cache_addb(0xb9); cache_addd(FMASK_TEST); // mov ecx,FMASK_TEST
+	cache_addb(0x8b); cache_addb(0x44); cache_addb(0x24); cache_addb(0x10); // mov eax,DWORD PTR [esp+0x10]
+	cache_addb(0x23); cache_addb(0x0d); cache_addd((Bit32u)&reg_flags); // and ecx,DWORD PTR [reg_flags]
+	cache_addb(0x55); // push ebp
+	cache_addb(0x68); const Bit8u *ret_addr = cache.pos; cache_addd(0); // push return_address
+	cache_addb(0x51); // push ecx
+	cache_addb(0xff); cache_addb(0xe0); // jmp eax
+	cache_addd((Bit32u)cache.pos, ret_addr); // write actual return_address
+	/* Restore the flags */
+	/* return here with flags in ecx */
+	cache_addb(0x5d); // pop ebp
+	cache_addb(0xBA); cache_addd(~FMASK_TEST); // mov edx,~FMASK_TEST
+	cache_addb(0x81); cache_addb(0xE1); cache_addd(FMASK_TEST); // and ecx,FMASK_TEST
+	cache_addb(0x23); cache_addb(0x15); cache_addd((Bit32u)&reg_flags); // and edx,DWORD PTR [reg_flags]
+	cache_addb(0x09); cache_addb(0xD1); // or ecx,edx
+	cache_addb(0x89); cache_addb(0x0D); cache_addd((Bit32u)&reg_flags); // mov DWORD PTR [reg_flags],ecx
+	cache_addb(0x5E); // pop esi
+	cache_addb(0x5F); // pop edi
+	cache_addb(0x5B); // pop ebx
+	cache_addb(0xC3); // ret
+
+	cache.pos = oldpos;
+	return gen_runcode(code);
+}
+#else
+static BlockReturn gen_runcode(const Bit8u * code) {
 	BlockReturn retval;
 #if defined (_MSC_VER)
 	__asm {
@@ -144,6 +192,7 @@ return_address:
 #endif
 	return retval;
 }
+#endif
 
 static GenReg * FindDynReg(DynReg * dynreg,bool stale=false) {
 	x86gen.last_used++;
@@ -311,16 +360,16 @@ static void gen_load_host(void * data,DynReg * dr1,Bitu size) {
 	dr1->flags|=DYNFLG_CHANGED;
 }
 
-static void gen_mov_host(void * data,DynReg * dr1,Bitu size,Bit8u di1=0) {
+static void gen_mov_host(void * data,DynReg * dr1,Bitu size,Bitu di1=0) {
 	GenReg * gr1=FindDynReg(dr1,(size==4));
 	switch (size) {
 	case 1:cache_addb(0x8a);break;	//mov byte
 	case 2:cache_addb(0x66);		//mov word
 	case 4:cache_addb(0x8b);break;	//mov
 	default:
-		IllegalOption("gen_load_host");
+		IllegalOption("gen_mov_host");
 	}
-	cache_addb(0x5+((gr1->index+(di1?4:0))<<3));
+	cache_addb(0x5+((gr1->index+di1)<<3));
 	cache_addd((Bit32u)data);
 	dr1->flags|=DYNFLG_CHANGED;
 }
@@ -340,7 +389,8 @@ static void gen_dop_byte(DualOps op,DynReg * dr1,Bit8u di1,DynReg * dr2,Bit8u di
 	case DOP_OR:	tmp=0x0a; if ((dr1==dr2) && (di1==di2)) goto nochange; break;
 	case DOP_TEST:	tmp=0x84; goto nochange;
 	case DOP_MOV:	if ((dr1==dr2) && (di1==di2)) return; tmp=0x8a; break;
-	case DOP_XCHG:	tmp=0x86; dr2->flags|=DYNFLG_CHANGED; break;
+	case DOP_XCHG:	if ((dr1==dr2) && (di1==di2)) return;
+		tmp=0x86; dr2->flags|=DYNFLG_CHANGED; break;
 	default:
 		IllegalOption("gen_dop_byte");
 	}
@@ -388,7 +438,7 @@ static void gen_dop_byte_imm_mem(DualOps op,DynReg * dr1,Bit8u di1,void* data) {
 	case DOP_AND:	tmp=0x0522; break;
 	case DOP_OR:	tmp=0x050a; break;
 	case DOP_TEST:	tmp=0x0584; goto nochange;	//Doesn't change
-	case DOP_MOV:	tmp=0x0585; break;
+	case DOP_MOV:	tmp=0x058A; break;
 	default:
 		IllegalOption("gen_dop_byte_imm_mem");
 	}
@@ -507,7 +557,7 @@ static void gen_dop_word(DualOps op,bool dword,DynReg * dr1,DynReg * dr2) {
 	case DOP_OR:	tmp=0x0b; if (dr1==dr2) goto nochange; break;
 	case DOP_TEST:	tmp=0x85; goto nochange;
 	case DOP_MOV:	if (dr1==dr2) return; tmp=0x8b; break;
-	case DOP_XCHG:
+	case DOP_XCHG:	if (dr1==dr2) return;
 		dr2->flags|=DYNFLG_CHANGED;
 		if (dword && !((dr1->flags&DYNFLG_HAS8) ^ (dr2->flags&DYNFLG_HAS8))) {
 			dr1->genreg=gr2;dr1->genreg->dynreg=dr1;
@@ -769,6 +819,7 @@ static void gen_call_function(void * func,char const* ops,...) {
 			}
 			ops++;
 		}
+		va_end(params);
 
 #if defined (MACOSX)
 		/* align stack */
@@ -866,6 +917,9 @@ static void gen_call_function(void * func,char const* ops,...) {
 	/* Clear some unprotected registers */
 	x86gen.regs[X86_REG_ECX]->Clear();
 	x86gen.regs[X86_REG_EDX]->Clear();
+	/* Make sure reg_esp is current */
+	if (DynRegs[G_ESP].flags & DYNFLG_CHANGED)
+		DynRegs[G_ESP].genreg->Save();
 	/* Do the actual call to the procedure */
 	cache_addb(0xe8);
 	cache_addd((Bit32u)func - (Bit32u)cache.pos-4);
@@ -937,6 +991,9 @@ static void gen_call_write(DynReg * dr,Bit32u val,Bitu write_size) {
 	/* Clear some unprotected registers */
 	x86gen.regs[X86_REG_ECX]->Clear();
 	x86gen.regs[X86_REG_EDX]->Clear();
+	/* Make sure reg_esp is current */
+	if (DynRegs[G_ESP].flags & DYNFLG_CHANGED)
+		DynRegs[G_ESP].genreg->Save();
 	/* Do the actual call to the procedure */
 	cache_addb(0xe8);
 	switch (write_size) {
@@ -957,40 +1014,40 @@ static void gen_call_write(DynReg * dr,Bit32u val,Bitu write_size) {
 #endif
 }
 
-static Bit8u * gen_create_branch(BranchTypes type) {
+static const Bit8u * gen_create_branch(BranchTypes type) {
 	/* First free all registers */
 	cache_addw(0x70+type);
 	return (cache.pos-1);
 }
 
-static void gen_fill_branch(Bit8u * data,Bit8u * from=cache.pos) {
+static void gen_fill_branch(const Bit8u * data,const Bit8u * from=cache.pos) {
 #if C_DEBUG
 	Bits len=from-data;
 	if (len<0) len=-len;
 	if (len>126) LOG_MSG("Big jump %d",len);
 #endif
-	*data=(from-data-1);
+	cache_addb((Bit8u)(from-data-1),data);
 }
 
-static Bit8u * gen_create_branch_long(BranchTypes type) {
+static const Bit8u * gen_create_branch_long(BranchTypes type) {
 	cache_addw(0x800f+(type<<8));
 	cache_addd(0);
 	return (cache.pos-4);
 }
 
-static void gen_fill_branch_long(Bit8u * data,Bit8u * from=cache.pos) {
-	*(Bit32u*)data=(from-data-4);
+static void gen_fill_branch_long(const Bit8u * data,const Bit8u * from=cache.pos) {
+	cache_addd((Bit32u)(from-data-4),data);
 }
 
-static Bit8u * gen_create_jump(Bit8u * to=0) {
+static const Bit8u * gen_create_jump(const Bit8u * to=0) {
 	/* First free all registers */
 	cache_addb(0xe9);
 	cache_addd(to-(cache.pos+4));
 	return (cache.pos-4);
 }
 
-static void gen_fill_jump(Bit8u * data,Bit8u * to=cache.pos) {
-	*(Bit32u*)data=(to-data-4);
+static void gen_fill_jump(const Bit8u * data,const Bit8u * to=cache.pos) {
+	gen_fill_branch_long(data,to);
 }
 
 
@@ -1025,6 +1082,22 @@ static void gen_load_flags(DynReg * dynreg) {
 	cache_addb(0x50+genreg->index);		//PUSH 32
 }
 
+#if C_MMX
+static void gen_save_host(void* data, DynReg* dr1, Bitu size, Bitu di1 = 0)
+{
+	GenReg* gr1 = FindDynReg(dr1);
+	switch (size) {
+	case 1: cache_addb(0x88); break; // mov byte
+	case 2: cache_addb(0x66);        // mov word
+	case 4: cache_addb(0x89); break; // mov
+	default: IllegalOption("gen_save_host");
+	}
+	cache_addb(0x5 + ((gr1->index + di1) << 3));
+	cache_addd((uintptr_t)data);
+	dr1->flags |= DYNFLG_CHANGED;
+}
+#endif
+
 static void gen_save_host_direct(void * data,Bits imm) {
 	cache_addw(0x05c7);		//MOV [],dword
 	cache_addd((Bit32u)data);
@@ -1058,14 +1131,48 @@ static void gen_return_fast(BlockReturn retcode,bool ret_exception=false) {
 	cache_addb(0xc3);			//RET
 }
 
+//DBP: Added reinitialization for restart support and avoid memory leaking of GenReg
+#include <new>
 static void gen_init(void) {
-	x86gen.regs[X86_REG_EAX]=new GenReg(0);
-	x86gen.regs[X86_REG_ECX]=new GenReg(1);
-	x86gen.regs[X86_REG_EDX]=new GenReg(2);
-	x86gen.regs[X86_REG_EBX]=new GenReg(3);
-	x86gen.regs[X86_REG_EBP]=new GenReg(5);
-	x86gen.regs[X86_REG_ESI]=new GenReg(6);
-	x86gen.regs[X86_REG_EDI]=new GenReg(7);
+	static Bitu regbuf[8][(sizeof(GenReg) + sizeof(Bitu) - 1) / sizeof(Bitu)];
+	memset(regbuf, 0, sizeof(regbuf));
+	x86gen.regs[X86_REG_EAX]=new (regbuf[0]) GenReg(0);
+	x86gen.regs[X86_REG_ECX]=new (regbuf[1]) GenReg(1);
+	x86gen.regs[X86_REG_EDX]=new (regbuf[2]) GenReg(2);
+	x86gen.regs[X86_REG_EBX]=new (regbuf[3]) GenReg(3);
+	x86gen.regs[X86_REG_EBP]=new (regbuf[5]) GenReg(5);
+	x86gen.regs[X86_REG_ESI]=new (regbuf[6]) GenReg(6);
+	x86gen.regs[X86_REG_EDI]=new (regbuf[7]) GenReg(7);
+	x86gen.flagsactive=false;
+	x86gen.last_used=0;
+	skip_flags=false;
+#ifdef RISC_X86_USE_GEN_RUNCODEINIT
+	gen_runcode = gen_runcodeInit;
+#endif
 }
 
-
+#if defined(X86_DYNFPU_DH_ENABLED)
+static void gen_dh_fpu_save(void)
+#if defined (_MSC_VER)
+{
+	__asm {
+	__asm	fnsave	dyn_dh_fpu.state
+	__asm	fldcw	dyn_dh_fpu.host_cw
+	}
+	dyn_dh_fpu.state_used=false;
+	dyn_dh_fpu.state.cw|=0x3f;
+}
+#else
+{
+	__asm__ volatile (
+		"fnsave		%0			\n"
+		"fldcw		%1			\n"
+		:	"=m" (dyn_dh_fpu.state)
+		:	"m" (dyn_dh_fpu.host_cw)
+		:	"memory"
+	);
+	dyn_dh_fpu.state_used=false;
+	dyn_dh_fpu.state.cw|=0x3f;
+}
+#endif
+#endif

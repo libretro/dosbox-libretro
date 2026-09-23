@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -52,32 +52,37 @@ static INLINE Bit32s Fetchds() {
 		continue;											\
 	}
 
+//DBP: Added conditional jump macro PF-reentrant compatibility from DOSBox-X by Jonathan Campbell
+//     Source: https://github.com/joncampbell123/dosbox-x/commit/64408c6
+/* NTS: At first glance, this looks like code that will only fetch the delta for conditional jumps
+ *      if the condition is true. Further examination shows that DOSBox's core has two different
+ *      CS:IP variables, reg_ip and core.cseip which Fetchb() modifies. */
 //TODO Could probably make all byte operands fast?
 #define JumpCond16_b(COND) {						\
+	Bit8s adj=Fetchbs();							\
 	SAVEIP;											\
-	if (COND) reg_ip+=Fetchbs();					\
-	reg_ip+=1;										\
+	if (COND) reg_ip+=adj;							\
 	continue;										\
 }
 
 #define JumpCond16_w(COND) {						\
+	Bit16s adj=Fetchws();							\
 	SAVEIP;											\
-	if (COND) reg_ip+=Fetchws();					\
-	reg_ip+=2;										\
+	if (COND) reg_ip+=adj;							\
 	continue;										\
 }
 
 #define JumpCond32_b(COND) {						\
+	Bit8s adj=Fetchbs();							\
 	SAVEIP;											\
-	if (COND) reg_eip+=Fetchbs();					\
-	reg_eip+=1;										\
+	if (COND) reg_eip+=adj;							\
 	continue;										\
 }
 
 #define JumpCond32_d(COND) {						\
+	Bit32s adj=Fetchds();							\
 	SAVEIP;											\
-	if (COND) reg_eip+=Fetchds();					\
-	reg_eip+=4;										\
+	if (COND) reg_eip+=adj;							\
 	continue;										\
 }
 

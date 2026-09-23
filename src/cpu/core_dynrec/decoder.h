@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -23,6 +23,10 @@
 #include "decoder_opcodes.h"
 
 #include "dyn_fpu.h"
+
+#if C_MMX
+#include "dyn_mmx.h"
+#endif
 
 /*
 	The function CreateCacheBlock translates the instruction stream
@@ -48,7 +52,7 @@ static CacheBlockDynRec * CreateCacheBlock(CodePageHandlerDynRec * codepage,Phys
 
 	// every codeblock that is run sets cache.block.running to itself
 	// so the block linking knows the last executed block
-	gen_mov_direct_ptr(&cache.block.running,(DRC_PTR_SIZE_IM)decode.block);
+	gen_mov_direct_ptr(&cache.block.running,(Bitu)decode.block);
 
 	// start with the cycles check
 	gen_mov_word_to_reg(FC_RETOP,&CPU_Cycles,true);
@@ -240,6 +244,10 @@ restart_prefix:
 				case 0xbe:dyn_movx_ev_gb(true);break;
 				case 0xbf:dyn_movx_ev_gw(true);break;
 
+#if C_MMX
+				dynrec_mmx_ops
+#endif
+
 				default:
 #if DYN_LOG
 //					LOG_MSG("Unhandled dual opcode 0F%02X",dual_code);
@@ -327,7 +335,11 @@ restart_prefix:
 		case 0x8c:dyn_mov_ev_seg();break;
 
 		// load effective address
-		case 0x8d:dyn_lea();break;
+		case 0x8d:
+			dyn_get_modrm();
+			if (GCC_UNLIKELY(decode.modrm.mod==3)) goto illegalopcode;
+			dyn_lea();
+			break;
 
 		// move a value from memory or a 16bit register into a segment register
 		case 0x8e:dyn_mov_seg_ev();break;
@@ -359,6 +371,7 @@ restart_prefix:
 		case 0x9d:	// popf
 			gen_call_function_I((void *)&CPU_POPF,decode.big_op);
 			dyn_check_exception(FC_RETOP);
+			dyn_check_trapflag();
 			InvalidateFlags();
 			break;
 
@@ -446,7 +459,9 @@ restart_prefix:
 		case 0xcb:dyn_ret_far(0);goto finish_block;
 
 		// int/iret
+#if !(C_DEBUG)
 		case 0xcd:dyn_interrupt(decode_fetchb());goto finish_block;
+#endif
 		case 0xcf:dyn_iret();goto finish_block;
 
 //		case 0xd4: AAM missing
@@ -553,7 +568,7 @@ restart_prefix:
 		case 0xfb:		//STI
 			gen_call_function_raw((void *)&CPU_STI);
 			dyn_check_exception(FC_RETOP);
-			if (max_opcodes<=0) max_opcodes=1;		//Allow 1 extra opcode
+			max_opcodes=1;		//Allow 1 extra opcode
 			break;
 
 		case 0xfc:		//CLD

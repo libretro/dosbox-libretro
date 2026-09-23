@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -22,8 +22,9 @@
 #include "dosbox.h"
 #include "video.h"
 #include "render.h"
-#include "render_scalers.h"
+#include "../gui/render_scalers.h"
 #include "vga.h"
+#include "pinhack.h"
 #include "pic.h"
 
 //#undef C_DEBUG
@@ -395,7 +396,7 @@ static Bit8u * VGA_TEXT_Draw_Line(Bitu vidstart, Bitu line) {
 		*draw++=(fg&mask1) | (bg&~mask1);
 		*draw++=(fg&mask2) | (bg&~mask2);
 	}
-	if (!vga.draw.cursor.enabled || !(vga.draw.cursor.count&0x8)) goto skip_cursor;
+	if (!vga.draw.cursor.enabled || !(vga.draw.cursor.count&0x10)) goto skip_cursor;
 	font_addr = (vga.draw.cursor.address-vidstart) >> 1;
 	if (font_addr>=0 && font_addr<(Bits)vga.draw.blocks) {
 		if (line<vga.draw.cursor.sline) goto skip_cursor;
@@ -444,7 +445,7 @@ static Bit8u * VGA_TEXT_Herc_Draw_Line(Bitu vidstart, Bitu line) {
 			*draw++=(fg&mask2) | (bg&~mask2);
 		}
 	}
-	if (!vga.draw.cursor.enabled || !(vga.draw.cursor.count&0x8)) goto skip_cursor;
+	if (!vga.draw.cursor.enabled || !(vga.draw.cursor.count&0x10)) goto skip_cursor;
 	font_addr = (vga.draw.cursor.address-vidstart) >> 1;
 	if (font_addr>=0 && font_addr<(Bits)vga.draw.blocks) {
 		if (line<vga.draw.cursor.sline) goto skip_cursor;
@@ -506,7 +507,7 @@ static Bit8u* VGA_TEXT_Draw_Line(Bitu vidstart, Bitu line) {
 		}
 	}
 	// draw the text mode cursor if needed
-	if ((vga.draw.cursor.count&0x8) && (line >= vga.draw.cursor.sline) &&
+	if ((vga.draw.cursor.count&0x10) && (line >= vga.draw.cursor.sline) &&
 		(line <= vga.draw.cursor.eline) && vga.draw.cursor.enabled) {
 		// the adress of the attribute that makes up the cell the cursor is in
 		Bits attr_addr = (vga.draw.cursor.address-vidstart) >> 1;
@@ -564,7 +565,7 @@ static Bit8u* VGA_TEXT_Xlat16_Draw_Line(Bitu vidstart, Bitu line) {
 		}
 	}
 	// draw the text mode cursor if needed
-	if ((vga.draw.cursor.count&0x8) && (line >= vga.draw.cursor.sline) &&
+	if ((vga.draw.cursor.count&0x10) && (line >= vga.draw.cursor.sline) &&
 		(line <= vga.draw.cursor.eline) && vga.draw.cursor.enabled) {
 		// the adress of the attribute that makes up the cell the cursor is in
 		Bits attr_addr = (vga.draw.cursor.address-vidstart) >> 1;
@@ -720,7 +721,7 @@ static void VGA_DrawPart(Bitu lines) {
 			vga.draw.address+=vga.draw.address_add;
 		}
 		vga.draw.lines_done++;
-		if (vga.draw.split_line==vga.draw.lines_done) {
+		if (vga.draw.split_line==vga.draw.lines_done && (!pinhack.trigger || !pinhack.active)) { // the pinball hack shows the whole table, which has no split
 #ifdef VGA_KEEP_CHANGES
 			VGA_ChangesEnd( );
 #endif
@@ -797,6 +798,7 @@ static void VGA_DisplayStartLatch(Bitu /*val*/) {
 }
  
 static void VGA_PanningLatch(Bitu /*val*/) {
+	//VGA_DisplayStartLatch(0); //DBP: this hack would fix flickering in Alpha Waves/Continuum
 	vga.draw.panning = vga.config.pel_panning;
 }
 
@@ -834,7 +836,9 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 		E_Exit("This new machine needs implementation in VGA_VerticalTimer too.");
 		break;
 	}
+
 	//Check if we can actually render, else skip the rest (frameskip)
+	vga.draw.cursor.count++; // Do this here, else the cursor speed depends on the frameskip
 	if (vga.draw.vga_override || !RENDER_StartUpdate())
 		return;
 
@@ -902,7 +906,7 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 		else vga.draw.linear_mask = 0x3fff; // CGA, Tandy 4 pages
 		vga.draw.cursor.address=vga.config.cursor_start*2;
 		vga.draw.address *= 2;
-		vga.draw.cursor.count++;
+		//vga.draw.cursor.count++; //Moved before the frameskip test.
 		/* check for blinking and blinking change delay */
 		FontMask[1]=(vga.draw.blinking & (vga.draw.cursor.count >> 4)) ?
 			0 : 0xffffffff;
@@ -1029,6 +1033,8 @@ void VGA_ActivateHardwareCursor(void) {
 		VGA_DrawLine=VGA_Draw_Linear_Line;
 	}
 }
+
+scrollhack pinhack;
 
 void VGA_SetupDrawing(Bitu /*val*/) {
 	if (vga.mode==M_ERROR) {
@@ -1292,7 +1298,14 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	//Different sync values gives different scaling of the whole vertical range
 	//VGA monitor just seems to thighten or widen the whole vertical range
 	double pheight;
-	double target_total = (machine==MCH_EGA) ? 262.0 : 449.0;
+	//DBP: Previously, the target total lines used to be forced to 262 visible lines for all EGA modes, which
+	//     resulted in the wrong pixel ratio for (at least) EGA 640x350 text mode (should be ~1.37, was ~0.8).
+	//     However, we can't just always use 449 visible lines (like the pixel height calculations below seem
+	//     to want) as that then breaks the pixel ratio for EGA's 320x200@60Hz mode (marked as double-scanned).
+	//     The underlying issue seems to be some conflation of EGA and VGA behavior prior to this point, which
+	//     might require a larger refactor to sort out. For now, at least prevent the target total lines from
+	//     ending up less than the mode's vertical resolution (which clearly wouldn't make practical sense).
+	double target_total = (machine==MCH_EGA && vga.draw.double_scan) ? vtotal : 449.0;
 	Bitu sync = vga.misc_output >> 6;
 	switch ( sync ) {
 	case 0:		// This is not defined in vga specs,
@@ -1369,8 +1382,13 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		// fall-through
 	case M_LIN32:
 		width<<=3;
-		if (vga.crtc.mode_control & 0x8)
+		if (vga.crtc.mode_control & 0x8) {
  			doublewidth = true;
+			if (vga.mode == M_LIN32) {
+				// vesa modes 10f/190/191/192
+				aspect_ratio *= 2.0;
+			}
+		}
 		/* Use HW mouse cursor drawer if enabled */
 		VGA_ActivateHardwareCursor();
 		break;
@@ -1380,6 +1398,10 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		width<<=2;
 		if ((vga.crtc.mode_control & 0x8) || (svgaCard == SVGA_S3Trio && (vga.s3.pll.cmd & 0x10)))
 			doublewidth = true;
+		else {
+			// vesa modes 165/175
+			aspect_ratio /= 2.0;
+		}
 		/* Use HW mouse cursor drawer if enabled */
 		VGA_ActivateHardwareCursor();
 		break;
@@ -1529,6 +1551,26 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 			height/=2;
 		}
 	}
+
+#ifdef C_DBP_LIBRETRO
+	//DBP: Standards prior to VGA (e.g. CGA, EGA) don't do double-scanning
+	if (doubleheight && machine<MCH_VGA) {
+		doubleheight=false;
+		aspect_ratio *= 2.0;
+	}
+#endif
+
+	// Pinball hack (Felipe Sanches, https://github.com/DeXteRrBDN/dosbox-pinhack, as carried by dosbox-core):
+	// in a mode the size of a pinball table view, draw the taller screen the whole table fits on instead of scrolling
+	pinhack.trigger = false;
+	if (pinhack.enabled && pinhack.active
+		&& (int)height >= pinhack.triggerheight.min && (int)height <= pinhack.triggerheight.max
+		&& (int)width >= pinhack.triggerwidth.min && (int)width <= pinhack.triggerwidth.max) {
+		pinhack.trigger = true;
+		if (pinhack.expand.height) height = pinhack.expand.height;
+		if (pinhack.expand.width) width = pinhack.expand.width;
+	}
+
 	vga.draw.lines_total=height;
 	vga.draw.parts_lines=vga.draw.lines_total/vga.draw.parts_total;
 	vga.draw.line_length = width * ((bpp + 1) / 8);
@@ -1537,11 +1579,11 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	vga.changes.frame = 0;
 	vga.changes.writeMask = 1;
 #endif
-    /* 
-	   Cheap hack to just make all > 640x480 modes have 4:3 aspect ratio
+	/*
+	   Cheap hack to just make all > 640x480 modes have square pixels
 	*/
 	if ( width >= 640 && height >= 480 ) {
-		aspect_ratio = ((float)width / (float)height) * ( 3.0 / 4.0);
+		aspect_ratio = 1.0;//((float)width / (float)height) * ( 3.0 / 4.0);
 	}
 //	LOG_MSG("ht %d vt %d ratio %f", htotal, vtotal, aspect_ratio );
 
@@ -1619,4 +1661,63 @@ void VGA_SetOverride(bool vga_override) {
 			VGA_SetupDrawing(0);
 		}
 	}
+}
+
+#include <dbp_serialize.h>
+#include <stdio.h>
+
+DBP_SERIALIZE_SET_POINTER_LIST(PIC_EventHandler, VGA_Draw,
+	VGA_DrawSingleLine,
+	VGA_DrawEGASingleLine,
+	VGA_DrawPart,
+	VGA_VerticalTimer,
+	VGA_Other_VertInterrupt,
+	VGA_DisplayStartLatch,
+	VGA_PanningLatch,
+	VGA_VertInterrupt);
+
+void DBPSerialize_VGA_Draw(DBPArchive& ar)
+{
+	ar.SerializeExcept(vga.draw, vga.draw.linear_base, vga.draw.font, vga.draw.font_tables);
+	ar.SerializeSparse(vga.draw.font, sizeof(vga.draw.font));
+	ar.SerializeBytes(TempLine, (render.src.width <= 1280 ? 1280 : render.src.width) * 4); // backwards compatible
+	ar.SerializeArray(temp);
+	ar.Serialize(FontMask[1]);
+	ar.Serialize(bg_color_index);
+
+	#ifndef VGA_KEEP_CHANGES
+	static const VGA_Line_Handler VGA_Draw_Changes_Line = NULL;
+	#endif
+	DBP_SERIALIZE_STATIC_POINTER_LIST(VGA_Line_Handler, VGA, 
+		VGA_Draw_1BPP_Line, VGA_Draw_2BPPHiRes_Line, VGA_Draw_2BPP_Line, VGA_Draw_4BPP_Line, VGA_Draw_4BPP_Line_Double, VGA_Draw_CGA16_Line,
+		VGA_Draw_LIN16_Line_HWMouse, VGA_Draw_LIN32_Line_HWMouse, VGA_Draw_Linear_Line, VGA_Draw_VGA_Line_HWMouse, VGA_Draw_Xlat16_Linear_Line,
+		VGA_TEXT_Draw_Line, VGA_TEXT_Herc_Draw_Line, VGA_TEXT_Xlat16_Draw_Line, VGA_Draw_Changes_Line);
+	ar.SerializePointers((void**)&VGA_DrawLine, 1, false, 1, DBP_SERIALIZE_GET_POINTER_LIST(VGA_Line_Handler, VGA));
+
+	Bit8u linear_base_num, font_tables_idx_0, font_tables_idx_1;
+	if (ar.mode == DBPArchive::MODE_SAVE)
+	{
+		linear_base_num = 
+			vga.draw.linear_base == NULL           ? 0 :
+			vga.draw.linear_base == vga.mem.linear ? 1 :
+			vga.draw.linear_base == vga.fastmem    ? 2 : 255;
+		DBP_ASSERT(linear_base_num != 255);
+
+		font_tables_idx_0 = (vga.draw.font_tables[0] ? (Bit8u)((vga.draw.font_tables[0] - vga.draw.font) / 1024 + 1) : 0);
+		font_tables_idx_1 = (vga.draw.font_tables[1] ? (Bit8u)((vga.draw.font_tables[1] - vga.draw.font) / 1024 + 1) : 0);
+	}
+	ar << linear_base_num << font_tables_idx_0 << font_tables_idx_1;
+	if (ar.mode == DBPArchive::MODE_LOAD)
+	{
+		vga.draw.linear_base = 
+			linear_base_num == 0 ? NULL           :
+			linear_base_num == 1 ? vga.mem.linear :
+			linear_base_num == 2 ? vga.fastmem    : NULL;
+
+		vga.draw.font_tables[0] = (font_tables_idx_0 ? &vga.draw.font[(font_tables_idx_0 - 1) * 1024] : NULL);
+		vga.draw.font_tables[1] = (font_tables_idx_1 ? &vga.draw.font[(font_tables_idx_1 - 1) * 1024] : NULL);
+	}
+	
+	if (ar.mode == DBPArchive::MODE_ZERO)
+		vga.draw.linear_base = NULL;
 }

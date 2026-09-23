@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -27,22 +27,28 @@
 #include <string.h>
 
 #define PAGES_IN_BLOCK	((1024*1024)/MEM_PAGE_SIZE)
+#ifndef C_DBP_LIBRETRO
 #define SAFE_MEMORY	32
 #define MAX_MEMORY	64
-#define MAX_PAGE_ENTRIES (MAX_MEMORY*1024*1024/4096)
-#define LFB_PAGES	512
-#define MAX_LINKS	((MAX_MEMORY*1024/4)+4096)		//Hopefully enough
-
-struct LinkBlock {
-	Bitu used;
-	Bit32u pages[MAX_LINKS];
-};
+#else
+#define MAX_MEMORY	2049 // needs to be <= 4097 due to DBPSerialize_All
+#endif
+//DBP: Unused
+//#define MAX_PAGE_ENTRIES (MAX_MEMORY*1024*1024/4096)
+//#define LFB_PAGES	512
+//#define MAX_LINKS	((MAX_MEMORY*1024/4)+4096)		//Hopefully enough
+//
+//struct LinkBlock {
+//	Bitu used;
+//	Bit32u pages[MAX_LINKS];
+//};
 
 static struct MemoryBlock {
 	Bitu pages;
 	PageHandler * * phandlers;
 	MemHandle * mhandles;
-	LinkBlock links;
+	//DBP: Unused
+	//LinkBlock links;
 	struct	{
 		Bitu		start_page;
 		Bitu		end_page;
@@ -66,6 +72,12 @@ public:
 	Bitu readb(PhysPt addr) {
 #if C_DEBUG
 		LOG_MSG("Illegal read from %x, CS:IP %8x:%8x",addr,SegValue(cs),reg_eip);
+#elif defined(C_DBP_LIBRETRO) // Win98 on boot reads seg 0x28, Win95C setup reads seg 0xf000 (don't log)
+		static Bits lcount=0;
+		if (lcount<200 && SegValue(cs) != 0x28 && SegValue(cs) != 0xf000) {
+			lcount++;
+			LOG_MSG("Illegal read from %x, CS:IP %8x:%8x",addr,SegValue(cs),reg_eip);
+		}
 #else
 		static Bits lcount=0;
 		if (lcount<1000) {
@@ -78,6 +90,12 @@ public:
 	void writeb(PhysPt addr,Bitu val) {
 #if C_DEBUG
 		LOG_MSG("Illegal write to %x, CS:IP %8x:%8x",addr,SegValue(cs),reg_eip);
+#elif defined(C_DBP_LIBRETRO) // Win98 on boot writes seg 0x28 (don't log)
+		static Bits lcount=0;
+		if (lcount<200 && SegValue(cs) != 0x28) {
+			lcount++;
+			LOG_MSG("Illegal write to %x, CS:IP %8x:%8x",addr,SegValue(cs),reg_eip);
+		}
 #else
 		static Bits lcount=0;
 		if (lcount<1000) {
@@ -107,13 +125,13 @@ public:
 		flags=PFLAG_READABLE|PFLAG_HASROM;
 	}
 	void writeb(PhysPt addr,Bitu val){
-		LOG(LOG_CPU,LOG_ERROR)("Write %x to rom at %x",val,addr);
+		LOG(LOG_CPU,LOG_ERROR)("Write %" sBitfs(x) " to rom at %x",val,addr);
 	}
 	void writew(PhysPt addr,Bitu val){
-		LOG(LOG_CPU,LOG_ERROR)("Write %x to rom at %x",val,addr);
+		LOG(LOG_CPU,LOG_ERROR)("Write %" sBitfs(x) " to rom at %x",val,addr);
 	}
 	void writed(PhysPt addr,Bitu val){
-		LOG(LOG_CPU,LOG_ERROR)("Write %x to rom at %x",val,addr);
+		LOG(LOG_CPU,LOG_ERROR)("Write %" sBitfs(x) " to rom at %x",val,addr);
 	}
 };
 
@@ -140,6 +158,13 @@ PageHandler * MEM_GetPageHandler(Bitu phys_page) {
 	} else if ((phys_page>=memory.lfb.start_page+0x01000000/4096) &&
 				(phys_page<memory.lfb.start_page+0x01000000/4096+16)) {
 		return memory.lfb.mmiohandler;
+#ifdef C_DBP_ENABLE_VOODOO
+	} else {
+		PageHandler* VOODOO_PCI_GetLFBPageHandler(Bitu);
+		if (PageHandler* vph = VOODOO_PCI_GetLFBPageHandler(phys_page)) {
+			return vph;
+		}
+#endif
 	}
 	return &illegal_page_handler;
 }
@@ -177,6 +202,26 @@ void mem_memcpy(PhysPt dest,PhysPt src,Bitu size) {
 	while (size--) mem_writeb_inline(dest++,mem_readb_inline(src++));
 }
 
+//DBP: Optimized MEM_BlockRead and MEM_BlockWrite to potentially use memcpy if possible
+#if defined(USE_FULL_TLB)
+void MEM_BlockRead(PhysPt pt,void * data,Bitu size) {
+	Bit8u * write=reinterpret_cast<Bit8u *>(data);
+	for (PhysPt block; size; size -= block, write += block, pt += block) {
+		PhysPt tlb_num = pt>>12;
+		if (HostPt tlb_addr = paging.tlb.read[tlb_num]) { block = ((tlb_num == (pt+size-1)>>12) ? size : ((pt&~0xfff)+0x1000-pt)); memcpy(write, tlb_addr+pt, block); }
+		else { block = 1; *write = (Bit8u)paging.tlb.readhandler[tlb_num]->readb(pt); }
+	}
+}
+
+void MEM_BlockWrite(PhysPt pt,void const * const data,Bitu size) {
+	Bit8u const * read = reinterpret_cast<Bit8u const * const>(data);
+	for (PhysPt block; size; size -= block, read += block, pt += block) {
+		PhysPt tlb_num = pt>>12;
+		if (HostPt tlb_addr = paging.tlb.write[tlb_num]) { block = ((tlb_num == (pt+size-1)>>12) ? size : ((pt&~0xfff)+0x1000-pt)); memcpy(tlb_addr+pt, read, block); }
+		else { block = 1; paging.tlb.writehandler[tlb_num]->writeb(pt, *read); }
+	}
+}
+#else
 void MEM_BlockRead(PhysPt pt,void * data,Bitu size) {
 	Bit8u * write=reinterpret_cast<Bit8u *>(data);
 	while (size--) {
@@ -190,6 +235,7 @@ void MEM_BlockWrite(PhysPt pt,void const * const data,Bitu size) {
 		mem_writeb_inline(pt++,*read++);
 	}
 }
+#endif
 
 void MEM_BlockCopy(PhysPt dest,PhysPt src,Bitu size) {
 	mem_memcpy(dest,src,size);
@@ -536,7 +582,6 @@ void PreparePCJRCartRom(void) {
 }
 
 HostPt GetMemBase(void) { return MemBase; }
-Bitu g_memsize = 0;
 
 class MEMORY:public Module_base{
 private:
@@ -556,13 +601,14 @@ public:
 			LOG_MSG("Maximum memory size is %d MB",MAX_MEMORY - 1);
 			memsize = MAX_MEMORY-1;
 		}
+#ifndef C_DBP_LIBRETRO
 		if (memsize > SAFE_MEMORY-1) {
 			LOG_MSG("Memory sizes above %d MB are NOT recommended.",SAFE_MEMORY - 1);
 			LOG_MSG("Stick with the default values unless you are absolutely certain.");
 		}
-		MemBase = new Bit8u[memsize*1024*1024];
-		g_memsize = memsize*1024*1024 ;
-		if (!MemBase) E_Exit("Can't allocate main memory of %d MB",memsize);
+#endif
+		MemBase = new(std::nothrow) Bit8u[memsize*1024*1024];
+		if (!MemBase) E_Exit("Can't allocate main memory of %" sBitfs(d) " MB",memsize);
 		/* Clear the memory, as new doesn't always give zeroed memory
 		 * (Visual C debug mode). We want zeroed memory though. */
 		memset((void*)MemBase,0,memsize*1024*1024);
@@ -589,7 +635,8 @@ public:
 			}
 		}
 		/* Reset some links */
-		memory.links.used = 0;
+		//DBP: Unused
+		//memory.links.used = 0;
 		// A20 Line - PS/2 system control port A
 		WriteHandler.Install(0x92,write_p92,IO_MB);
 		ReadHandler.Install(0x92,read_p92,IO_MB);
@@ -613,4 +660,36 @@ void MEM_Init(Section * sec) {
 	/* shutdown function */
 	test = new MEMORY(sec);
 	sec->AddDestroyFunction(&MEM_ShutDown);
+}
+
+#include <dbp_serialize.h>
+
+void DBPSerialize_Memory(DBPArchive& ar)
+{
+	if (ar.mode == DBPArchive::MODE_ZERO) { ar.Serialize(memory); return; }
+
+	// in older versions when setting the core to 64MB ram it was actually only set to 63MB
+	Bitu pages = (ar.version < 5 && memory.pages == 16384 ? 16128 : memory.pages);
+
+	//// We could keep the callback memory section across load because we don't serialize CallBack_Handlers[]
+	//// Don't do this for now because we can't be sure the OS hasn't modified this area or the emulated program keeps a copy of it.
+	//// Instead try to keep callbacks in the same order when adding new functionality with callbacks like PCI bus.
+	//Bit8u cbBuf[CB_SIZE * CB_MAX]; if (ar.mode == DBPArchive::MODE_LOAD) memcpy(cbBuf, MemBase + CALLBACK_PhysPointer(0), sizeof(cbBuf));
+
+	// memory.pages is serialized in DBPSerialize_All and validated to be unchanged during load
+	ar.Serialize(memory.lfb.start_page);
+	ar.Serialize(memory.lfb.end_page);
+	ar.Serialize(memory.lfb.pages);
+	ar.Serialize(memory.a20);
+	ar.SerializeSparse(MemBase, (pages * MEM_PAGE_SIZE));
+	ar.SerializeBytes(memory.mhandles, (pages * sizeof(MemHandle)));
+
+	//if (ar.mode == DBPArchive::MODE_LOAD) memcpy(MemBase + CALLBACK_PhysPointer(0), cbBuf, sizeof(cbBuf));
+
+	typedef PageHandler* PageHandlerPtr;
+	DBP_SERIALIZE_STATIC_POINTER_LIST(PageHandlerPtr, Memory, &illegal_page_handler, &ram_page_handler, &rom_page_handler);
+	DBP_SERIALIZE_EXTERN_POINTER_LIST(PageHandlerPtr, VGA);
+	ar.SerializePointers((void**)memory.phandlers, pages, true, 2,
+		DBP_SERIALIZE_GET_POINTER_LIST(PageHandlerPtr, Memory),
+		DBP_SERIALIZE_GET_POINTER_LIST(PageHandlerPtr, VGA));
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -402,6 +402,10 @@ void TIMER_SetGate2(bool in) {
 	gate2 = in; //Set it here so the counter_latch above works
 }
 
+bool TIMER_GetOutput2(void) {
+	return counter_output(2);
+}
+
 class TIMER:public Module_base{
 private:
 	IO_ReadHandleObject ReadHandler[4];
@@ -466,4 +470,13 @@ void TIMER_Destroy(Section*){
 void TIMER_Init(Section* sec) {
 	test = new TIMER(sec);
 	sec->AddDestroyFunction(&TIMER_Destroy);
+}
+
+#include <dbp_serialize.h>
+
+DBP_SERIALIZE_SET_POINTER_LIST(PIC_EventHandler, TIMER, PIT0_Event);
+
+void DBPSerialize_Timer(DBPArchive& ar)
+{
+	ar.SerializeArray(pit) << gate2 << latched_timerstatus << latched_timerstatus_locked;
 }

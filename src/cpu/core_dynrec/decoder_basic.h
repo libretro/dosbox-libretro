@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -130,21 +130,30 @@ static struct DynDecode {
 
 static bool MakeCodePage(Bitu lin_addr,CodePageHandlerDynRec * &cph) {
 	Bit8u rdval;
+	const Bitu cflag = cpu.code.big ? PFLAG_HASCODE32:PFLAG_HASCODE16;
 	//Ensure page contains memory:
 	if (GCC_UNLIKELY(mem_readb_checked(lin_addr,&rdval))) return true;
 
 	PageHandler * handler=get_tlb_readhandler(lin_addr);
 	if (handler->flags & PFLAG_HASCODE) {
-		// this is a codepage handler, and the one that we're looking for
+		// this is a codepage handler, make sure it matches current code size
 		cph=(CodePageHandlerDynRec *)handler;
-		return false;
+		if (handler->flags & cflag) return false;
+		// wrong code size/stale dynamic code, drop it
+		cph->ClearRelease();
+		cph=0;
+		// handler was changed, refresh
+		handler=get_tlb_readhandler(lin_addr);
 	}
 	if (handler->flags & PFLAG_NOCODE) {
 		if (PAGING_ForcePageInit(lin_addr)) {
 			handler=get_tlb_readhandler(lin_addr);
 			if (handler->flags & PFLAG_HASCODE) {
 				cph=(CodePageHandlerDynRec *)handler;
-				return false;
+				if (handler->flags & cflag) return false;
+				cph->ClearRelease();
+				cph=0;
+				handler=get_tlb_readhandler(lin_addr);
 			}
 		}
 		if (handler->flags & PFLAG_NOCODE) {
@@ -372,7 +381,7 @@ static bool decode_fetchd_imm(Bitu & val) {
 
 // modrm decoding helper
 static void INLINE dyn_get_modrm(void) {
-	decode.modrm.val=decode_fetchb();
+	decode.modrm.val = decode_fetchb();
 	decode.modrm.mod=(decode.modrm.val >> 6) & 3;
 	decode.modrm.reg=(decode.modrm.val >> 3) & 7;
 	decode.modrm.rm=(decode.modrm.val & 7);
@@ -381,10 +390,10 @@ static void INLINE dyn_get_modrm(void) {
 
 #ifdef DRC_USE_SEGS_ADDR
 
-#define MOV_SEG_VAL_TO_HOST_REG(host_reg, seg_index) gen_mov_seg16_to_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_SEG_VAL(seg_index)) - (DRC_PTR_SIZE_IM)(&Segs))
+#define MOV_SEG_VAL_TO_HOST_REG(host_reg, seg_index) gen_mov_seg16_to_reg(host_reg,(Bitu)(DRCD_SEG_VAL(seg_index)) - (Bitu)(&Segs))
 
-#define MOV_SEG_PHYS_TO_HOST_REG(host_reg, seg_index) gen_mov_seg32_to_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_SEG_PHYS(seg_index)) - (DRC_PTR_SIZE_IM)(&Segs))
-#define ADD_SEG_PHYS_TO_HOST_REG(host_reg, seg_index) gen_add_seg32_to_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_SEG_PHYS(seg_index)) - (DRC_PTR_SIZE_IM)(&Segs))
+#define MOV_SEG_PHYS_TO_HOST_REG(host_reg, seg_index) gen_mov_seg32_to_reg(host_reg,(Bitu)(DRCD_SEG_PHYS(seg_index)) - (Bitu)(&Segs))
+#define ADD_SEG_PHYS_TO_HOST_REG(host_reg, seg_index) gen_add_seg32_to_reg(host_reg,(Bitu)(DRCD_SEG_PHYS(seg_index)) - (Bitu)(&Segs))
 
 #else
 
@@ -398,20 +407,22 @@ static void INLINE dyn_get_modrm(void) {
 
 #ifdef DRC_USE_REGS_ADDR
 
-#define MOV_REG_VAL_TO_HOST_REG(host_reg, reg_index) gen_mov_regval32_to_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_VAL(reg_index)) - (DRC_PTR_SIZE_IM)(&cpu_regs))
-#define ADD_REG_VAL_TO_HOST_REG(host_reg, reg_index) gen_add_regval32_to_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_VAL(reg_index)) - (DRC_PTR_SIZE_IM)(&cpu_regs))
+#define MOV_REG_VAL_TO_HOST_REG(host_reg, reg_index) gen_mov_regval32_to_reg(host_reg,(Bitu)(DRCD_REG_VAL(reg_index)) - (Bitu)(&cpu_regs))
+#define ADD_REG_VAL_TO_HOST_REG(host_reg, reg_index) gen_add_regval32_to_reg(host_reg,(Bitu)(DRCD_REG_VAL(reg_index)) - (Bitu)(&cpu_regs))
 
-#define MOV_REG_WORD16_TO_HOST_REG(host_reg, reg_index) gen_mov_regval16_to_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_WORD(reg_index,false)) - (DRC_PTR_SIZE_IM)(&cpu_regs))
-#define MOV_REG_WORD32_TO_HOST_REG(host_reg, reg_index) gen_mov_regval32_to_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_WORD(reg_index,true)) - (DRC_PTR_SIZE_IM)(&cpu_regs))
-#define MOV_REG_WORD_TO_HOST_REG(host_reg, reg_index, dword) gen_mov_regword_to_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_WORD(reg_index,dword)) - (DRC_PTR_SIZE_IM)(&cpu_regs), dword)
+#define MOV_REG_WORD16_TO_HOST_REG(host_reg, reg_index) gen_mov_regval16_to_reg(host_reg,(Bitu)(DRCD_REG_WORD(reg_index,false)) - (Bitu)(&cpu_regs))
+#define MOV_REG_WORD32_TO_HOST_REG(host_reg, reg_index) gen_mov_regval32_to_reg(host_reg,(Bitu)(DRCD_REG_WORD(reg_index,true)) - (Bitu)(&cpu_regs))
+#define MOV_REG_WORD_TO_HOST_REG(host_reg, reg_index, dword) gen_mov_regword_to_reg(host_reg,(Bitu)(DRCD_REG_WORD(reg_index,dword)) - (Bitu)(&cpu_regs), dword)
 
-#define MOV_REG_WORD16_FROM_HOST_REG(host_reg, reg_index) gen_mov_regval16_from_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_WORD(reg_index,false)) - (DRC_PTR_SIZE_IM)(&cpu_regs))
-#define MOV_REG_WORD32_FROM_HOST_REG(host_reg, reg_index) gen_mov_regval32_from_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_WORD(reg_index,true)) - (DRC_PTR_SIZE_IM)(&cpu_regs))
-#define MOV_REG_WORD_FROM_HOST_REG(host_reg, reg_index, dword) gen_mov_regword_from_reg(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_WORD(reg_index,dword)) - (DRC_PTR_SIZE_IM)(&cpu_regs), dword)
+#define MOV_REG_WORD16_FROM_HOST_REG(host_reg, reg_index) gen_mov_regval16_from_reg(host_reg,(Bitu)(DRCD_REG_WORD(reg_index,false)) - (Bitu)(&cpu_regs))
+#define MOV_REG_WORD32_FROM_HOST_REG(host_reg, reg_index) gen_mov_regval32_from_reg(host_reg,(Bitu)(DRCD_REG_WORD(reg_index,true)) - (Bitu)(&cpu_regs))
+#define MOV_REG_WORD_FROM_HOST_REG(host_reg, reg_index, dword) gen_mov_regword_from_reg(host_reg,(Bitu)(DRCD_REG_WORD(reg_index,dword)) - (Bitu)(&cpu_regs), dword)
 
-#define MOV_REG_BYTE_TO_HOST_REG_LOW(host_reg, reg_index, high_byte) gen_mov_regbyte_to_reg_low(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_BYTE(reg_index,high_byte)) - (DRC_PTR_SIZE_IM)(&cpu_regs))
-#define MOV_REG_BYTE_TO_HOST_REG_LOW_CANUSEWORD(host_reg, reg_index, high_byte) gen_mov_regbyte_to_reg_low_canuseword(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_BYTE(reg_index,high_byte)) - (DRC_PTR_SIZE_IM)(&cpu_regs))
-#define MOV_REG_BYTE_FROM_HOST_REG_LOW(host_reg, reg_index, high_byte) gen_mov_regbyte_from_reg_low(host_reg,(DRC_PTR_SIZE_IM)(DRCD_REG_BYTE(reg_index,high_byte)) - (DRC_PTR_SIZE_IM)(&cpu_regs))
+#define MOV_REG_BYTE_TO_HOST_REG_LOW(host_reg, reg_index, high_byte) gen_mov_regbyte_to_reg_low(host_reg,(Bitu)(DRCD_REG_BYTE(reg_index,high_byte)) - (Bitu)(&cpu_regs))
+#define MOV_REG_BYTE_TO_HOST_REG_LOW_CANUSEWORD(host_reg, reg_index, high_byte) gen_mov_regbyte_to_reg_low_canuseword(host_reg,(Bitu)(DRCD_REG_BYTE(reg_index,high_byte)) - (Bitu)(&cpu_regs))
+#define MOV_REG_BYTE_FROM_HOST_REG_LOW(host_reg, reg_index, high_byte) gen_mov_regbyte_from_reg_low(host_reg,(Bitu)(DRCD_REG_BYTE(reg_index,high_byte)) - (Bitu)(&cpu_regs))
+
+#define MOV_FLAGS_TO_HOST_REG(host_reg) gen_mov_regval32_to_reg(host_reg,(Bitu)(DRCD_REG_FLAGS) - (Bitu)(&cpu_regs))
 
 #else
 
@@ -429,6 +440,8 @@ static void INLINE dyn_get_modrm(void) {
 #define MOV_REG_BYTE_TO_HOST_REG_LOW(host_reg, reg_index, high_byte) gen_mov_byte_to_reg_low(host_reg,DRCD_REG_BYTE(reg_index,high_byte))
 #define MOV_REG_BYTE_TO_HOST_REG_LOW_CANUSEWORD(host_reg, reg_index, high_byte) gen_mov_byte_to_reg_low_canuseword(host_reg,DRCD_REG_BYTE(reg_index,high_byte))
 #define MOV_REG_BYTE_FROM_HOST_REG_LOW(host_reg, reg_index, high_byte) gen_mov_byte_from_reg_low(host_reg,DRCD_REG_BYTE(reg_index,high_byte))
+
+#define MOV_FLAGS_TO_HOST_REG(host_reg) gen_mov_word_to_reg(host_reg,DRCD_REG_FLAGS,true)
 
 #endif
 
@@ -503,72 +516,72 @@ static INLINE void dyn_set_eip_end(HostReg reg,Bit32u imm=0) {
 // is architecture dependent
 // R=host register; I=32bit immediate value; A=address value; m=memory
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_R(void * func,Bitu op) {
+static INLINE const Bit8u* gen_call_function_R(void * func,Bitu op) {
 	gen_load_param_reg(op,0);
 	return gen_call_function_setup(func, 1);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_R3(void * func,Bitu op) {
+static INLINE const Bit8u* gen_call_function_R3(void * func,Bitu op) {
 	gen_load_param_reg(op,2);
 	return gen_call_function_setup(func, 3, true);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_RI(void * func,Bitu op1,Bitu op2) {
+static INLINE const Bit8u* gen_call_function_RI(void * func,Bitu op1,Bitu op2) {
 	gen_load_param_imm(op2,1);
 	gen_load_param_reg(op1,0);
 	return gen_call_function_setup(func, 2);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_RA(void * func,Bitu op1,DRC_PTR_SIZE_IM op2) {
+static INLINE const Bit8u* gen_call_function_RA(void * func,Bitu op1,Bitu op2) {
 	gen_load_param_addr(op2,1);
 	gen_load_param_reg(op1,0);
 	return gen_call_function_setup(func, 2);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_RR(void * func,Bitu op1,Bitu op2) {
+static INLINE const Bit8u* gen_call_function_RR(void * func,Bitu op1,Bitu op2) {
 	gen_load_param_reg(op2,1);
 	gen_load_param_reg(op1,0);
 	return gen_call_function_setup(func, 2);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_IR(void * func,Bitu op1,Bitu op2) {
+static INLINE const Bit8u* gen_call_function_IR(void * func,Bitu op1,Bitu op2) {
 	gen_load_param_reg(op2,1);
 	gen_load_param_imm(op1,0);
 	return gen_call_function_setup(func, 2);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_I(void * func,Bitu op) {
+static INLINE const Bit8u* gen_call_function_I(void * func,Bitu op) {
 	gen_load_param_imm(op,0);
 	return gen_call_function_setup(func, 1);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_II(void * func,Bitu op1,Bitu op2) {
+static INLINE const Bit8u* gen_call_function_II(void * func,Bitu op1,Bitu op2) {
 	gen_load_param_imm(op2,1);
 	gen_load_param_imm(op1,0);
 	return gen_call_function_setup(func, 2);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_III(void * func,Bitu op1,Bitu op2,Bitu op3) {
+static INLINE const Bit8u* gen_call_function_III(void * func,Bitu op1,Bitu op2,Bitu op3) {
 	gen_load_param_imm(op3,2);
 	gen_load_param_imm(op2,1);
 	gen_load_param_imm(op1,0);
 	return gen_call_function_setup(func, 3);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_IA(void * func,Bitu op1,DRC_PTR_SIZE_IM op2) {
+static INLINE const Bit8u* gen_call_function_IA(void * func,Bitu op1,Bitu op2) {
 	gen_load_param_addr(op2,1);
 	gen_load_param_imm(op1,0);
 	return gen_call_function_setup(func, 2);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_IIR(void * func,Bitu op1,Bitu op2,Bitu op3) {
+static INLINE const Bit8u* gen_call_function_IIR(void * func,Bitu op1,Bitu op2,Bitu op3) {
 	gen_load_param_reg(op3,2);
 	gen_load_param_imm(op2,1);
 	gen_load_param_imm(op1,0);
 	return gen_call_function_setup(func, 3);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_IIIR(void * func,Bitu op1,Bitu op2,Bitu op3,Bitu op4) {
+static INLINE const Bit8u* gen_call_function_IIIR(void * func,Bitu op1,Bitu op2,Bitu op3,Bitu op4) {
 	gen_load_param_reg(op4,3);
 	gen_load_param_imm(op3,2);
 	gen_load_param_imm(op2,1);
@@ -576,7 +589,7 @@ static DRC_PTR_SIZE_IM INLINE gen_call_function_IIIR(void * func,Bitu op1,Bitu o
 	return gen_call_function_setup(func, 4);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_IRRR(void * func,Bitu op1,Bitu op2,Bitu op3,Bitu op4) {
+static INLINE const Bit8u* gen_call_function_IRRR(void * func,Bitu op1,Bitu op2,Bitu op3,Bitu op4) {
 	gen_load_param_reg(op4,3);
 	gen_load_param_reg(op3,2);
 	gen_load_param_reg(op2,1);
@@ -584,12 +597,12 @@ static DRC_PTR_SIZE_IM INLINE gen_call_function_IRRR(void * func,Bitu op1,Bitu o
 	return gen_call_function_setup(func, 4);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_m(void * func,Bitu op) {
+static INLINE const Bit8u* gen_call_function_m(void * func,Bitu op) {
 	gen_load_param_mem(op,2);
 	return gen_call_function_setup(func, 3, true);
 }
 
-static DRC_PTR_SIZE_IM INLINE gen_call_function_mm(void * func,Bitu op1,Bitu op2) {
+static INLINE const Bit8u* gen_call_function_mm(void * func,Bitu op1,Bitu op2) {
 	gen_load_param_mem(op2,3);
 	gen_load_param_mem(op1,2);
 	return gen_call_function_setup(func, 4, true);
@@ -597,7 +610,7 @@ static DRC_PTR_SIZE_IM INLINE gen_call_function_mm(void * func,Bitu op1,Bitu op2
 
 
 
-enum save_info_type {db_exception, cycle_check, string_break};
+enum save_info_type {db_exception, cycle_check, string_break, trap};
 
 
 // function that is called on exceptions
@@ -614,7 +627,7 @@ static BlockReturn DynRunException(Bit32u eip_add,Bit32u cycle_sub) {
 // end of a cache block because it is rarely reached (like exceptions)
 static struct {
 	save_info_type type;
-	DRC_PTR_SIZE_IM branch_pos;
+	const Bit8u* branch_pos;
 	Bit32u eip_change;
 	Bitu cycles;
 } save_info_dynrec[512];
@@ -657,6 +670,14 @@ static void dyn_fill_blocks(void) {
 				gen_add_direct_word(&reg_eip,save_info_dynrec[sct].eip_change,decode.big_op);
 				dyn_return(BR_Cycles);
 				break;
+			//DBP: Added trap flag emulation after POPF in dynamic core fix by koolkdev (https://sourceforge.net/p/dosbox/patches/291/)
+			case trap:
+				// trapflag is set, switch to trap-aware decoder
+				decode.cycles=save_info_dynrec[sct].cycles;
+				dyn_reduce_cycles();
+				gen_add_direct_word(&reg_eip,save_info_dynrec[sct].eip_change,decode.big_op);
+				dyn_return(BR_Trap);
+				break;
 		}
 	}
 	used_save_info_dynrec=0;
@@ -681,6 +702,20 @@ static void dyn_check_exception(HostReg reg) {
 	save_info_dynrec[used_save_info_dynrec].eip_change=decode.op_start-decode.code_start;
 	if (!cpu.code.big) save_info_dynrec[used_save_info_dynrec].eip_change&=0xffff;
 	save_info_dynrec[used_save_info_dynrec].type=db_exception;
+	used_save_info_dynrec++;
+}
+
+
+//DBP: Added trap flag emulation after POPF in dynamic core fix by koolkdev (https://sourceforge.net/p/dosbox/patches/291/)
+// check and branch if the trap flag is turned on
+static void dyn_check_trapflag(void) {
+	MOV_FLAGS_TO_HOST_REG(FC_OP1);
+	gen_and_imm(FC_OP1, FLAG_TF);
+	save_info_dynrec[used_save_info_dynrec].branch_pos=gen_create_branch_long_nonzero(FC_OP1,true);
+	save_info_dynrec[used_save_info_dynrec].cycles=decode.cycles;
+	save_info_dynrec[used_save_info_dynrec].eip_change=decode.code-decode.code_start;
+	if (!cpu.code.big) save_info_dynrec[used_save_info_dynrec].eip_change&=0xffff;
+	save_info_dynrec[used_save_info_dynrec].type=trap;
 	used_save_info_dynrec++;
 }
 
@@ -986,10 +1021,10 @@ skip_extend_word:
 							// succeeded, use the pointer to avoid code invalidation
 							if (!addseg) {
 								if (!scaled_reg_used) {
-									gen_mov_word_to_reg(ea_reg,(void*)val,true);
+									gen_mov_LE_word_to_reg(ea_reg,(void*)val,true);
 								} else {
 									DYN_LEA_MEM_REG_VAL(ea_reg,NULL,scaled_reg,scale,0);
-									gen_add(ea_reg,(void*)val);
+									gen_add_LE(ea_reg,(void*)val);
 								}
 							} else {
 								if (!scaled_reg_used) {
@@ -997,7 +1032,7 @@ skip_extend_word:
 								} else {
 									DYN_LEA_SEG_PHYS_REG_VAL(ea_reg,(decode.seg_prefix_used ? decode.seg_prefix : seg_base),scaled_reg,scale,0);
 								}
-								gen_add(ea_reg,(void*)val);
+								gen_add_LE(ea_reg,(void*)val);
 							}
 							return;
 						}
@@ -1038,10 +1073,10 @@ skip_extend_word:
 						if (!addseg) {
 							if (!scaled_reg_used) {
 								MOV_REG_VAL_TO_HOST_REG(ea_reg,base_reg);
-								gen_add(ea_reg,(void*)val);
+								gen_add_LE(ea_reg,(void*)val);
 							} else {
 								DYN_LEA_REG_VAL_REG_VAL(ea_reg,base_reg,scaled_reg,scale,0);
-								gen_add(ea_reg,(void*)val);
+								gen_add_LE(ea_reg,(void*)val);
 							}
 						} else {
 							if (!scaled_reg_used) {
@@ -1050,7 +1085,7 @@ skip_extend_word:
 								DYN_LEA_SEG_PHYS_REG_VAL(ea_reg,(decode.seg_prefix_used ? decode.seg_prefix : seg_base),scaled_reg,scale,0);
 							}
 							ADD_REG_VAL_TO_HOST_REG(ea_reg,base_reg);
-							gen_add(ea_reg,(void*)val);
+							gen_add_LE(ea_reg,(void*)val);
 						}
 						return;
 					}
@@ -1115,11 +1150,11 @@ skip_extend_word:
 				// succeeded, use the pointer to avoid code invalidation
 				if (!addseg) {
 					MOV_REG_VAL_TO_HOST_REG(ea_reg,base_reg);
-					gen_add(ea_reg,(void*)val);
+					gen_add_LE(ea_reg,(void*)val);
 				} else {
 					MOV_SEG_PHYS_TO_HOST_REG(ea_reg,(decode.seg_prefix_used ? decode.seg_prefix : seg_base));
 					ADD_REG_VAL_TO_HOST_REG(ea_reg,base_reg);
-					gen_add(ea_reg,(void*)val);
+					gen_add_LE(ea_reg,(void*)val);
 				}
 				return;
 			}
@@ -1139,28 +1174,6 @@ skip_extend_word:
 		}
 	}
 }
-
-
-
-// add code that checks if port access is allowed
-// the port is given in a register
-static void dyn_add_iocheck(HostReg reg_port,Bitu access_size) {
-	if (cpu.pmode) {
-		gen_call_function_RI((void *)&CPU_IO_Exception,reg_port,access_size);
-		dyn_check_exception(FC_RETOP);
-	}
-}
-
-// add code that checks if port access is allowed
-// the port is a constant
-static void dyn_add_iocheck_var(Bit8u accessed_port,Bitu access_size) {
-	if (cpu.pmode) {
-		gen_call_function_II((void *)&CPU_IO_Exception,accessed_port,access_size);
-		dyn_check_exception(FC_RETOP);
-	}
-}
-
-
 
 // save back the address register
 static void gen_protect_addr_reg(void) {
@@ -1199,7 +1212,7 @@ static void gen_restore_reg(HostReg reg,HostReg dest_reg) {
 
 static Bitu mf_functions_num=0;
 static struct {
-	Bit8u* pos;
+	const Bit8u* pos;
 	void* fct_ptr;
 	Bitu ftype;
 } mf_functions[64];
@@ -1250,9 +1263,9 @@ static void InvalidateFlagsPartially(void* current_simple_function,Bitu flags_ty
 // enqueue this instruction, if later an instruction is encountered that
 // destroys all condition flags and the flags weren't needed in-between
 // this function can be replaced by a simpler one as well
-static void InvalidateFlagsPartially(void* current_simple_function,DRC_PTR_SIZE_IM cpos,Bitu flags_type) {
+static void InvalidateFlagsPartially(void* current_simple_function,const Bit8u* cpos,Bitu flags_type) {
 #ifdef DRC_FLAGS_INVALIDATION
-	mf_functions[mf_functions_num].pos=(Bit8u*)cpos;
+	mf_functions[mf_functions_num].pos=cpos;
 	mf_functions[mf_functions_num].fct_ptr=current_simple_function;
 	mf_functions[mf_functions_num].ftype=flags_type;
 	mf_functions_num++;

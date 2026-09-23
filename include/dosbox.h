@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -24,7 +22,10 @@
 
 #include "config.h"
 
-GCC_ATTRIBUTE(noreturn) void E_Exit(const char * message,...) GCC_ATTRIBUTE( __format__(__printf__, 1, 2));
+#ifdef C_DBP_USE_SDL
+GCC_ATTRIBUTE(noreturn) 
+#endif
+void E_Exit(const char * message,...) GCC_ATTRIBUTE( __format__(__printf__, 1, 2));
 
 void MSG_Add(const char*,const char*); //add messages to the internal languagefile
 const char* MSG_Get(char const *);     //get messages from the internal languagefile
@@ -61,8 +62,12 @@ enum SVGACards {
 
 extern SVGACards svgaCard;
 extern MachineType machine;
+#ifdef C_DBP_USE_SDL
 extern bool SDLNetInited;
-extern bool uselfn, autolfn;
+#endif
+#ifdef C_DBP_LIBRETRO
+extern bool DOSBox_Boot;
+#endif
 
 #define IS_TANDY_ARCH ((machine==MCH_TANDY) || (machine==MCH_PCJR))
 #define IS_EGAVGA_ARCH ((machine==MCH_EGA) || (machine==MCH_VGA))
@@ -74,29 +79,5 @@ extern bool uselfn, autolfn;
 #ifndef DOSBOX_LOGGING_H
 #include "logging.h"
 #endif // the logging system.
-
-#ifdef __PS3__
-#include <math.h>
-#include <sys/time.h>
-#include <sys/sys_time.h>
-#include <sys/timer.h>
-#include <dirent.h>
-#include <sys/cdefs.h>
-#include <ctype.h>
-#include <sys/stat.h>
-#define S_IREAD S_IRUSR
-#define S_IWRITE S_IWUSR
-#define F_OK  0  /* test for existence of file */
-#define S_ISDIR(mode)  (((mode) & S_IFMT) == S_IFDIR)
-#define getenv(a)  "/dev_hdd0/RETROARCH/USRDIR/cores/"
-#define getcwd(a,b)  "/dev_hdd0/RETROARCH/USRDIR/"
-struct timeb {
-    time_t          time;
-    unsigned short  millitm;
-    short           timezone;
-    short           dstflag;
-};
-int access(const char *fpath, int /*mode*/);
-#endif
 
 #endif /* DOSBOX_DOSBOX_H */

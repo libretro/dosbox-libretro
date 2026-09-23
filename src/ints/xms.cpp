@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -118,7 +116,6 @@ Bitu XMS_GetEnabledA20(void) {
 
 static RealPt xms_callback;
 static bool umb_available;
-bool uselfn, autolfn;
 
 static XMS_Block xms_handles[XMS_HANDLES];
 
@@ -424,18 +421,14 @@ public:
 	XMS(Section* configuration):Module_base(configuration){
 		Section_prop * section=static_cast<Section_prop *>(configuration);
 		umb_available=false;
-		const char *dosver=section->Get_string("ver"), *p = strchr(dosver,'.');
-		dos.version.major = strlen(dosver)==0?7:(Bit8u)(atoi(dosver));
-		dos.version.minor = strlen(dosver)==0?10:(p==NULL?0:(Bit8u)(atoi(p+1)));
-		uselfn = strcmp(section->Get_string("lfn"),"false") && (!strcmp(section->Get_string("lfn"),"true") || dos.version.major>=7);
-		autolfn = !strcmp(section->Get_string("lfn"),"auto");
 		if (!section->Get_bool("xms")) return;
 		Bitu i;
 		BIOS_ZeroExtendedSize(true);
 		DOS_AddMultiplexHandler(multiplex_xms);
 
 		/* place hookable callback in writable memory area */
-		xms_callback=RealMake(DOS_GetMemory(0x1)-1,0x10);
+		//DBP: Avoid DOS memory leak
+		if (!xms_callback) xms_callback=RealMake(DOS_GetMemory(0x1)-1,0x10);
 		callbackhandler.Install(&XMS_Handler,CB_HOOKABLE,Real2Phys(xms_callback),"XMS Handler");
 		// pseudocode for CB_HOOKABLE:
 		//	jump near skip
@@ -468,6 +461,10 @@ public:
 			umb_available=false;
 		}
 
+		//DBP: Added cleanup for restart support (needs to be before Get_bool("xms") check)
+		extern bool DBP_IsShuttingDown();
+		if (DBP_IsShuttingDown()) xms_callback=0;
+
 		if (!section->Get_bool("xms")) return;
 		/* Undo biosclearing */
 		BIOS_ZeroExtendedSize(false);
@@ -490,4 +487,11 @@ void XMS_ShutDown(Section* /*sec*/) {
 void XMS_Init(Section* sec) {
 	test = new XMS(sec);
 	sec->AddDestroyFunction(&XMS_ShutDown,true);
+}
+
+#include <dbp_serialize.h>
+
+void DBPSerialize_XMS(DBPArchive& ar)
+{
+	ar.Serialize(umb_available).SerializeArray(xms_handles);
 }

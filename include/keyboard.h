@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #ifndef DOSBOX_KEYBOARD_H
@@ -46,6 +46,15 @@ enum KBD_KEYS {
 	
 	KBD_LAST
 };
+
+// DBP: Added for syncing host LEDs (and states) with DOSBox
+enum KBD_LEDS : Bit8u {
+	KLED_SCROLLLOCK = 0x01,
+	KLED_NUMLOCK = 0x02,
+	KLED_CAPSLOCK = 0x04,
+};
+extern KBD_LEDS biosKeyLEDOverwrite;
+void BIOS_SetKeyboardLEDOverwrite(KBD_KEYS event_key, KBD_LEDS leds);
 
 void KEYBOARD_ClrBuffer(void);
 void KEYBOARD_AddKey(KBD_KEYS keytype,bool pressed);

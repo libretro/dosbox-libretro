@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -264,7 +264,6 @@ public:
 
 class VGA_UnchainedEGA_Handler : public VGA_UnchainedRead_Handler {
 public:
-	template< bool wrapping>
 	void writeHandler(PhysPt start, Bit8u val) {
 		Bit32u data=ModeOperation(val);
 		/* Update video memory and the pixel buffer */
@@ -300,25 +299,25 @@ public:
 		addr += vga.svga.bank_write_full;
 		addr = CHECKED2(addr);
 		MEM_CHANGED( addr << 3);
-		writeHandler<true>(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
 	}
 	void writew(PhysPt addr,Bitu val) {
 		addr = PAGING_GetPhysicalAddress(addr) & vgapages.mask;
 		addr += vga.svga.bank_write_full;
 		addr = CHECKED2(addr);
 		MEM_CHANGED( addr << 3);
-		writeHandler<true>(addr+0,(Bit8u)(val >> 0));
-		writeHandler<true>(addr+1,(Bit8u)(val >> 8));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+1,(Bit8u)(val >> 8));
 	}
 	void writed(PhysPt addr,Bitu val) {
 		addr = PAGING_GetPhysicalAddress(addr) & vgapages.mask;
 		addr += vga.svga.bank_write_full;
 		addr = CHECKED2(addr);
 		MEM_CHANGED( addr << 3);
-		writeHandler<true>(addr+0,(Bit8u)(val >> 0));
-		writeHandler<true>(addr+1,(Bit8u)(val >> 8));
-		writeHandler<true>(addr+2,(Bit8u)(val >> 16));
-		writeHandler<true>(addr+3,(Bit8u)(val >> 24));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+1,(Bit8u)(val >> 8));
+		writeHandler(addr+2,(Bit8u)(val >> 16));
+		writeHandler(addr+3,(Bit8u)(val >> 24));
 	}
 };
 
@@ -562,23 +561,23 @@ public:
 		addr = vga.svga.bank_write_full + (PAGING_GetPhysicalAddress(addr) & 0xffff);
 		addr = CHECKED4(addr);
 		MEM_CHANGED( addr << 3 );
-		writeHandler<false>(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
 	}
 	void writew(PhysPt addr,Bitu val) {
 		addr = vga.svga.bank_write_full + (PAGING_GetPhysicalAddress(addr) & 0xffff);
 		addr = CHECKED4(addr);
 		MEM_CHANGED( addr << 3 );
-		writeHandler<false>(addr+0,(Bit8u)(val >> 0));
-		writeHandler<false>(addr+1,(Bit8u)(val >> 8));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+1,(Bit8u)(val >> 8));
 	}
 	void writed(PhysPt addr,Bitu val) {
 		addr = vga.svga.bank_write_full + (PAGING_GetPhysicalAddress(addr) & 0xffff);
 		addr = CHECKED4(addr);
 		MEM_CHANGED( addr << 3 );
-		writeHandler<false>(addr+0,(Bit8u)(val >> 0));
-		writeHandler<false>(addr+1,(Bit8u)(val >> 8));
-		writeHandler<false>(addr+2,(Bit8u)(val >> 16));
-		writeHandler<false>(addr+3,(Bit8u)(val >> 24));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+1,(Bit8u)(val >> 8));
+		writeHandler(addr+2,(Bit8u)(val >> 16));
+		writeHandler(addr+3,(Bit8u)(val >> 24));
 	}
 	Bitu readb(PhysPt addr) {
 		addr = vga.svga.bank_read_full + (PAGING_GetPhysicalAddress(addr) & 0xffff);
@@ -735,7 +734,7 @@ public:
 	VGA_HERC_Handler() {
 		flags=PFLAG_READABLE|PFLAG_WRITEABLE;
 	}
-	HostPt GetHostReadPt(Bitu phys_page) {
+	HostPt GetHostReadPt(Bitu /*phys_page*/) {
 		// The 4kB map area is repeated in the 32kB range
 		return &vga.mem.linear[0];
 	}
@@ -941,8 +940,12 @@ void VGA_StartUpdateLFB(void) {
 }
 
 static void VGA_Memory_ShutDown(Section * /*sec*/) {
+#ifndef C_DBP_LIBRETRO
 	delete[] vga.mem.linear_orgptr;
 	delete[] vga.fastmem_orgptr;
+#else
+	delete[] vga.mem.linear_orgptr;
+#endif
 #ifdef VGA_KEEP_CHANGES
 	delete[] vga.changes.map;
 #endif
@@ -957,12 +960,26 @@ void VGA_SetupMemory(Section* sec) {
 	if (vga_allocsize<512*1024) vga_allocsize=512*1024;
 	// We reserve extra 2K for one scan line
 	vga_allocsize+=2048;
+#ifndef C_DBP_LIBRETRO
 	vga.mem.linear_orgptr = new Bit8u[vga_allocsize+16];
 	vga.mem.linear=(Bit8u*)(((Bitu)vga.mem.linear_orgptr + 16-1) & ~(16-1));
 	memset(vga.mem.linear,0,vga_allocsize);
 
 	vga.fastmem_orgptr = new Bit8u[(vga.vmemsize<<1)+4096+16];
 	vga.fastmem=(Bit8u*)(((Bitu)vga.fastmem_orgptr + 16-1) & ~(16-1));
+	//DBP: Added this zeroeing for better compression of serialized data
+	memset(vga.fastmem,0,(vga.vmemsize<<1)+4096);
+#else // DBP: Combine two allocations into one
+	vga_allocsize+=16;
+	Bit32u vga_fastmemofs = vga_allocsize;
+	vga_allocsize+=(vga.vmemsize<<1)+4096+16;
+
+	vga.mem.linear_orgptr = new Bit8u[vga_allocsize];
+	memset(vga.mem.linear_orgptr,0,vga_allocsize);
+
+	vga.mem.linear = (Bit8u*)(((Bitu)vga.mem.linear_orgptr                  + 16-1) & ~(16-1));
+	vga.fastmem    = (Bit8u*)(((Bitu)vga.mem.linear_orgptr + vga_fastmemofs + 16-1) & ~(16-1));
+#endif
 
 	// In most cases these values stay the same. Assumptions: vmemwrap is power of 2,
 	// vmemwrap <= vmemsize, fastmem implicitly has mem wrap twice as big
@@ -985,4 +1002,40 @@ void VGA_SetupMemory(Section* sec) {
 		   conventional memory below 128k */
 		//TODO map?	
 	} 
+}
+
+#include <dbp_serialize.h>
+
+typedef PageHandler* PageHandlerPtr;
+DBP_SERIALIZE_SET_POINTER_LIST(PageHandlerPtr, VGA,
+	&vgaph.map,        &vgaph.changes, &vgaph.text, &vgaph.tandy,
+	&vgaph.cega,       &vgaph.cvga,    &vgaph.uega, &vgaph.uvga,
+	&vgaph.pcjr,       &vgaph.herc,    &vgaph.lin4, &vgaph.lfb,
+	&vgaph.lfbchanges, &vgaph.mmio,    &vgaph.empty);
+
+void DBPSerialize_VGA_Memory(DBPArchive& ar)
+{
+	if (ar.mode == DBPArchive::MODE_ZERO)
+	{
+		// it is assumed this is done after VGA_Memory_ShutDown has been called
+		ar.Serialize(vga.mem).Serialize(vga.vmemwrap).Serialize(vga.vmemsize).Serialize(vgapages);
+		#ifdef VGA_KEEP_CHANGES
+		ar.Serialize(vga.changes);
+		#endif
+		return;
+	}
+
+	// vga.vmemsize is serialized in DBPSerialize_All and validated to be unchanged during load
+	Bit32u vga_allocsize = vga.vmemsize;
+	if (vga_allocsize < 512*1024) vga_allocsize = 512*1024;
+	vga_allocsize += 2048;
+	ar.SerializeSparse(vga.mem.linear, vga_allocsize);
+	ar.Serialize(vga.vmemwrap);
+	ar.SerializeSparse(vga.fastmem, (vga.vmemsize<<1)+4096);
+	ar.Serialize(vgapages);
+
+	#ifdef VGA_KEEP_CHANGES
+	ar.SerializeExcept(vga.changes, vga.changes.map);
+	ar.Serialize(vga.changes.map, (vga.vmemsize >> VGA_CHANGE_SHIFT) + 32);
+	#endif
 }

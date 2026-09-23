@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -23,14 +23,22 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef C_DBP_USE_SDL
 #include <unistd.h>
+#endif
 
 #include "dosbox.h"
+#ifdef C_DBP_USE_SDL
 #include "SDL.h"
+#endif
 #include "support.h"
 #include "cdrom.h"
 
-#ifndef __LIBRETRO__ // No SDL cd support
+#ifdef C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE
+#include "drives.h"
+#endif
+
+#ifdef C_DBP_USE_SDL
 CDROM_Interface_SDL::CDROM_Interface_SDL(void) {
 	driveID		= 0;
 	oldLeadOut	= 0;
@@ -143,7 +151,7 @@ bool CDROM_Interface_SDL::LoadUnloadMedia(bool unload) {
 	bool success = (SDL_CDEject(cd)==0);
 	return success;
 }
-#endif
+#endif /* C_DBP_USE_SDL */
 
 int CDROM_GetMountType(char* path, int forceCD) {
 // 0 - physical CDROM
@@ -152,6 +160,7 @@ int CDROM_GetMountType(char* path, int forceCD) {
 	// 1. Smells like a real cdrom 
 	// if ((strlen(path)<=3) && (path[2]=='\\') && (strchr(path,'\\')==strrchr(path,'\\')) && 	(GetDriveType(path)==DRIVE_CDROM)) return 0;
 
+#if defined(C_DBP_NATIVE_CDROM) && defined(C_DBP_USE_SDL)
 	const char* cdName;
 	char buffer[512];
 	strcpy(buffer,path);
@@ -171,10 +180,17 @@ int CDROM_GetMountType(char* path, int forceCD) {
 		cdName = SDL_CDName(i);
 		if (strcmp(buffer,cdName)==0) return 0;
 	};
-	
+#endif /* defined(C_DBP_NATIVE_CDROM) && defined(C_DBP_USE_SDL) */
+
 	// Detect ISO
+#ifdef C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE
+	DOS_File* file = FindAndOpenDosFile(path);
+	if (file) { file->Close(); delete file; return 1; }
+	if (path[0] == '$') return -1;
+#else
 	struct stat file_stat;
 	if ((stat(path, &file_stat) == 0) && (file_stat.st_mode & S_IFREG)) return 1; 
+#endif /* C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE */
 	return 2;
 }
 

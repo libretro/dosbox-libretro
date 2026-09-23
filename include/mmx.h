@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -75,15 +75,25 @@ typedef union {
 
 } MMX_reg;
 
-extern MMX_reg reg_mmx[8];
+extern MMX_reg * reg_mmx[8];
 extern MMX_reg * lookupRMregMM[256];
 
+static INLINE Bit8s SaturateWordSToByteS(Bit16s value) {
+	return (value < -128 ? (Bit8s)-128 : value > 127 ? (Bit8s)127 : (Bit8s)value);
+}
 
-Bit8s  SaturateWordSToByteS(Bit16s value);
-Bit16s SaturateDwordSToWordS(Bit32s value);
-Bit8u  SaturateWordSToByteU(Bit16s value);
-Bit16u SaturateDwordSToWordU(Bit32s value);
+static INLINE Bit16s SaturateDwordSToWordS(Bit32s value) {
+	return (value < -32768 ? (Bit16s)-32768 : value > 32767 ? (Bit16s)32767 : (Bit16s)value);
+}
 
-void   setFPU(Bit16u tag);
+static INLINE Bit8u SaturateWordSToByteU(Bit16s value) {
+	return (value < 0 ? (Bit8u)0 : value > 255 ? (Bit8u)255 : (Bit8u)value);
+}
+
+static INLINE Bit16u SaturateDwordSToWordU(Bit32s value) {
+	return (value < 0 ? (Bit16u)0 : value > 65535 ? (Bit16u)65535 : (Bit16u)value);
+}
+
+void setFPUTagEmpty();
 
 #endif

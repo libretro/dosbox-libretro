@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 	CASE_D(0x01)												/* ADD Ed,Gd */
@@ -148,20 +148,25 @@
 		reg_edi=Pop_32();break;
 	CASE_D(0x60)												/* PUSHAD */
 	{
+		PAGE_FAULT_CLEANUP_TRY(Bit32u old_esp = reg_esp;)
 		Bitu tmpesp = reg_esp;
 		Push_32(reg_eax);Push_32(reg_ecx);Push_32(reg_edx);Push_32(reg_ebx);
 		Push_32(tmpesp);Push_32(reg_ebp);Push_32(reg_esi);Push_32(reg_edi);
+		PAGE_FAULT_CLEANUP_CATCH(reg_esp = old_esp;)
 	}; break;
 	CASE_D(0x61)												/* POPAD */
+		PAGE_FAULT_CLEANUP_TRY(Bit32u old_esp = reg_esp;)
 		reg_edi=Pop_32();reg_esi=Pop_32();reg_ebp=Pop_32();Pop_32();//Don't save ESP
 		reg_ebx=Pop_32();reg_edx=Pop_32();reg_ecx=Pop_32();reg_eax=Pop_32();
+		PAGE_FAULT_CLEANUP_CATCH(reg_esp = old_esp;)
 		break;
 	CASE_D(0x62)												/* BOUND Ed */
 		{
-			Bit32s bound_min, bound_max;
-			GetRMrd;GetEAa;
-			bound_min=LoadMd(eaa);
-			bound_max=LoadMd(eaa+4);
+			GetRMrd;
+			if (rm >= 0xc0) goto illegal_opcode;
+			GetEAa;
+			Bit32s bound_min=LoadMds(eaa);
+			Bit32s bound_max=LoadMds(eaa+4);
 			if ( (((Bit32s)*rmrd) < bound_min) || (((Bit32s)*rmrd) > bound_max) ) {
 				EXCEPTION(5);
 			}
@@ -339,8 +344,9 @@
 			}	
 	CASE_D(0x8d)												/* LEA Gd */
 		{
-			//Little hack to always use segprefixed version
 			GetRMrd;
+			if (rm >= 0xc0) goto illegal_opcode;
+			//Little hack to always use segprefixed version
 			BaseDS=BaseSS=0;
 			if (TEST_PREFIX_ADDR) {
 				*rmrd=(Bit32u)(*EATable[256+rm])();
@@ -351,10 +357,12 @@
 		}
 	CASE_D(0x8f)												/* POP Ed */
 		{
+			PAGE_FAULT_CLEANUP_TRY(Bit32u old_esp = reg_esp;)
 			Bit32u val=Pop_32();
 			GetRM;
 			if (rm >= 0xc0 ) {GetEArd;*eard=val;}
 			else {GetEAa;SaveMd(eaa,val);}
+			PAGE_FAULT_CLEANUP_CATCH(reg_esp = old_esp;)
 			break;
 		}
 	CASE_D(0x91)												/* XCHG ECX,EAX */
@@ -390,7 +398,7 @@
 			CPU_CALL(true,newcs,newip,GETIP);
 #if CPU_TRAP_CHECK
 			if (GETFLAG(TF)) {	
-				cpudecoder=CPU_Core_Normal_Trap_Run;
+				cpudecoder=CPU_TRAP_DECODER;
 				return CBRET_NONE;
 			}
 #endif
@@ -403,7 +411,7 @@
 		if (CPU_POPF(true)) RUNEXCEPTION();
 #if CPU_TRAP_CHECK
 		if (GETFLAG(TF)) {	
-			cpudecoder=CPU_Core_Normal_Trap_Run;
+			cpudecoder=CPU_TRAP_DECODER;
 			goto decode_end;
 		}
 #endif
@@ -454,9 +462,15 @@
 	CASE_D(0xc1)												/* GRP2 Ed,Ib */
 		GRP2D(Fetchb());break;
 	CASE_D(0xc2)												/* RETN Iw */
-		reg_eip=Pop_32();
-		reg_esp+=Fetchw();
-		continue;
+		{
+			PAGE_FAULT_CLEANUP_TRY(Bit32u old_esp = reg_esp;)
+			/* this is structured either to complete RET or leave registers unmodified if interrupted by page fault */
+			Bit32u new_eip=Pop_32();
+			reg_esp+=Fetchw();
+			reg_eip=new_eip;
+			PAGE_FAULT_CLEANUP_CATCH(reg_esp = old_esp;)
+			continue;
+		}
 	CASE_D(0xc3)												/* RETN */
 		reg_eip=Pop_32();
 		continue;
@@ -493,9 +507,11 @@
 		}
 		break;
 	CASE_D(0xc9)												/* LEAVE */
+		PAGE_FAULT_CLEANUP_TRY(Bit32u old_esp = reg_esp;)
 		reg_esp&=cpu.stack.notmask;
 		reg_esp|=(reg_ebp&cpu.stack.mask);
 		reg_ebp=Pop_32();
+		PAGE_FAULT_CLEANUP_CATCH(reg_esp = old_esp;)
 		break;
 	CASE_D(0xca)												/* RETF Iw */
 		{ 
@@ -515,7 +531,7 @@
 			CPU_IRET(true,GETIP);
 #if CPU_TRAP_CHECK
 			if (GETFLAG(TF)) {	
-				cpudecoder=CPU_Core_Normal_Trap_Run;
+				cpudecoder=CPU_TRAP_DECODER;
 				return CBRET_NONE;
 			}
 #endif
@@ -568,10 +584,12 @@
 		}
 	CASE_D(0xe8)												/* CALL Jd */
 		{ 
+			/* must not adjust (E)IP until we have completed the instruction.
+			 * if interrupted by a page fault, EIP must be unmodified. */
 			Bit32s addip=Fetchds();
-			SAVEIP;
-			Push_32(reg_eip);
-			reg_eip+=addip;
+			Bit32u here=GETIP;
+			Push_32(here);
+			reg_eip=(Bit32u)(addip+here);
 			continue;
 		}
 	CASE_D(0xe9)												/* JMP Jd */
@@ -589,7 +607,7 @@
 			CPU_JMP(true,newcs,newip,GETIP);
 #if CPU_TRAP_CHECK
 			if (GETFLAG(TF)) {	
-				cpudecoder=CPU_Core_Normal_Trap_Run;
+				cpudecoder=CPU_TRAP_DECODER;
 				return CBRET_NONE;
 			}
 #endif
@@ -603,9 +621,11 @@
 			continue;
 		}
 	CASE_D(0xed)												/* IN EAX,DX */
+		if (CPU_IO_Exception(reg_dx,4)) RUNEXCEPTION();
 		reg_eax=IO_ReadD(reg_dx);
 		break;
 	CASE_D(0xef)												/* OUT DX,EAX */
+		if (CPU_IO_Exception(reg_dx,4)) RUNEXCEPTION();
 		IO_WriteD(reg_dx,reg_eax);
 		break;
 	CASE_D(0xf7)												/* GRP3 Ed(,Id) */
@@ -663,9 +683,14 @@
 				RMEd(DECD);
 				break;
 			case 0x02:											/* CALL NEAR Ed */
-				if (rm >= 0xc0 ) {GetEArd;reg_eip=*eard;}
-				else {GetEAa;reg_eip=LoadMd(eaa);}
-				Push_32(GETIP);
+				{
+					/* either EIP is set to the call address or EIP does not change if interrupted by PF */
+					Bit32u new_eip;
+					if (rm >= 0xc0 ) {GetEArd;new_eip=*eard;}
+					else {GetEAa;new_eip=LoadMd(eaa);}
+					Push_32(GETIP); /* <- PF can happen here */
+					reg_eip = new_eip;
+				}
 				continue;
 			case 0x03:											/* CALL FAR Ed */
 				{
@@ -677,7 +702,7 @@
 					CPU_CALL(true,newcs,newip,GETIP);
 #if CPU_TRAP_CHECK
 					if (GETFLAG(TF)) {	
-						cpudecoder=CPU_Core_Normal_Trap_Run;
+						cpudecoder=CPU_TRAP_DECODER;
 						return CBRET_NONE;
 					}
 #endif
@@ -697,7 +722,7 @@
 					CPU_JMP(true,newcs,newip,GETIP);
 #if CPU_TRAP_CHECK
 					if (GETFLAG(TF)) {	
-						cpudecoder=CPU_Core_Normal_Trap_Run;
+						cpudecoder=CPU_TRAP_DECODER;
 						return CBRET_NONE;
 					}
 #endif

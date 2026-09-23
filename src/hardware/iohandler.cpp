@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -24,6 +24,11 @@
 #include "cpu.h"
 #include "../src/cpu/lazyflags.h"
 #include "callback.h"
+
+/*
+  DBP: Added replacement of IOFaultCore with fake I/O code from DOSBox-X by Jonathan Campbell
+       Source: https://github.com/joncampbell123/dosbox-x/commit/8f8bbd1
+*/
 
 //#define ENABLE_PORTLOG
 
@@ -149,6 +154,7 @@ IO_WriteHandleObject::~IO_WriteHandleObject(){
 	//LOG_MSG("FreeWritehandler called with port %X",m_port);
 }
 
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
 struct IOF_Entry {
 	Bitu cs;
 	Bitu eip;
@@ -160,6 +166,11 @@ static struct {
 	IOF_Entry entries[IOF_QUEUESIZE];
 } iof_queue;
 
+#ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE //DBP: Added this to support page/io fault queue wiping
+extern void DOSBOX_ResetCPUDecoder();
+extern bool DOSBOX_IsWipingPageFaultQueue;
+#endif
+
 static Bits IOFaultCore(void) {
 	CPU_CycleLeft+=CPU_Cycles;
 	CPU_Cycles=1;
@@ -168,12 +179,18 @@ static Bits IOFaultCore(void) {
 	if (ret<0) E_Exit("Got a dosbox close machine in IO-fault core?");
 	if (ret)
 		return ret;
+#ifndef C_DBP_PAGE_FAULT_QUEUE_WIPE
 	if (!iof_queue.used) E_Exit("IO-faul Core without IO-faul");
 	IOF_Entry * entry=&iof_queue.entries[iof_queue.used-1];
+#else // support loading save state into a iofault
+	if (!iof_queue.used) DOSBOX_ResetCPUDecoder();
+	IOF_Entry * entry=&iof_queue.entries[iof_queue.used?iof_queue.used-1:0];
+#endif
 	if (entry->cs == SegValue(cs) && entry->eip==reg_eip)
 		return -1;
 	return 0;
 }
+#endif
 
 
 /* Some code to make io operations take some virtual time. Helps certain
@@ -208,14 +225,14 @@ inline void IO_USEC_write_delay_old() {
 
 inline void IO_USEC_read_delay() {
 	Bits delaycyc = CPU_CycleMax/IODELAY_READ_MICROSk;
-	if(GCC_UNLIKELY(CPU_Cycles < 3*delaycyc)) delaycyc = 0; //Else port acces will set cycles to 0. which might trigger problem with games which read 16 bit values
+	if(GCC_UNLIKELY(delaycyc > CPU_Cycles)) delaycyc = CPU_Cycles;
 	CPU_Cycles -= delaycyc;
 	CPU_IODelayRemoved += delaycyc;
 }
 
 inline void IO_USEC_write_delay() {
 	Bits delaycyc = CPU_CycleMax/IODELAY_WRITE_MICROSk;
-	if(GCC_UNLIKELY(CPU_Cycles < 3*delaycyc)) delaycyc=0;
+	if(GCC_UNLIKELY(delaycyc > CPU_Cycles)) delaycyc = CPU_Cycles;
 	CPU_Cycles -= delaycyc;
 	CPU_IODelayRemoved += delaycyc;
 }
@@ -289,6 +306,7 @@ void log_io(Bitu width, bool write, Bitu port, Bitu val) {
 void IO_WriteB(Bitu port,Bitu val) {
 	log_io(0, true, port, val);
 	if (GCC_UNLIKELY(GETFLAG(VM) && (CPU_IO_Exception(port,1)))) {
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
 		LazyFlags old_lflags;
 		memcpy(&old_lflags,&lflags,sizeof(LazyFlags));
 		CPU_Decoder * old_cpudecoder;
@@ -314,7 +332,13 @@ void IO_WriteB(Bitu port,Bitu val) {
 		reg_al = old_al;
 		reg_dx = old_dx;
 		memcpy(&lflags,&old_lflags,sizeof(LazyFlags));
+#ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE //DBP: Added this to support page fault queue wiping
+		if (!DOSBOX_IsWipingPageFaultQueue)
+#endif
 		cpudecoder=old_cpudecoder;
+#else
+		CPU_ForceV86FakeIO_Out(port,val,1);
+#endif
 	}
 	else {
 		IO_USEC_write_delay();
@@ -325,6 +349,7 @@ void IO_WriteB(Bitu port,Bitu val) {
 void IO_WriteW(Bitu port,Bitu val) {
 	log_io(1, true, port, val);
 	if (GCC_UNLIKELY(GETFLAG(VM) && (CPU_IO_Exception(port,2)))) {
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
 		LazyFlags old_lflags;
 		memcpy(&old_lflags,&lflags,sizeof(LazyFlags));
 		CPU_Decoder * old_cpudecoder;
@@ -350,7 +375,13 @@ void IO_WriteW(Bitu port,Bitu val) {
 		reg_ax = old_ax;
 		reg_dx = old_dx;
 		memcpy(&lflags,&old_lflags,sizeof(LazyFlags));
+#ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE //DBP: Added this to support page fault queue wiping
+		if (!DOSBOX_IsWipingPageFaultQueue)
+#endif
 		cpudecoder=old_cpudecoder;
+#else
+		CPU_ForceV86FakeIO_Out(port,val,2);
+#endif
 	}
 	else {
 		IO_USEC_write_delay();
@@ -361,6 +392,7 @@ void IO_WriteW(Bitu port,Bitu val) {
 void IO_WriteD(Bitu port,Bitu val) {
 	log_io(2, true, port, val);
 	if (GCC_UNLIKELY(GETFLAG(VM) && (CPU_IO_Exception(port,4)))) {
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
 		LazyFlags old_lflags;
 		memcpy(&old_lflags,&lflags,sizeof(LazyFlags));
 		CPU_Decoder * old_cpudecoder;
@@ -386,7 +418,13 @@ void IO_WriteD(Bitu port,Bitu val) {
 		reg_eax = old_eax;
 		reg_dx = old_dx;
 		memcpy(&lflags,&old_lflags,sizeof(LazyFlags));
+#ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE //DBP: Added this to support page fault queue wiping
+		if (!DOSBOX_IsWipingPageFaultQueue)
+#endif
 		cpudecoder=old_cpudecoder;
+#else
+		CPU_ForceV86FakeIO_Out(port,val,4);
+#endif
 	}
 	else io_writehandlers[2][port](port,val,4);
 }
@@ -394,6 +432,7 @@ void IO_WriteD(Bitu port,Bitu val) {
 Bitu IO_ReadB(Bitu port) {
 	Bitu retval;
 	if (GCC_UNLIKELY(GETFLAG(VM) && (CPU_IO_Exception(port,1)))) {
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
 		LazyFlags old_lflags;
 		memcpy(&old_lflags,&lflags,sizeof(LazyFlags));
 		CPU_Decoder * old_cpudecoder;
@@ -404,6 +443,7 @@ Bitu IO_ReadB(Bitu port) {
 		entry->eip=reg_eip;
 		CPU_Push16(SegValue(cs));
 		CPU_Push16(reg_ip);
+		Bit8u old_al = reg_al;
 		Bit16u old_dx = reg_dx;
 		reg_dx = port;
 		RealPt icb = CALLBACK_RealPointer(call_priv_io);
@@ -415,10 +455,17 @@ Bitu IO_ReadB(Bitu port) {
 		iof_queue.used--;
 
 		retval = reg_al;
+		reg_al = old_al;
 		reg_dx = old_dx;
 		memcpy(&lflags,&old_lflags,sizeof(LazyFlags));
+#ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE //DBP: Added this to support page fault queue wiping
+		if (!DOSBOX_IsWipingPageFaultQueue)
+#endif
 		cpudecoder=old_cpudecoder;
 		return retval;
+#else
+		return CPU_ForceV86FakeIO_In(port,1);
+#endif
 	}
 	else {
 		IO_USEC_read_delay();
@@ -431,6 +478,7 @@ Bitu IO_ReadB(Bitu port) {
 Bitu IO_ReadW(Bitu port) {
 	Bitu retval;
 	if (GCC_UNLIKELY(GETFLAG(VM) && (CPU_IO_Exception(port,2)))) {
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
 		LazyFlags old_lflags;
 		memcpy(&old_lflags,&lflags,sizeof(LazyFlags));
 		CPU_Decoder * old_cpudecoder;
@@ -441,6 +489,7 @@ Bitu IO_ReadW(Bitu port) {
 		entry->eip=reg_eip;
 		CPU_Push16(SegValue(cs));
 		CPU_Push16(reg_ip);
+		Bit16u old_ax = reg_ax;
 		Bit16u old_dx = reg_dx;
 		reg_dx = port;
 		RealPt icb = CALLBACK_RealPointer(call_priv_io);
@@ -452,9 +501,16 @@ Bitu IO_ReadW(Bitu port) {
 		iof_queue.used--;
 
 		retval = reg_ax;
+		reg_ax = old_ax;
 		reg_dx = old_dx;
 		memcpy(&lflags,&old_lflags,sizeof(LazyFlags));
+#ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE //DBP: Added this to support page fault queue wiping
+		if (!DOSBOX_IsWipingPageFaultQueue)
+#endif
 		cpudecoder=old_cpudecoder;
+#else
+		return CPU_ForceV86FakeIO_In(port,2);
+#endif
 	}
 	else {
 		IO_USEC_read_delay();
@@ -467,6 +523,7 @@ Bitu IO_ReadW(Bitu port) {
 Bitu IO_ReadD(Bitu port) {
 	Bitu retval;
 	if (GCC_UNLIKELY(GETFLAG(VM) && (CPU_IO_Exception(port,4)))) {
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
 		LazyFlags old_lflags;
 		memcpy(&old_lflags,&lflags,sizeof(LazyFlags));
 		CPU_Decoder * old_cpudecoder;
@@ -477,6 +534,7 @@ Bitu IO_ReadD(Bitu port) {
 		entry->eip=reg_eip;
 		CPU_Push16(SegValue(cs));
 		CPU_Push16(reg_ip);
+		Bit32u old_eax = reg_eax;
 		Bit16u old_dx = reg_dx;
 		reg_dx = port;
 		RealPt icb = CALLBACK_RealPointer(call_priv_io);
@@ -488,9 +546,16 @@ Bitu IO_ReadD(Bitu port) {
 		iof_queue.used--;
 
 		retval = reg_eax;
+		reg_eax = old_eax;
 		reg_dx = old_dx;
 		memcpy(&lflags,&old_lflags,sizeof(LazyFlags));
+#ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE //DBP: Added this to support page fault queue wiping
+		if (!DOSBOX_IsWipingPageFaultQueue)
+#endif
 		cpudecoder=old_cpudecoder;
+#else
+		return CPU_ForceV86FakeIO_In(port,4);
+#endif
 	} else {
 		retval = io_readhandlers[2][port](port,4);
 	}
@@ -501,9 +566,12 @@ Bitu IO_ReadD(Bitu port) {
 class IO :public Module_base {
 public:
 	IO(Section* configuration):Module_base(configuration){
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
 	iof_queue.used=0;
-	IO_FreeReadHandler(0,IO_MA,IO_MAX);
-	IO_FreeWriteHandler(0,IO_MA,IO_MAX);
+#endif
+	//DBP: Performance improvement
+	for (IO_WriteHandler **wh = &io_writehandlers[0][0], **whEnd = &io_writehandlers[3][0]; wh != whEnd; wh++) *wh = IO_WriteDefault;
+	for (IO_ReadHandler  **rh = &io_readhandlers[0][0],  **rhEnd = &io_readhandlers[3][0];  rh != rhEnd; rh++) *rh = IO_ReadDefault;
 	}
 	~IO()
 	{
@@ -520,4 +588,33 @@ void IO_Destroy(Section*) {
 void IO_Init(Section * sect) {
 	test = new IO(sect);
 	sect->AddDestroyFunction(&IO_Destroy);
+}
+
+#include <dbp_serialize.h>
+
+typedef CPU_Decoder* CPU_DecoderPtr;
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
+DBP_SERIALIZE_SET_POINTER_LIST(CPU_DecoderPtr, IO, &IOFaultCore);
+#else
+DBP_SERIALIZE_SET_POINTER_LIST(CPU_DecoderPtr, IO, NULL);
+#endif
+
+void DBPSerialize_IO(DBPArchive& ar)
+{
+#ifdef C_DBP_OLD_IO_FAULT_QUEUE
+	if (ar.version >= 5)
+		ar.Serialize(iof_queue.entries[iof_queue.used?iof_queue.used-1:0]);
+	else // ar.version <= 4
+		ar.Serialize(iof_queue);
+
+	if (ar.mode == DBPArchive::MODE_ZERO)
+		iof_queue.used = 0;
+#else
+	if (ar.version < 5)
+	{
+		struct OLDIOF_Entry { Bitu cs; Bitu eip; };
+		struct OLDIOF_Queue { Bitu used; OLDIOF_Entry entries[16]; };
+		ar.Discard(sizeof(OLDIOF_Queue));
+	}
+#endif
 }

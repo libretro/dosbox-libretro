@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -107,7 +107,7 @@ static void write_crtc_data_other(Bitu /*port*/,Bitu val,Bitu /*iolen*/) {
 		vga.other.lightpen |= (Bit8u)val;
 		break;
 	default:
-		LOG(LOG_VGAMISC,LOG_NORMAL)("MC6845:Write %X to illegal index %x",val,vga.other.index);
+		LOG(LOG_VGAMISC,LOG_NORMAL)("MC6845:Write %" sBitfs(X) " to illegal index %x",val,vga.other.index);
 	}
 }
 static Bitu read_crtc_data_other(Bitu /*port*/,Bitu /*iolen*/) {
@@ -154,7 +154,7 @@ static Bitu read_crtc_data_other(Bitu /*port*/,Bitu /*iolen*/) {
 	return (Bitu)(~0);
 }
 
-static void write_lightpen(Bitu port,Bitu val,Bitu) {
+static void write_lightpen(Bitu port,Bitu /*val*/,Bitu) {
 	switch (port) {
 	case 0x3db:	// Clear lightpen latch
 		vga.other.lightpen_triggered = false;
@@ -162,11 +162,11 @@ static void write_lightpen(Bitu port,Bitu val,Bitu) {
 	case 0x3dc:	// Preset lightpen latch
 		if (!vga.other.lightpen_triggered) {
 			vga.other.lightpen_triggered = true; // TODO: this shows at port 3ba/3da bit 1
-			
+
 			double timeInFrame = PIC_FullIndex()-vga.draw.delay.framestart;
 			double timeInLine = fmod(timeInFrame,vga.draw.delay.htotal);
 			Bitu current_scanline = (Bitu)(timeInFrame / vga.draw.delay.htotal);
-			
+
 			vga.other.lightpen = (Bit16u)((vga.draw.address_add/2) * (current_scanline/2));
 			vga.other.lightpen += (Bit16u)((timeInLine / vga.draw.delay.hdend) *
 				((float)(vga.draw.address_add/2)));
@@ -381,6 +381,8 @@ static void write_cga_color_select(Bitu val) {
 		vga.tandy.border_color = val & 0xf;
 		vga.attr.overscan_color = 0;
 		break;
+	default: //Else unhandled values warning
+		break;
 	}
 }
 
@@ -388,7 +390,7 @@ static void write_cga(Bitu port,Bitu val,Bitu /*iolen*/) {
 	switch (port) {
 	case 0x3d8:
 		vga.tandy.mode_control=(Bit8u)val;
-		vga.attr.disabled = (val&0x8)? 0: 1; 
+		vga.attr.disabled = (val&0x8)? 0: 1;
 		if (vga.tandy.mode_control & 0x2) {		// graphics mode
 			if (vga.tandy.mode_control & 0x10) {// highres mode
 				if (cga_comp==1 || (cga_comp==0 && !(val&0x4))) {	// composite display
@@ -422,7 +424,7 @@ static void CGAModel(bool pressed) {
 	update_cga16_color();
 	LOG_MSG("%s model CGA selected", new_cga ? "Late" : "Early");
 }
- 
+
 static void Composite(bool pressed) {
 	if (!pressed) return;
 	if (++cga_comp>2) cga_comp=0;
@@ -452,7 +454,7 @@ static void tandy_update_palette() {
 				if (vga.tandy.color_select & 0x10) color_set |= 8; // intensity
 				if (vga.tandy.color_select & 0x20) color_set |= 1; // Cyan Mag. White
 				if (vga.tandy.mode_control & 0x04) {			// Cyan Red White
-					color_set |= 1; 
+					color_set |= 1;
 					r_mask &= ~1;
 				}
 				VGA_SetCGA4Table(
@@ -645,20 +647,20 @@ static void write_pcjr(Bitu port,Bitu val,Bitu /*iolen*/) {
 		break;
 	case 0x3df:
 		// CRT/processor page register
-		
+
 		// Bit 0-2: CRT page PG0-2
 		// In one- and two bank modes, bit 0-2 select the 16kB memory
 		// area of system RAM that is displayed on the screen.
 		// In 4-banked modes, bit 1-2 select the 32kB memory area.
 		// Bit 2 only has effect when the PCJR upgrade to 128k is installed.
-		
+
 		// Bit 3-5: Processor page CPU_PG
 		// Selects the 16kB area of system RAM that is mapped to
-		// the B8000h IBM PC video memory window. Since A14-A16 of the 
+		// the B8000h IBM PC video memory window. Since A14-A16 of the
 		// processor are unconditionally replaced with these bits when
 		// B8000h is accessed, the 16kB area is mapped to the 32kB
 		// range twice in a row. (Scuba Venture writes across the boundary)
-		
+
 		// Bit 6-7: Video Address mode
 		// 0: CRTC addresses A0-12 directly, accessing 8k characters
 		//    (+8k attributes). Used in text modes (one bank).
@@ -690,8 +692,8 @@ static void CycleHercPal(bool pressed) {
 	Herc_Palette();
 	VGA_DAC_CombineColor(1,7);
 }
-	
-void Herc_Palette(void) {	
+
+void Herc_Palette(void) {
 	switch (herc_pal) {
 	case 0:	// White
 		VGA_DAC_SetEntry(0x7,0x2a,0x2a,0x2a);
@@ -711,7 +713,7 @@ void Herc_Palette(void) {
 static void write_hercules(Bitu port,Bitu val,Bitu /*iolen*/) {
 	switch (port) {
 	case 0x3b8: {
-		// the protected bits can always be cleared but only be set if the 
+		// the protected bits can always be cleared but only be set if the
 		// protection bits are set
 		if (vga.herc.mode_control&0x2) {
 			// already set
@@ -812,15 +814,19 @@ void VGA_SetupOther(void) {
 		extern Bit8u int10_font_14[256 * 14];
 		for (i=0;i<256;i++)	memcpy(&vga.draw.font[i*32],&int10_font_14[i*14],14);
 		vga.draw.font_tables[0]=vga.draw.font_tables[1]=vga.draw.font;
+#ifdef C_DBP_ENABLE_MAPPER
 		MAPPER_AddHandler(CycleHercPal,MK_f11,0,"hercpal","Herc Pal");
+#endif
 	}
 	if (machine==MCH_CGA) {
 		IO_RegisterWriteHandler(0x3d8,write_cga,IO_MB);
 		IO_RegisterWriteHandler(0x3d9,write_cga,IO_MB);
+#ifdef C_DBP_ENABLE_MAPPER
 		MAPPER_AddHandler(IncreaseHue,MK_f11,MMOD2,"inchue","Inc Hue");
 		MAPPER_AddHandler(DecreaseHue,MK_f11,0,"dechue","Dec Hue");
 		MAPPER_AddHandler(CGAModel,MK_f11,MMOD1|MMOD2,"cgamodel","CGA Model");
 		MAPPER_AddHandler(Composite,MK_f12,0,"cgacomp","CGA Comp");
+#endif
 	}
 	if (machine==MCH_TANDY) {
 		write_tandy( 0x3df, 0x0, 0 );
@@ -862,4 +868,23 @@ void VGA_SetupOther(void) {
 		}
 	}
 
+}
+
+void DBP_SetCGAMode(bool new_model, Bit8u comp_mode) {
+	if (new_cga != new_model) {
+		new_cga = new_model;
+		update_cga16_color();
+	}
+	if (cga_comp != comp_mode) {
+		cga_comp = comp_mode;
+		if (vga.tandy.mode_control & 0x2)
+			write_cga(0x3d8,vga.tandy.mode_control,1);
+	}
+}
+
+void DBP_SetHerculesPalette(Bit8u palette) {
+	herc_pal = palette;
+	if (herc_pal>2) herc_pal=0;
+	Herc_Palette();
+	VGA_DAC_CombineColor(1,7);
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -139,7 +139,8 @@ static Bitu INT10_Handler(void) {
 		break;
 	case 0x0F:								/* Get videomode */
 		reg_bh=real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
-		reg_al=real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE)|(real_readb(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL)&0x80);
+		reg_al=real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
+		if (IS_EGAVGA_ARCH) reg_al|=real_readb(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL)&0x80;
 		reg_ah=(Bit8u)real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
 		break;					
 	case 0x10:								/* Palette functions */
@@ -449,45 +450,8 @@ graphics_chars:
 		break;
 	case 0x1A:								/* Display Combination */
 		if (!IS_VGA_ARCH) break;
-		if (reg_al==0) {	// get dcc
-			// walk the tables...
-			RealPt vsavept=real_readd(BIOSMEM_SEG,BIOSMEM_VS_POINTER);
-			RealPt svstable=real_readd(RealSeg(vsavept),RealOff(vsavept)+0x10);
-			if (svstable) {
-				RealPt dcctable=real_readd(RealSeg(svstable),RealOff(svstable)+0x02);
-				Bit8u entries=real_readb(RealSeg(dcctable),RealOff(dcctable)+0x00);
-				Bit8u idx=real_readb(BIOSMEM_SEG,BIOSMEM_DCC_INDEX);
-				// check if index within range
-				if (idx<entries) {
-					Bit16u dccentry=real_readw(RealSeg(dcctable),RealOff(dcctable)+0x04+idx*2);
-					if ((dccentry&0xff)==0) reg_bx=dccentry>>8;
-					else reg_bx=dccentry;
-				} else reg_bx=0xffff;
-			} else reg_bx=0xffff;
-			reg_ax=0x1A;	// high part destroyed or zeroed depending on BIOS
-		} else if (reg_al==1) {	// set dcc
-			Bit8u newidx=0xff;
-			// walk the tables...
-			RealPt vsavept=real_readd(BIOSMEM_SEG,BIOSMEM_VS_POINTER);
-			RealPt svstable=real_readd(RealSeg(vsavept),RealOff(vsavept)+0x10);
-			if (svstable) {
-				RealPt dcctable=real_readd(RealSeg(svstable),RealOff(svstable)+0x02);
-				Bit8u entries=real_readb(RealSeg(dcctable),RealOff(dcctable)+0x00);
-				if (entries) {
-					Bitu ct;
-					Bit16u swpidx=reg_bh|(reg_bl<<8);
-					// search the ddc index in the dcc table
-					for (ct=0; ct<entries; ct++) {
-						Bit16u dccentry=real_readw(RealSeg(dcctable),RealOff(dcctable)+0x04+ct*2);
-						if ((dccentry==reg_bx) || (dccentry==swpidx)) {
-							newidx=(Bit8u)ct;
-							break;
-						}
-					}
-				}
-			}
-
-			real_writeb(BIOSMEM_SEG,BIOSMEM_DCC_INDEX,newidx);
+		if (reg_al<2) {
+			INT10_DisplayCombinationCode(&reg_bx,reg_al==1);
 			reg_ax=0x1A;	// high part destroyed or zeroed depending on BIOS
 		}
 		break;
@@ -592,10 +556,10 @@ graphics_chars:
 			break;
 		case 0x07:
 			switch (reg_bl) {
-			case 0x80:						/* Set Display Start during retrace ?? */
+			case 0x80:						/* Set Display Start during retrace */
 			case 0x00:						/* Set display Start */
 				reg_al=0x4f;
-				reg_ah=VESA_SetDisplayStart(reg_cx,reg_dx);
+				reg_ah=VESA_SetDisplayStart(reg_cx,reg_dx,reg_bl==0x80);
 				break;
 			case 0x01:
 				reg_al=0x4f;
@@ -611,9 +575,8 @@ graphics_chars:
 		case 0x09:
 			switch (reg_bl) {
 			case 0x80:						/* Set Palette during retrace */
-				//TODO
 			case 0x00:						/* Set Palette */
-				reg_ah=VESA_SetPalette(SegPhys(es)+reg_di,reg_dx,reg_cx);
+				reg_ah=VESA_SetPalette(SegPhys(es)+reg_di,reg_dx,reg_cx,reg_bl==0x80);
 				reg_al=0x4f;
 				break;
 			case 0x01:						/* Get Palette */
@@ -633,27 +596,27 @@ graphics_chars:
 			}
 			switch (reg_bl) {
 			case 0x00:
-				reg_edi=RealOff(int10.rom.pmode_interface);
 				SegSet16(es,RealSeg(int10.rom.pmode_interface));
+				reg_di=RealOff(int10.rom.pmode_interface);
 				reg_cx=int10.rom.pmode_interface_size;
 				reg_ax=0x004f;
 				break;
 			case 0x01:						/* Get code for "set window" */
-				reg_edi=RealOff(int10.rom.pmode_interface)+int10.rom.pmode_interface_window;
 				SegSet16(es,RealSeg(int10.rom.pmode_interface));
-				reg_cx=0x10;		//0x10 should be enough for the callbacks
+				reg_di=RealOff(int10.rom.pmode_interface)+int10.rom.pmode_interface_window;
+				reg_cx=int10.rom.pmode_interface_start-int10.rom.pmode_interface_window;
 				reg_ax=0x004f;
 				break;
 			case 0x02:						/* Get code for "set display start" */
-				reg_edi=RealOff(int10.rom.pmode_interface)+int10.rom.pmode_interface_start;
 				SegSet16(es,RealSeg(int10.rom.pmode_interface));
-				reg_cx=0x10;		//0x10 should be enough for the callbacks
+				reg_di=RealOff(int10.rom.pmode_interface)+int10.rom.pmode_interface_start;
+				reg_cx=int10.rom.pmode_interface_palette-int10.rom.pmode_interface_start;
 				reg_ax=0x004f;
 				break;
 			case 0x03:						/* Get code for "set palette" */
-				reg_edi=RealOff(int10.rom.pmode_interface)+int10.rom.pmode_interface_palette;
 				SegSet16(es,RealSeg(int10.rom.pmode_interface));
-				reg_cx=0x10;		//0x10 should be enough for the callbacks
+				reg_di=RealOff(int10.rom.pmode_interface)+int10.rom.pmode_interface_palette;
+				reg_cx=int10.rom.pmode_interface_size-int10.rom.pmode_interface_palette;
 				reg_ax=0x004f;
 				break;
 			default:
@@ -705,18 +668,20 @@ graphics_chars:
 }
 
 static void INT10_Seg40Init(void) {
-	// the default char height
-	real_writeb(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT,16);
-	// Clear the screen 
-	real_writeb(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,0x60);
-	// Set the basic screen we have
-	real_writeb(BIOSMEM_SEG,BIOSMEM_SWITCHES,0xF9);
-	// Set the basic modeset options
-	real_writeb(BIOSMEM_SEG,BIOSMEM_MODESET_CTL,0x51);
-	// Set the  default MSR
+	// Set the default MSR
 	real_writeb(BIOSMEM_SEG,BIOSMEM_CURRENT_MSR,0x09);
-	// Set the pointer to video save pointer table
-	real_writed(BIOSMEM_SEG,BIOSMEM_VS_POINTER,int10.rom.video_save_pointers);
+	if (IS_EGAVGA_ARCH) {
+		// Set the default char height
+		real_writeb(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT,16);
+		// Clear the screen 
+		real_writeb(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,0x60);
+		// Set the basic screen we have
+		real_writeb(BIOSMEM_SEG,BIOSMEM_SWITCHES,0xF9);
+		// Set the basic modeset options
+		real_writeb(BIOSMEM_SEG,BIOSMEM_MODESET_CTL,0x51);
+		// Set the pointer to video save pointer table
+		real_writed(BIOSMEM_SEG,BIOSMEM_VS_POINTER,int10.rom.video_save_pointers);
+	}
 }
 
 
@@ -767,4 +732,11 @@ void INT10_Init(Section* /*sec*/) {
 	INT10_SetupRomMemory();
 	INT10_Seg40Init();
 	INT10_SetVideoMode(0x3);
+}
+
+#include <dbp_serialize.h>
+
+void DBPSerialize_INT10(DBPArchive& ar)
+{
+	ar.Serialize(int10);
 }
