@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -91,6 +91,8 @@
 
 // access to a general register
 #define DRCD_REG_VAL(reg) (&cpu_regs.regs[reg].dword)
+// access to the flags register
+#define DRCD_REG_FLAGS (&cpu_regs.flags)
 // access to a segment register
 #define DRCD_SEG_VAL(seg) (&Segs.val[seg])
 // access to the physical value of a segment register/selector
@@ -112,7 +114,8 @@ enum BlockReturn {
 #endif
 	BR_Iret,
 	BR_CallBack,
-	BR_SMCBlock
+	BR_SMCBlock,
+	BR_Trap
 };
 
 // identificator to signal self-modification of the currently executed block
@@ -124,21 +127,27 @@ static void IllegalOptionDynrec(const char* msg) {
 }
 
 static struct {
-	BlockReturn (*runcode)(Bit8u*);		// points to code that can start a block
+	BlockReturn (*runcode)(const Bit8u*);		// points to code that can start a block
 	Bitu callback;				// the occurred callback
 	Bitu readdata;				// spare space used when reading from memory
 	Bit32u protected_regs[8];	// space to save/restore register values
 } core_dynrec;
 
 
-#include "core_dynrec/cache.h"
+#include "dyn_cache.h"
+
+//DBP: Fix compilation for OpenDingux
+#ifdef MIPSEL
+#undef MIPSEL
+#endif
 
 #define X86			0x01
 #define X86_64		0x02
 #define MIPSEL		0x03
 #define ARMV4LE		0x04
 #define ARMV7LE		0x05
-#define POWERPC		0x04
+#define POWERPC		0x06
+#define ARMV8LE		0x07
 
 #if C_TARGETCPU == X86_64
 #include "core_dynrec/risc_x64.h"
@@ -150,6 +159,13 @@ static struct {
 #include "core_dynrec/risc_armv4le.h"
 #elif C_TARGETCPU == POWERPC
 #include "core_dynrec/risc_ppc.h"
+#elif C_TARGETCPU == ARMV8LE
+#include "core_dynrec/risc_armv8le.h"
+#endif
+
+#ifndef WORDS_BIGENDIAN
+#define gen_add_LE gen_add
+#define gen_mov_LE_word_to_reg gen_mov_word_to_reg
 #endif
 
 #include "core_dynrec/decoder.h"
@@ -159,16 +175,14 @@ CacheBlockDynRec * LinkBlocks(BlockReturn ret) {
 	// the last instruction was a control flow modifying instruction
 	Bitu temp_ip=SegPhys(cs)+reg_eip;
 	CodePageHandlerDynRec * temp_handler=(CodePageHandlerDynRec *)get_tlb_readhandler(temp_ip);
-	if (temp_handler->flags & PFLAG_HASCODE) {
+	if (temp_handler->flags & (cpu.code.big ? PFLAG_HASCODE32:PFLAG_HASCODE16)) {
 		// see if the target is an already translated block
 		block=temp_handler->FindCacheBlock(temp_ip & 4095);
-		if (!block) return NULL;
-
-		// found it, link the current block to
-		cache.block.running->LinkTo(ret==BR_Link2,block);
-		return block;
+		if (block) { // found it, link the current block to
+			cache.block.running->LinkTo(ret==BR_Link2,block);
+		}
 	}
-	return NULL;
+	return block;
 }
 
 /*
@@ -217,6 +231,8 @@ Bits CPU_Core_Dynrec_Run(void) {
 				Bits nc_retcode=CPU_Core_Normal_Run();
 				if (!nc_retcode) {
 					CPU_Cycles=old_cycles-1;
+					if (old_cycles <= 1)
+						return CBRET_NONE;
 					continue;
 				}
 				CPU_CycleLeft+=old_cycles;
@@ -297,6 +313,19 @@ run_block:
 			if (block) goto run_block;
 			break;
 
+		//DBP: Added trap flag emulation after POPF in dynamic core fix by koolkdev (https://sourceforge.net/p/dosbox/patches/291/)
+		case BR_Trap:
+			// trapflag is set, switch to the trap-aware decoder
+#if C_DEBUG
+#if C_HEAVY_DEBUG
+			if (DEBUG_HeavyIsBreakpoint()) {
+				return debugCallback;
+			}
+#endif
+#endif
+			cpudecoder=CPU_Core_Dynrec_Trap_Run;
+			return CBRET_NONE;
+
 		default:
 			E_Exit("Invalid return code %d", ret);
 		}
@@ -314,7 +343,7 @@ Bits CPU_Core_Dynrec_Trap_Run(void) {
 
 	// trap to int1 unless the last instruction deferred this
 	// (allows hardware interrupts to be served without interaction)
-	if (!cpu.trap_skip) CPU_HW_Interrupt(1);
+	if (!cpu.trap_skip) CPU_DebugException(DBINT_STEP,reg_eip);
 
 	CPU_Cycles = oldCycles-1;
 	// continue (either the trapflag was clear anyways, or the int1 cleared it)
@@ -328,11 +357,30 @@ void CPU_Core_Dynrec_Init(void) {
 
 void CPU_Core_Dynrec_Cache_Init(bool enable_cache) {
 	// Initialize code cache and dynamic blocks
-	cache_init(enable_cache);
+	//DBP: Fix turning dynamic core on and off
+	//cache_init(enable_cache);
+	if (enable_cache && cache_initialized) DBPSerialize_cache_reset();
+	else if (enable_cache && !cache_initialized) cache_init(true);
+	else if (!enable_cache && cache_initialized) cache_close();
 }
 
-void CPU_Core_Dynrec_Cache_Close(void) {
-	cache_close();
+//void CPU_Core_Dynrec_Cache_Close(void) {
+//	cache_close();
+//}
+
+#include <dbp_serialize.h>
+
+void DBPSerialize_CPU_Core_Dynrec(DBPArchive& ar)
+{
+	bool stored_initialized = cache_initialized;
+	ar
+		.Serialize(stored_initialized)
+		.Serialize(core_dynrec.callback)
+		.Serialize(core_dynrec.readdata)
+		.SerializeArray(core_dynrec.protected_regs);
+
+	if (ar.mode == DBPArchive::MODE_LOAD)
+		CPU_Core_Dynrec_Cache_Init(stored_initialized);
 }
 
 #endif

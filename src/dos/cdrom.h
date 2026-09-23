@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -31,7 +31,21 @@
 #include "dosbox.h"
 #include "mem.h"
 #include "mixer.h"
+#ifdef C_DBP_USE_SDL
 #include "SDL.h"
+#include "SDL_thread.h"
+#else
+#define CD_FPS	75
+#define FRAMES_TO_MSF(f, M,S,F)	{					\
+	int value = f;							\
+	*(F) = value%CD_FPS;						\
+	value /= CD_FPS;						\
+	*(S) = value%60;						\
+	value /= 60;							\
+	*(M) = value;							\
+}
+#define MSF_TO_FRAMES(M, S, F)	((M)*60*CD_FPS+(S)*CD_FPS+(F))
+#endif
 
 #if defined(C_SDL_SOUND)
 #include "SDL_sound.h"
@@ -40,7 +54,9 @@
 #define RAW_SECTOR_SIZE		2352
 #define COOKED_SECTOR_SIZE	2048
 
+#ifdef C_DBP_NATIVE_CDROM
 enum { CDROM_USE_SDL, CDROM_USE_ASPI, CDROM_USE_IOCTL_DIO, CDROM_USE_IOCTL_DX, CDROM_USE_IOCTL_MCI };
+#endif
 
 typedef struct SMSF {
 	unsigned char min;
@@ -77,12 +93,17 @@ public:
 	virtual void	ChannelControl		(TCtrl ctrl) = 0;
 	
 	virtual bool	ReadSectors			(PhysPt buffer, bool raw, unsigned long sector, unsigned long num) = 0;
+	#ifdef C_DBP_ENABLE_IDE
+	enum atapi_res { ATAPI_OK, ATAPI_ILLEGAL_MODE, ATAPI_READ_ERROR, ATAPI_NO_MEDIA };
+	virtual atapi_res ReadSectorsAtapi	(void* buffer, Bitu bufferSize, Bitu sector, Bitu num, Bit8u readSectorType, Bitu readLength) { return ATAPI_READ_ERROR; }
+	#endif
 
 	virtual bool	LoadUnloadMedia		(bool unload) = 0;
 	
 	virtual void	InitNewMedia		(void) {};
 };	
 
+#ifdef C_DBP_NATIVE_CDROM
 class CDROM_Interface_SDL : public CDROM_Interface
 {
 public:
@@ -99,7 +120,7 @@ public:
 	virtual bool	PlayAudioSector		(unsigned long start,unsigned long len);
 	virtual bool	PauseAudio			(bool resume);
 	virtual bool	StopAudio			(void);
-	virtual void	ChannelControl		(TCtrl ctrl) { return; };
+	virtual void	ChannelControl		(TCtrl /*ctrl*/) { return; };
 	virtual bool	ReadSectors			(PhysPt /*buffer*/, bool /*raw*/, unsigned long /*sector*/, unsigned long /*num*/) { return false; };
 	virtual bool	LoadUnloadMedia		(bool unload);
 
@@ -111,6 +132,7 @@ private:
 	int		driveID;
 	Uint32	oldLeadOut;
 };
+#endif /* C_DBP_NATIVE_CDROM */
 
 class CDROM_Interface_Fake : public CDROM_Interface
 {
@@ -125,7 +147,7 @@ public:
 	bool	PlayAudioSector		(unsigned long /*start*/,unsigned long /*len*/) { return true; };
 	bool	PauseAudio			(bool /*resume*/) { return true; };
 	bool	StopAudio			(void) { return true; };
-	void	ChannelControl		(TCtrl ctrl) { return; };
+	void	ChannelControl		(TCtrl /*ctrl*/) { return; };
 	bool	ReadSectors			(PhysPt /*buffer*/, bool /*raw*/, unsigned long /*sector*/, unsigned long /*num*/) { return true; };
 	bool	LoadUnloadMedia		(bool /*unload*/) { return true; };
 };	
@@ -135,36 +157,58 @@ class CDROM_Interface_Image : public CDROM_Interface
 private:
 	class TrackFile {
 	public:
+	#ifdef C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE
+		TrackFile(const char *filename, bool &error, const char *relative_to = NULL);
+		virtual bool read(Bit8u *buffer, int seek, int count);
+		virtual int getLength();
+		virtual ~TrackFile();
+	protected:
+		class DOS_File* dos_file;
+		Bit32u dos_ofs, dos_end;
+	#else
 		virtual bool read(Bit8u *buffer, int seek, int count) = 0;
 		virtual int getLength() = 0;
 		virtual ~TrackFile() { };
+	#endif
 	};
 	
 	class BinaryFile : public TrackFile {
 	public:
+		#ifdef C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE
+		BinaryFile(const char *filename, bool &error, const char *relative_to = NULL) : TrackFile(filename, error, relative_to) { }
+		#else
 		BinaryFile(const char *filename, bool &error);
-		~BinaryFile();
-		bool read(Bit8u *buffer, int seek, int count);
-		int getLength();
+		#endif
 	private:
+		#ifndef C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE
 		BinaryFile();
 		std::ifstream *file;
+		#endif
 	};
 	
-	#if defined(C_SDL_SOUND)
 	class AudioFile : public TrackFile {
 	public:
+		#ifdef C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE
+		AudioFile(const char *filename, bool &error, const char *relative_to = NULL);
+		#else
 		AudioFile(const char *filename, bool &error);
+		#endif
 		~AudioFile();
 		bool read(Bit8u *buffer, int seek, int count);
 		int getLength();
 	private:
 		AudioFile();
+		#ifdef C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE
+		Bit32u wave_start, audio_length, last_seek;
+		double audio_factor;
+		struct stb_vorbis *vorb;
+		std::vector<Bit8u> buffer_temp;
+		#elif defined(C_SDL_SOUND)
 		Sound_Sample *sample;
 		int lastCount;
 		int lastSeek;
+		#endif
 	};
-	#endif
 	
 	struct Track {
 		int number;
@@ -193,11 +237,17 @@ public:
 	bool	StopAudio		(void);
 	void	ChannelControl		(TCtrl ctrl);
 	bool	ReadSectors		(PhysPt buffer, bool raw, unsigned long sector, unsigned long num);
+	#ifdef C_DBP_ENABLE_IDE
+	atapi_res ReadSectorsAtapi	(void* buffer, Bitu bufferSize, Bitu sector, Bitu num, Bit8u readSectorType, Bitu readLength);
+	#endif
 	bool	LoadUnloadMedia		(bool unload);
 	bool	ReadSector		(Bit8u *buffer, bool raw, unsigned long sector);
 	bool	HasDataTrack		(void);
 	
 static	CDROM_Interface_Image* images[26];
+
+	//DBP: for restart
+static	void	ShutDown();
 
 private:
 	// player
@@ -207,7 +257,9 @@ static	void	CDAudioCallBack(Bitu len);
 static  struct imagePlayer {
 		CDROM_Interface_Image *cd;
 		MixerChannel   *channel;
+#ifdef C_DBP_USE_SDL
 		SDL_mutex 	*mutex;
+#endif
 		Bit8u   buffer[8192];
 		int     bufLen;
 		int     currFrame;	
@@ -228,15 +280,21 @@ static  struct imagePlayer {
 	bool	GetCueFrame(int &frames, std::istream &in);
 	bool	GetCueString(std::string &str, std::istream &in);
 	bool	AddTrack(Track &curr, int &shift, int prestart, int &totalPregap, int currPregap);
+#ifdef C_DBP_SUPPORT_CDROM_CHD_IMAGE
+	bool	LoadChdFile(char *filename);
+#endif
 
 static	int	refCount;
 	std::vector<Track>	tracks;
 typedef	std::vector<Track>::iterator	track_it;
 	std::string	mcn;
 	Bit8u	subUnit;
+
+	friend void DBPSerialize_CDPlayer(struct DBPArchive& ar);
 };
 
-#if defined(WIN32) && !defined(__LIBRETRO__) /* Win 32 */
+#ifdef C_DBP_NATIVE_CDROM
+#if defined (WIN32)	/* Win 32 */
 
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 
@@ -262,7 +320,7 @@ public:
 	bool	PlayAudioSector		(unsigned long start,unsigned long len);
 	bool	PauseAudio			(bool resume);
 	bool	StopAudio			(void);
-	void	ChannelControl		(TCtrl ctrl) { return; };
+	void	ChannelControl		(TCtrl /*ctrl*/) { return; };
 	
 	bool	ReadSectors			(PhysPt buffer, bool raw, unsigned long sector, unsigned long num);
 
@@ -392,5 +450,6 @@ private:
 };
 
 #endif /* LINUX */
+#endif /* C_DBP_NATIVE_CDROM */
 
 #endif /* __CDROM_INTERFACE__ */

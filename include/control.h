@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -52,7 +52,9 @@
 
 class Config{
 public:
+#ifdef C_DBP_NATIVE_CONFIGFILE
 	CommandLine * cmdline;
+#endif
 private:
 	std::list<Section*> sectionlist;
 	typedef std::list<Section*>::iterator it;
@@ -63,6 +65,7 @@ private:
 	bool secure_mode; //Sandbox mode
 public:
 	bool initialised;
+#ifdef C_DBP_NATIVE_CONFIGFILE
 	std::vector<std::string> startup_params;
 	std::vector<std::string> configfiles;
 	Config(CommandLine * cmd):cmdline(cmd),secure_mode(false) {
@@ -70,12 +73,20 @@ public:
 		cmdline->FillVector(startup_params);
 		initialised=false;
 	}
+#else
+	friend class CONFIG;
+	Config():secure_mode(false),initialised(false) {}
+#endif
 	~Config();
 
 	Section_line * AddSection_line(char const * const _name,void (*_initfunction)(Section*));
 	Section_prop * AddSection_prop(char const * const _name,void (*_initfunction)(Section*),bool canchange=false);
 	
 	Section* GetSection(int index);
+#ifdef C_DBP_LIBRETRO
+	Section* GetSection(char const * const _sectionname) const;
+	Property* GetProp(char const * const _sectionname, char const * const _property) const;
+#endif
 	Section* GetSection(std::string const&_sectionname) const;
 	Section* GetSectionFromProperty(char const * const prop) const;
 

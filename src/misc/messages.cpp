@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -25,6 +25,7 @@
 #include "support.h"
 #include "setup.h"
 #include "control.h"
+#ifdef C_DBP_ENABLE_MESSAGEFILE
 #include <list>
 #include <string>
 using namespace std;
@@ -142,3 +143,35 @@ void MSG_Init(Section_prop * section) {
 		if(pathprop) LoadMessageFile(pathprop->realpath.c_str());
 	}
 }
+#else // C_DBP_ENABLE_MESSAGEFILE
+#include "../dos/drives.h"
+
+//DBP: Replacing list<> with hash map yields significant performance improvement especially during startup/restart
+static std::vector<char> MsgBuf;
+static StringToPointerHashMap<void> MsgOffsets;
+
+void MSG_Init(Section_prop * section) { }
+
+void MSG_Add(const char * _name, const char* _val)
+{
+	size_t bytes = strlen(_val) + 1;
+	Bit32u hash = MsgOffsets.Hash(_name);
+	size_t existing = (size_t)MsgOffsets.Get(_name, 0, hash);
+	if (existing)
+	{
+		DBP_ASSERT(!strcmp(&MsgBuf[existing-1], _val));
+		return;
+	}
+	size_t bufpos = MsgBuf.size();
+	MsgBuf.resize(bufpos + bytes);
+	memcpy(&MsgBuf[bufpos], _val, bytes);
+	MsgOffsets.Put(_name, (void*)(bufpos + 1), 0, hash);
+}
+
+const char * MSG_Get(char const * msg)
+{
+	size_t bufpos1 = (size_t)MsgOffsets.Get(msg);
+	if (bufpos1) return &MsgBuf[bufpos1-1];
+	return "Message not Found!\n";
+}
+#endif // C_DBP_ENABLE_MESSAGEFILE

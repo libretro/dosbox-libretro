@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: MISC FIX
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -33,9 +31,8 @@
 #include "cross.h"
 #include "control.h"
 #include "shell.h"
-
-//fix for functions that are not the same in all versions of libc
-#include "nonlibc.h"
+#include "hardware.h"
+#include "mapper.h"
 
 Bitu call_program;
 
@@ -57,7 +54,12 @@ static Bit8u exe_block[]={
 static std::vector<PROGRAMS_Main*> internal_progs;
 
 void PROGRAMS_MakeFile(char const * const name,PROGRAMS_Main * main) {
+	//DBP: removed memleak by copying data inside VFILE_Register
+	#if 0
 	Bit8u * comdata=(Bit8u *)malloc(32); //MEM LEAK
+	#else
+	Bit8u comdata[32];
+	#endif
 	memcpy(comdata,&exe_block,sizeof(exe_block));
 	comdata[CB_POS]=(Bit8u)(call_program&0xff);
 	comdata[CB_POS+1]=(Bit8u)((call_program>>8)&0xff);
@@ -83,7 +85,7 @@ static Bitu PROGRAMS_Handler(void) {
 	HostPt writer=(HostPt)&index;
 	for (;size>0;size--) *writer++=mem_readb(reader++);
 	Program * new_program;
-	if (index > internal_progs.size()) E_Exit("something is messing with the memory");
+	if (index >= internal_progs.size()) E_Exit("something is messing with the memory");
 	PROGRAMS_Main * handler = internal_progs[index];
 	(*handler)(&new_program);
 	new_program->Run();
@@ -103,9 +105,9 @@ Program::Program() {
 	while (mem_readb(envscan)) envscan+=mem_strlen(envscan)+1;	
 	envscan+=3;
 	CommandTail tail;
-	MEM_BlockRead(PhysMake(dos.psp(),CTBUF+1),&tail,CTBUF+1);
-	if (tail.count<CTBUF) tail.buffer[tail.count]=0;
-	else tail.buffer[CTBUF-1]=0;
+	MEM_BlockRead(PhysMake(dos.psp(),128),&tail,128);
+	if (tail.count<127) tail.buffer[tail.count]=0;
+	else tail.buffer[126]=0;
 	char filename[256+1];
 	MEM_StrCopy(envscan,filename,256);
 	cmd = new CommandLine(filename,tail.buffer);
@@ -139,10 +141,11 @@ void Program::WriteOut(const char * format,...) {
 	va_list msg;
 	
 	va_start(msg,format);
-	portable_vsnprintf(buf,2047,format,msg);
+	vsnprintf(buf,2047,format,msg);
 	va_end(msg);
 
 	Bit16u size = (Bit16u)strlen(buf);
+	dos.internal_output=true;
 	for(Bit16u i = 0; i < size;i++) {
 		Bit8u out;Bit16u s=1;
 		if (buf[i] == 0xA && last_written_character != 0xD) {
@@ -151,6 +154,7 @@ void Program::WriteOut(const char * format,...) {
 		last_written_character = out = buf[i];
 		DOS_WriteFile(STDOUT,&out,&s);
 	}
+	dos.internal_output=false;
 	
 //	DOS_WriteFile(STDOUT,(Bit8u *)buf,&size);
 }
@@ -158,6 +162,7 @@ void Program::WriteOut(const char * format,...) {
 void Program::WriteOut_NoParsing(const char * format) {
 	Bit16u size = (Bit16u)strlen(format);
 	char const* buf = format;
+	dos.internal_output=true;
 	for(Bit16u i = 0; i < size;i++) {
 		Bit8u out;Bit16u s=1;
 		if (buf[i] == 0xA && last_written_character != 0xD) {
@@ -166,6 +171,7 @@ void Program::WriteOut_NoParsing(const char * format) {
 		last_written_character = out = buf[i];
 		DOS_WriteFile(STDOUT,&out,&s);
 	}
+	dos.internal_output=false;
 
 //	DOS_WriteFile(STDOUT,(Bit8u *)format,&size);
 }
@@ -221,9 +227,16 @@ Bitu Program::GetEnvCount(void) {
 }
 
 bool Program::SetEnv(const char * entry,const char * new_string) {
-	PhysPt env_read=PhysMake(psp->GetEnvironment(),0);
-	PhysPt env_write=env_read;
-	char env_string[1024+1];
+	PhysPt env_read = PhysMake(psp->GetEnvironment(),0);
+	
+	//Get size of environment.
+	DOS_MCB mcb(psp->GetEnvironment()-1);
+	Bit16u envsize = mcb.GetSize()*16;
+
+
+	PhysPt env_write = env_read;
+	PhysPt env_write_start = env_read;
+	char env_string[1024+1] = { 0 };
 	do 	{
 		MEM_StrCopy(env_read,env_string,1024);
 		if (!env_string[0]) break;
@@ -236,25 +249,33 @@ bool Program::SetEnv(const char * entry,const char * new_string) {
 	} while (1);
 /* TODO Maybe save the program name sometime. not really needed though */
 	/* Save the new entry */
+
+	//ensure room
+	if (envsize <= (env_write-env_write_start) + strlen(entry) + 1 + strlen(new_string) + 2) return false;
+
 	if (new_string[0]) {
 		std::string bigentry(entry);
 		for (std::string::iterator it = bigentry.begin(); it != bigentry.end(); ++it) *it = toupper(*it);
-		sprintf(env_string,"%s=%s",bigentry.c_str(),new_string); 
-//		sprintf(env_string,"%s=%s",entry,new_string); //oldcode
+		snprintf(env_string,1024+1,"%s=%s",bigentry.c_str(),new_string);
 		MEM_BlockWrite(env_write,env_string,(Bitu)(strlen(env_string)+1));
 		env_write += (PhysPt)(strlen(env_string)+1);
 	}
 	/* Clear out the final piece of the environment */
-	mem_writed(env_write,0);
+	mem_writeb(env_write,0);
 	return true;
 }
 
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 bool MSG_Write(const char *);
 void restart_program(std::vector<std::string> & parameters);
+#else
+#include "../dos/drives.h"
+#endif
 
 class CONFIG : public Program {
 public:
 	void Run(void);
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 private:
 	void restart(const char* useconfig);
 	
@@ -279,23 +300,41 @@ private:
 		}
 		return false;
 	}
+#endif
 };
 
 void CONFIG::Run(void) {
 	static const char* const params[] = {
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 		"-r", "-wcp", "-wcd", "-wc", "-writeconf", "-l", "-rmconf",
-		"-h", "-help", "-?", "-axclear", "-axadd", "-axtype", "-get", "-set",
+		"-h", "-help", "-?", "-axclear", "-axadd", "-axtype",
+		"-avistart","-avistop",
+		"-startmapper",
+#endif
+		"-get", "-set",
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 		"-writelang", "-wl", "-securemode", "" };
+#else
+		"-dump", "" };
+#endif
 	enum prs {
 		P_NOMATCH, P_NOPARAMS, // fixed return values for GetParameterFromList
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 		P_RESTART,
 		P_WRITECONF_PORTABLE, P_WRITECONF_DEFAULT, P_WRITECONF, P_WRITECONF2,
 		P_LISTCONF,	P_KILLCONF,
 		P_HELP, P_HELP2, P_HELP3,
 		P_AUTOEXEC_CLEAR, P_AUTOEXEC_ADD, P_AUTOEXEC_TYPE,
+		P_REC_AVI_START, P_REC_AVI_STOP,
+		P_START_MAPPER,
+#endif
 		P_GETPROP, P_SETPROP,
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 		P_WRITELANG, P_WRITELANG2,
 		P_SECURE
+#else
+		P_DUMP,
+#endif
 	} presult = P_NOMATCH;
 	
 	bool first = true;
@@ -305,6 +344,7 @@ void CONFIG::Run(void) {
 		presult = (enum prs)cmd->GetParameterFromList(params, pvars);
 		switch(presult) {
 		
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 		case P_RESTART:
 			if (securemode_check()) return;
 			if (pvars.size() == 0) restart_program(control->startup_params);
@@ -313,9 +353,6 @@ void CONFIG::Run(void) {
 				restart_params.push_back(control->cmdline->GetFileName());
 				for(size_t i = 0; i < pvars.size(); i++) {
 					restart_params.push_back(pvars[i]);
-					if (pvars[i].find(' ') != std::string::npos) {
-						pvars[i] = "\""+pvars[i]+"\""; // add back spaces
-					}
 				}
 				// the rest on the commandline, too
 				cmd->FillVector(restart_params);
@@ -378,6 +415,7 @@ void CONFIG::Run(void) {
 				else WriteOut(MSG_Get("PROGRAM_CONFIG_NOCONFIGFILE"));
 			}
 			break;
+#endif
 
 		case P_NOPARAMS:
 			if (!first) break;
@@ -386,6 +424,7 @@ void CONFIG::Run(void) {
 			WriteOut(MSG_Get("PROGRAM_CONFIG_USAGE"));
 			return;
 
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 		case P_HELP: case P_HELP2: case P_HELP3: {
 			switch(pvars.size()) {
 			case 0:
@@ -531,6 +570,17 @@ void CONFIG::Run(void) {
 			WriteOut("\n%s",sec->data.c_str());
 			break;
 		}
+		case P_REC_AVI_START:
+			CAPTURE_VideoStart();
+			break;
+		case P_REC_AVI_STOP:
+			CAPTURE_VideoStop();
+			break;
+		case P_START_MAPPER:
+			if (securemode_check()) return;
+			MAPPER_Run(false);
+			break;
+#endif
 		case P_GETPROP: {
 			// "section property"
 			// "property"
@@ -710,18 +760,30 @@ void CONFIG::Run(void) {
 			// Input has been parsed (pvar[0]=section, [1]=property, [2]=value)
 			// now execute
 			Section* tsec = control->GetSection(pvars[0]);
-			std::string value;
-			value += pvars[2];
+			std::string value(pvars[2]);
+			//Due to parsing there can be a = at the start of value.
+			while (value.size() && (value.at(0) ==' ' ||value.at(0) =='=') ) value.erase(0,1);
 			for(Bitu i = 3; i < pvars.size(); i++) value += (std::string(" ") + pvars[i]);
+			if (value.empty() ) {
+				WriteOut(MSG_Get("PROGRAM_CONFIG_SET_SYNTAX"));
+				return;
+			}
 			std::string inputline = pvars[1] + "=" + value;
 			
 			tsec->ExecuteDestroy(false);
 			bool change_success = tsec->HandleInputline(inputline.c_str());
 			if (!change_success) WriteOut(MSG_Get("PROGRAM_CONFIG_VALUE_ERROR"),
 				value.c_str(),pvars[1].c_str());
+#ifdef C_DBP_LIBRETRO
+			else {
+				Property* p = tsec->GetProp(pvars[1].c_str());
+				if (p) p->MarkFixed();
+			}
+#endif
 			tsec->ExecuteInit(false);
 			return;
 		}
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 		case P_WRITELANG: case P_WRITELANG2:
 			// In secure mode don't allow a new languagefile to be created
 			// Who knows which kind of file we would overwrite.
@@ -741,6 +803,30 @@ void CONFIG::Run(void) {
 			control->SwitchToSecureMode();
 			WriteOut(MSG_Get("PROGRAM_CONFIG_SECURE_ON"));
 			return;
+#else
+		case P_DUMP: {
+			std::string dump;
+			for (Config::const_it it = control->sectionlist.begin(); it != control->sectionlist.end(); ++it)
+			{
+				if (dump.length()) dump.append("\r\n");
+				dump.append("[").append((*it)->GetName()).append("]\r\n");
+				if (Section_prop *sec = dynamic_cast<Section_prop *>(*it))
+				{
+					Property *p;;
+					for (size_t i = 0; (p = sec->Get_prop(i)) != NULL; i++)
+						dump.append(p->propname).append("=").append(p->GetValue().ToString()).append("\r\n");
+				}
+				//// Skip potentially auto generated autoexec for now
+				//else if (Section_line *sec = dynamic_cast<Section_line *>(*it))
+				//	dump.append(sec->data).append("\r\n");
+			}
+			if (DriveCreateFile(Drives['C'-'A'], "DBOXCONF.TXT", (Bit8u*)&dump[0], (Bit32u)dump.length()))
+				WriteOut("Written config to %s\n", "DBOXCONF.TXT");
+			else
+				WriteOut("Failed to write file %s\n", "DBOXCONF.TXT");
+			return;
+		}
+#endif
 
 		default:
 			E_Exit("bug");
@@ -756,13 +842,19 @@ static void CONFIG_ProgramStart(Program * * make) {
 	*make=new CONFIG;
 }
 
+//DBP: memory cleanup
+static void PROGRAMS_ShutDown(Section* /*sec*/) {
+	internal_progs.clear();
+}
 
-void PROGRAMS_Init(Section* /*sec*/) {
+void PROGRAMS_Init(Section* sec) {
+	sec->AddDestroyFunction(&PROGRAMS_ShutDown);
 	/* Setup a special callback to start virtual programs */
 	call_program=CALLBACK_Allocate();
 	CALLBACK_Setup(call_program,&PROGRAMS_Handler,CB_RETF,"internal program");
 	PROGRAMS_MakeFile("CONFIG.COM",CONFIG_ProgramStart);
 
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 	// listconf
 	MSG_Add("PROGRAM_CONFIG_NOCONFIGFILE","No config file loaded!\n");
 	MSG_Add("PROGRAM_CONFIG_PRIMARY_CONF","Primary config file: \n%s\n");
@@ -772,8 +864,10 @@ void PROGRAMS_Init(Section* /*sec*/) {
 	// writeconf
 	MSG_Add("PROGRAM_CONFIG_FILE_ERROR","\nCan't open file %s\n");
 	MSG_Add("PROGRAM_CONFIG_FILE_WHICH","Writing config file %s");
+#endif
 	
 	// help
+#ifdef C_DBP_ENABLE_CONFIG_PROGRAM
 	MSG_Add("PROGRAM_CONFIG_USAGE","Config tool:\n"\
 		"-writeconf or -wc without parameter: write to primary loaded config file.\n"\
 		"-writeconf or -wc with filename: write file to config directory.\n"\
@@ -789,6 +883,9 @@ void PROGRAMS_Init(Section* /*sec*/) {
 		"-axadd [line] adds a line to the autoexec section.\n"\
 		"-axtype prints the content of the autoexec section.\n"\
 		"-securemode switches to secure mode.\n"\
+		"-avistart starts AVI recording.\n"\
+		"-avistop stops AVI recording.\n"\
+		"-startmapper starts the keymapper.\n"\
 		"-get \"section property\" returns the value of the property.\n"\
 		"-set \"section property=value\" sets the value." );
 	MSG_Add("PROGRAM_CONFIG_HLP_PROPHLP","Purpose of property \"%s\" (contained in section \"%s\"):\n%s\n\nPossible Values: %s\nDefault value: %s\nCurrent value: %s\n");
@@ -800,6 +897,12 @@ void PROGRAMS_Init(Section* /*sec*/) {
 
 	MSG_Add("PROGRAM_CONFIG_SECURE_ON","Switched to secure mode.\n");
 	MSG_Add("PROGRAM_CONFIG_SECURE_DISALLOW","This operation is not permitted in secure mode.\n");
+#else
+	MSG_Add("PROGRAM_CONFIG_USAGE","Config tool:\n"\
+		"-get \"section property\" returns the value of the property.\n"\
+		"-set \"section property=value\" sets the value.\n"\
+		"-dump write the current config to C:\\DBOXCONF.TXT" );
+#endif
 	MSG_Add("PROGRAM_CONFIG_SECTION_ERROR","Section %s doesn't exist.\n");
 	MSG_Add("PROGRAM_CONFIG_VALUE_ERROR","\"%s\" is not a valid value for property %s.\n");
 	MSG_Add("PROGRAM_CONFIG_PROPERTY_ERROR","No such section or property.\n");

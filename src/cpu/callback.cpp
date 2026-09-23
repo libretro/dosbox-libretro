@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -33,7 +33,7 @@
 CallBack_Handler CallBack_Handlers[CB_MAX];
 char* CallBack_Description[CB_MAX];
 
-static Bitu call_stop,call_idle,call_default,call_default2;
+static Bitu call_stop,call_idle,call_default;
 Bitu call_priv_io;
 
 static Bitu illegal_handler(void) {
@@ -86,8 +86,8 @@ static Bitu stop_handler(void) {
 
 void CALLBACK_RunRealFar(Bit16u seg,Bit16u off) {
 	reg_sp-=4;
-	mem_writew(SegPhys(ss)+reg_sp,RealOff(CALLBACK_RealPointer(call_stop)));
-	mem_writew(SegPhys(ss)+reg_sp+2,RealSeg(CALLBACK_RealPointer(call_stop)));
+	real_writew(SegValue(ss),reg_sp+0,RealOff(CALLBACK_RealPointer(call_stop)));
+	real_writew(SegValue(ss),reg_sp+2,RealSeg(CALLBACK_RealPointer(call_stop)));
 	Bit32u oldeip=reg_eip;
 	Bit16u oldcs=SegValue(cs);
 	reg_eip=off;
@@ -108,28 +108,30 @@ void CALLBACK_RunRealInt(Bit8u intnum) {
 }
 
 void CALLBACK_SZF(bool val) {
-	Bit16u tempf = mem_readw(SegPhys(ss)+reg_sp+4);
+	Bit16u tempf = real_readw(SegValue(ss),reg_sp+4);
 	if (val) tempf |= FLAG_ZF;
 	else tempf &= ~FLAG_ZF;
-	mem_writew(SegPhys(ss)+reg_sp+4,tempf);
+	real_writew(SegValue(ss),reg_sp+4,tempf);
 }
 
 void CALLBACK_SCF(bool val) {
-	Bit16u tempf = mem_readw(SegPhys(ss)+reg_sp+4);
+	Bit16u tempf = real_readw(SegValue(ss),reg_sp+4);
 	if (val) tempf |= FLAG_CF;
 	else tempf &= ~FLAG_CF;
-	mem_writew(SegPhys(ss)+reg_sp+4,tempf);
+	real_writew(SegValue(ss),reg_sp+4,tempf);
 }
 
 void CALLBACK_SIF(bool val) {
-	Bit16u tempf = mem_readw(SegPhys(ss)+reg_sp+4);
+	Bit16u tempf = real_readw(SegValue(ss),reg_sp+4);
 	if (val) tempf |= FLAG_IF;
 	else tempf &= ~FLAG_IF;
-	mem_writew(SegPhys(ss)+reg_sp+4,tempf);
+	real_writew(SegValue(ss),reg_sp+4,tempf);
 }
 
 void CALLBACK_SetDescription(Bitu nr, const char* descr) {
 	if (descr) {
+		//DBP: Cleanup memory
+		if (CallBack_Description[nr]) delete [] CallBack_Description[nr];
 		CallBack_Description[nr] = new char[strlen(descr)+1];
 		strcpy(CallBack_Description[nr],descr);
 	} else
@@ -173,6 +175,26 @@ Bitu CALLBACK_SetupExtra(Bitu callback, Bitu type, PhysPt physAddress, bool use_
 		phys_writeb(physAddress+0x00,(Bit8u)0xCA);		//A RETF 8 Instruction
 		phys_writew(physAddress+0x01,(Bit16u)0x0008);
 		return (use_cb?7:3);
+	case CB_RETF_STI:
+		phys_writeb(physAddress+0x00,(Bit8u)0xFB);		//STI
+		if (use_cb) {
+			phys_writeb(physAddress+0x01,(Bit8u)0xFE);	//GRP 4
+			phys_writeb(physAddress+0x02,(Bit8u)0x38);	//Extra Callback instruction
+			phys_writew(physAddress+0x03,(Bit16u)callback);	//The immediate word
+			physAddress+=4;
+		}
+		phys_writeb(physAddress+0x01,(Bit8u)0xCB);		//A RETF Instruction
+		return (use_cb?6:2);
+	case CB_RETF_CLI:
+		phys_writeb(physAddress+0x00,(Bit8u)0xFA);		//CLI
+		if (use_cb) {
+			phys_writeb(physAddress+0x01,(Bit8u)0xFE);	//GRP 4
+			phys_writeb(physAddress+0x02,(Bit8u)0x38);	//Extra Callback instruction
+			phys_writew(physAddress+0x03,(Bit16u)callback);	//The immediate word
+			physAddress+=4;
+		}
+		phys_writeb(physAddress+0x01,(Bit8u)0xCB);		//A RETF Instruction
+		return (use_cb?6:2);
 	case CB_IRET:
 		if (use_cb) {
 			phys_writeb(physAddress+0x00,(Bit8u)0xFE);	//GRP 4
@@ -282,26 +304,32 @@ Bitu CALLBACK_SetupExtra(Bitu callback, Bitu type, PhysPt physAddress, bool use_
 		return (use_cb?0x0e:0x0a);
 	case CB_IRQ12:	// ps2 mouse int74
 		if (!use_cb) E_Exit("int74 callback must implement a callback handler!");
-		phys_writeb(physAddress+0x00,(Bit8u)0x1e);		// push ds
-		phys_writeb(physAddress+0x01,(Bit8u)0x06);		// push es
-		phys_writew(physAddress+0x02,(Bit16u)0x6066);	// pushad
-		phys_writeb(physAddress+0x04,(Bit8u)0xfc);		// cld
-		phys_writeb(physAddress+0x05,(Bit8u)0xfb);		// sti
-		phys_writeb(physAddress+0x06,(Bit8u)0xFE);		//GRP 4
-		phys_writeb(physAddress+0x07,(Bit8u)0x38);		//Extra Callback instruction
-		phys_writew(physAddress+0x08,(Bit16u)callback);			//The immediate word
-		return 0x0a;
+		phys_writeb(physAddress+0x00,(Bit8u)0xfb);		// sti
+		phys_writeb(physAddress+0x01,(Bit8u)0x1e);		// push ds
+		phys_writeb(physAddress+0x02,(Bit8u)0x06);		// push es
+		phys_writew(physAddress+0x03,(Bit16u)0x6066);	// pushad
+		phys_writeb(physAddress+0x05,(Bit8u)0xFE);		//GRP 4
+		phys_writeb(physAddress+0x06,(Bit8u)0x38);		//Extra Callback instruction
+		phys_writew(physAddress+0x07,(Bit16u)callback);			//The immediate word
+		phys_writeb(physAddress+0x09,(Bit8u)0x50);		// push ax
+		phys_writew(physAddress+0x0a,(Bit16u)0x20b0);	// mov al, 0x20
+		phys_writew(physAddress+0x0c,(Bit16u)0xa0e6);	// out 0xa0, al
+		phys_writew(physAddress+0x0e,(Bit16u)0x20e6);	// out 0x20, al
+		phys_writeb(physAddress+0x10,(Bit8u)0x58);		// pop ax
+		phys_writeb(physAddress+0x11,(Bit8u)0xfc);		// cld
+		phys_writeb(physAddress+0x12,(Bit8u)0xCB);		//A RETF Instruction
+		return 0x13;
 	case CB_IRQ12_RET:	// ps2 mouse int74 return
-		if (use_cb) {
-			phys_writeb(physAddress+0x00,(Bit8u)0xFE);	//GRP 4
-			phys_writeb(physAddress+0x01,(Bit8u)0x38);	//Extra Callback instruction
-			phys_writew(physAddress+0x02,(Bit16u)callback);		//The immediate word
-			physAddress+=4;
-		}
 		phys_writeb(physAddress+0x00,(Bit8u)0xfa);		// cli
 		phys_writew(physAddress+0x01,(Bit16u)0x20b0);	// mov al, 0x20
 		phys_writew(physAddress+0x03,(Bit16u)0xa0e6);	// out 0xa0, al
 		phys_writew(physAddress+0x05,(Bit16u)0x20e6);	// out 0x20, al
+		if (use_cb) {
+			phys_writeb(physAddress+0x07,(Bit8u)0xFE);	//GRP 4
+			phys_writeb(physAddress+0x08,(Bit8u)0x38);	//Extra Callback instruction
+			phys_writew(physAddress+0x09,(Bit16u)callback);		//The immediate word
+			physAddress+=4;
+		}
 		phys_writew(physAddress+0x07,(Bit16u)0x6166);	// popad
 		phys_writeb(physAddress+0x09,(Bit8u)0x07);		// pop es
 		phys_writeb(physAddress+0x0a,(Bit8u)0x1f);		// pop ds
@@ -458,8 +486,50 @@ Bitu CALLBACK_SetupExtra(Bitu callback, Bitu type, PhysPt physAddress, bool use_
 		phys_writew(physAddress+0x02,(Bit16u)0x0ECD);		// int 0e
 		phys_writeb(physAddress+0x04,(Bit8u)0xCF);		//An IRET Instruction
 		return (use_cb?9:5);
+	case CB_VESA_WAIT:
+		if (use_cb) E_Exit("VESA wait must not implement a callback handler!");
+		phys_writeb(physAddress+0x00,(Bit8u)0xFB);		// sti
+		phys_writeb(physAddress+0x01,(Bit8u)0x50);		// push ax
+		phys_writeb(physAddress+0x02,(Bit8u)0x52);		// push dx
+		phys_writeb(physAddress+0x03,(Bit8u)0xBA);		// mov dx,
+		phys_writew(physAddress+0x04,(Bit16u)0x03DA);	// 0x3da
+		phys_writeb(physAddress+0x06,(Bit8u)0xEC);		// in al,dx
+		phys_writew(physAddress+0x07,(Bit16u)0x08A8);	// test al,8
+		phys_writew(physAddress+0x09,(Bit16u)0xFB75);	// jne $-5
+		phys_writeb(physAddress+0x0B,(Bit8u)0xEC);		// in al,dx
+		phys_writew(physAddress+0x0C,(Bit16u)0x08A8);	// test al,8
+		phys_writew(physAddress+0x0E,(Bit16u)0xFB74);	// je $-5
+		phys_writeb(physAddress+0x10,(Bit8u)0x5A);		// pop dx
+		phys_writeb(physAddress+0x11,(Bit8u)0x58);		// pop ax
+		phys_writeb(physAddress+0x12,(Bit8u)0xCB);		//A RETF Instruction
+		return 19;
+	case CB_VESA_PM:
+		if (use_cb) {
+			phys_writeb(physAddress+0x00,(Bit8u)0xFE);	//GRP 4
+			phys_writeb(physAddress+0x01,(Bit8u)0x38);	//Extra Callback instruction
+			phys_writew(physAddress+0x02,(Bit16u)callback);	//The immediate word
+			physAddress+=4;
+		}
+		phys_writew(physAddress+0x00,(Bit16u)0xC3F6);	// test bl,
+		phys_writeb(physAddress+0x02,(Bit8u)0x80);		// 0x80
+		phys_writew(physAddress+0x03,(Bit16u)0x1674);	// je $+22
+		phys_writew(physAddress+0x05,(Bit16u)0x5066);	// push ax
+		phys_writew(physAddress+0x07,(Bit16u)0x5266);	// push dx
+		phys_writew(physAddress+0x09,(Bit16u)0xBA66);	// mov dx,
+		phys_writew(physAddress+0x0B,(Bit16u)0x03DA);	// 0x3da
+		phys_writeb(physAddress+0x0D,(Bit8u)0xEC);		// in al,dx
+		phys_writew(physAddress+0x0E,(Bit16u)0x08A8);	// test al,8
+		phys_writew(physAddress+0x10,(Bit16u)0xFB75);	// jne $-5
+		phys_writeb(physAddress+0x12,(Bit8u)0xEC);		// in al,dx
+		phys_writew(physAddress+0x13,(Bit16u)0x08A8);	// test al,8
+		phys_writew(physAddress+0x15,(Bit16u)0xFB74);	// je $-5
+		phys_writew(physAddress+0x17,(Bit16u)0x5A66);	// pop dx
+		phys_writew(physAddress+0x19,(Bit16u)0x5866);	// pop ax
+		if (use_cb)
+			phys_writeb(physAddress+0x1B,(Bit8u)0xC3);	//A RETN Instruction
+		return (use_cb?32:27);
 	default:
-		E_Exit("CALLBACK:Setup:Illegal type %d",type);
+		E_Exit("CALLBACK:Setup:Illegal type %" sBitfs(u),type);
 	}
 	return 0;
 }
@@ -530,6 +600,16 @@ void CALLBACK_HandlerObject::Install(CallBack_Handler handler,Bitu type,PhysPt a
 		CALLBACK_Setup(m_callback,handler,type,addr,description);
 	} else E_Exit("Callback handler object already installed");
 }
+#ifdef C_DBP_LIBRETRO
+void CALLBACK_HandlerObject::InstallFixed(Bitu fix_callback, CallBack_Handler handler,Bitu type,const char* description){
+	if(!installed && CallBack_Handlers[fix_callback]==&illegal_handler) {
+		installed=true;
+		m_type=SETUP;
+		m_callback=fix_callback;
+		CALLBACK_Setup(m_callback,handler,type,description);
+	} else E_Exit("Callback handler object already installed");
+}
+#endif
 
 void CALLBACK_HandlerObject::Allocate(CallBack_Handler handler,const char* description) {
 	if(!installed) {
@@ -549,7 +629,19 @@ void CALLBACK_HandlerObject::Set_RealVec(Bit8u vec){
 	} else E_Exit ("double usage of vector handler");
 }
 
-void CALLBACK_Init(Section* /*sec*/) {
+//DBP: memory cleanup
+#include "setup.h"
+static void CALLBACK_ShutDown(Section* /*sec*/) {
+	for (Bitu i=0;i<CB_MAX;i++) {
+		if (!CallBack_Description[i]) continue;
+		delete [] CallBack_Description[i];
+		CallBack_Description[i]=0;
+	}
+}
+
+void CALLBACK_Init(Section* sec) {
+	sec->AddDestroyFunction(&CALLBACK_ShutDown);
+
 	Bitu i;
 	for (i=0;i<CB_MAX;i++) {
 		CallBack_Handlers[i]=&illegal_handler;
@@ -575,8 +667,6 @@ void CALLBACK_Init(Section* /*sec*/) {
 	/* Default handlers for unhandled interrupts that have to be non-null */
 	call_default=CALLBACK_Allocate();
 	CALLBACK_Setup(call_default,&default_handler,CB_IRET,"default");
-	call_default2=CALLBACK_Allocate();
-	CALLBACK_Setup(call_default2,&default_handler,CB_IRET,"default");
 
 	/* Only setup default handler for first part of interrupt table */
 	for (Bit16u ct=0;ct<0x60;ct++) {
@@ -597,10 +687,9 @@ void CALLBACK_Init(Section* /*sec*/) {
 
 	}
 	// setup a few interrupt handlers that point to bios IRETs by default
-	real_writed(0,0x0e*4,CALLBACK_RealPointer(call_default2));	//design your own railroad
 	real_writed(0,0x66*4,CALLBACK_RealPointer(call_default));	//war2d
 	real_writed(0,0x67*4,CALLBACK_RealPointer(call_default));
-	real_writed(0,0x68*4,CALLBACK_RealPointer(call_default));
+	if (machine==MCH_CGA) real_writed(0,0x68*4,0);				//Popcorn
 	real_writed(0,0x5c*4,CALLBACK_RealPointer(call_default));	//Network stuff
 	//real_writed(0,0xf*4,0); some games don't like it
 

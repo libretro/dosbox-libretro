@@ -1,5 +1,5 @@
- /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+/*
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,13 +11,16 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #ifndef DOSBOX_MAPPER_H
 #define DOSBOX_MAPPER_H
+
+#include "config.h"
+#ifdef C_DBP_ENABLE_MAPPER
 
 enum MapKeys {
 	MK_f1,MK_f2,MK_f3,MK_f4,MK_f5,MK_f6,MK_f7,MK_f8,MK_f9,MK_f10,MK_f11,MK_f12,
@@ -36,5 +39,7 @@ void MAPPER_LosingFocus(void);
 
 #define MMOD1 0x1
 #define MMOD2 0x2
+
+#endif // C_DBP_ENABLE_MAPPER
 
 #endif

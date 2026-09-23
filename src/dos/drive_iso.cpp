@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -31,7 +29,6 @@
 #define FLAGS2	((iso) ? de->fileFlags : de->timeZone)
 
 using namespace std;
-char fullname[LFN_NAMELENGTH];
 
 class isoFile : public DOS_File {
 public:
@@ -48,7 +45,8 @@ private:
 	Bit32u fileBegin;
 	Bit32u filePos;
 	Bit32u fileEnd;
-	Bit16u info;
+	//DBP: Removed unused field
+	//Bit16u info;
 };
 
 isoFile::isoFile(isoDrive *drive, const char *name, FileStat_Block *stat, Bit32u offset) {
@@ -136,13 +134,22 @@ Bit16u isoFile::GetInformation(void) {
 	return 0x40;		// read-only drive
 }
 
-int  MSCDEX_RemoveDrive(char driveLetter);
-int  MSCDEX_AddDrive(char driveLetter, const char* physicalPath, Bit8u& subUnit);
-void MSCDEX_ReplaceDrive(CDROM_Interface* cdrom, Bit8u subUnit);
-bool MSCDEX_HasDrive(char driveLetter);
-bool MSCDEX_GetVolumeName(Bit8u subUnit, char* name);
+int   MSCDEX_RemoveDrive(char driveLetter);
+int   MSCDEX_AddDrive(char driveLetter, const char* physicalPath, Bit8u& subUnit);
+void  MSCDEX_ReplaceDrive(CDROM_Interface* cdrom, Bit8u subUnit);
+bool  MSCDEX_HasDrive(char driveLetter);
+bool  MSCDEX_GetVolumeName(Bit8u subUnit, char* name);
+Bit8u MSCDEX_GetSubUnit(char driveLetter);
 
-isoDrive::isoDrive(char driveLetter, const char *fileName, Bit8u mediaid, int &error) {
+isoDrive::isoDrive(char driveLetter, const char *fileName, Bit8u mediaid, int &error)
+         :iso(false),
+          dataCD(false),
+          mediaid(0),
+          subUnit(0),
+          driveLetter('\0')
+ {
+	this->fileName[0]  = '\0';
+	this->discLabel[0] = '\0';
 	nextFreeDirIterator = 0;
 	memset(dirIterators, 0, sizeof(dirIterators));
 	memset(sectorHashEntries, 0, sizeof(sectorHashEntries));
@@ -153,8 +160,12 @@ isoDrive::isoDrive(char driveLetter, const char *fileName, Bit8u mediaid, int &e
 
 	if (!error) {
 		if (loadImage()) {
+			#ifdef C_DBP_LIBRETRO // safety
+			snprintf(info, sizeof(info), "isoDrive %s", fileName);
+			#else
 			strcpy(info, "isoDrive ");
 			strcat(info, fileName);
+			#endif
 			this->driveLetter = driveLetter;
 			this->mediaid = mediaid;
 			char buffer[32] = { 0 };
@@ -162,8 +173,12 @@ isoDrive::isoDrive(char driveLetter, const char *fileName, Bit8u mediaid, int &e
 			Set_Label(buffer,discLabel,true);
 
 		} else if (CDROM_Interface_Image::images[subUnit]->HasDataTrack() == false) { //Audio only cdrom
+			#ifdef C_DBP_LIBRETRO // safety
+			snprintf(info, sizeof(info), "isoDrive %s", fileName);
+			#else
 			strcpy(info, "isoDrive ");
 			strcat(info, fileName);
+			#endif
 			this->driveLetter = driveLetter;
 			this->mediaid = mediaid;
 			char buffer[32] = { 0 };
@@ -177,6 +192,7 @@ isoDrive::~isoDrive() { }
 
 int isoDrive::UpdateMscdex(char driveLetter, const char* path, Bit8u& subUnit) {
 	if (MSCDEX_HasDrive(driveLetter)) {
+		subUnit = MSCDEX_GetSubUnit(driveLetter);
 		CDROM_Interface_Image* oldCdrom = CDROM_Interface_Image::images[subUnit];
 		CDROM_Interface* cdrom = new CDROM_Interface_Image(subUnit);
 		char pathCopy[CROSS_LEN];
@@ -257,16 +273,16 @@ bool isoDrive::FindFirst(char *dir, DOS_DTA &dta, bool fcb_findfirst) {
 	dta.SetDirID((Bit16u)dirIterator);
 
 	Bit8u attr;
-	char pattern[CROSS_LEN];
-	dta.GetSearchParams(attr, pattern,true);
-	
+	char pattern[ISO_MAXPATHNAME];
+	dta.GetSearchParams(attr, pattern);
+   
 	if (attr == DOS_ATTR_VOLUME) {
-		dta.SetResult(discLabel, discLabel, 0, 0, 0, DOS_ATTR_VOLUME);
+		dta.SetResult(discLabel, 0, 0, 0, DOS_ATTR_VOLUME);
 		return true;
 	} else if ((attr & DOS_ATTR_VOLUME) && isRoot && !fcb_findfirst) {
 		if (WildFileCmp(discLabel,pattern)) {
 			// Get Volume Label (DOS_ATTR_VOLUME) and only in basedir and if it matches the searchstring
-			dta.SetResult(discLabel, discLabel, 0, 0, 0, DOS_ATTR_VOLUME);
+			dta.SetResult(discLabel, 0, 0, 0, DOS_ATTR_VOLUME);
 			return true;
 		}
 	}
@@ -276,8 +292,8 @@ bool isoDrive::FindFirst(char *dir, DOS_DTA &dta, bool fcb_findfirst) {
 
 bool isoDrive::FindNext(DOS_DTA &dta) {
 	Bit8u attr;
-	char pattern[CROSS_LEN], findName[DOS_NAMELENGTH_ASCII], lfindName[ISO_MAXPATHNAME];
-	dta.GetSearchParams(attr, pattern, true);
+	char pattern[DOS_NAMELENGTH_ASCII];
+	dta.GetSearchParams(attr, pattern);
 	
 	int dirIterator = dta.GetDirID();
 	bool isRoot = dirIterators[dirIterator].root;
@@ -289,15 +305,12 @@ bool isoDrive::FindNext(DOS_DTA &dta) {
 		else findAttr |= DOS_ATTR_ARCHIVE;
 		if (IS_HIDDEN(FLAGS1)) findAttr |= DOS_ATTR_HIDDEN;
 
-		if (strcmp((char*)de.ident,(char*)fullname))
-			strcpy(lfindName,fullname);
-		else
-			GetLongName((char*)de.ident,lfindName);
-		if (!IS_ASSOC(FLAGS1) && !(isRoot && de.ident[0]=='.') && (WildFileCmp((char*)de.ident, pattern) || LWildFileCmp(lfindName, pattern))
+		if (!IS_ASSOC(FLAGS1) && !(isRoot && de.ident[0]=='.') && WildFileCmp((char*)de.ident, pattern)
 			&& !(~attr & findAttr & (DOS_ATTR_DIRECTORY | DOS_ATTR_HIDDEN | DOS_ATTR_SYSTEM))) {
 			
-			findName[0] = 0;
 			/* file is okay, setup everything to be copied in DTA Block */
+			char findName[DOS_NAMELENGTH_ASCII];		
+			findName[0] = 0;
 			if(strlen((char*)de.ident) < DOS_NAMELENGTH_ASCII) {
 				strcpy(findName, (char*)de.ident);
 				upcase(findName);
@@ -305,7 +318,7 @@ bool isoDrive::FindNext(DOS_DTA &dta) {
 			Bit32u findSize = DATA_LENGTH(de);
 			Bit16u findDate = DOS_PackDate(1900 + de.dateYear, de.dateMonth, de.dateDay);
 			Bit16u findTime = DOS_PackTime(de.timeHour, de.timeMin, de.timeSec);
-			dta.SetResult(findName, lfindName, findSize, findDate, findTime, findAttr);
+			dta.SetResult(findName, findSize, findDate, findTime, findAttr);
 			return true;
 		}
 	}
@@ -333,19 +346,6 @@ bool isoDrive::GetFileAttr(char *name, Bit16u *attr) {
 	return success;
 }
 
-bool isoDrive::GetFileAttrEx(char* name, struct stat *status) {
-	return false;
-}
-
-Bit32u isoDrive::GetCompressedSize(char* name) {
-	return 0;
-}
-
-void* isoDrive::CreateOpenFile(const char* name) {
-	DOS_SetError(1);
-	return NULL;
-}
-
 bool isoDrive::AllocationInfo(Bit16u *bytes_sector, Bit8u *sectors_cluster, Bit16u *total_clusters, Bit16u *free_clusters) {
 	*bytes_sector = 2048;
 	*sectors_cluster = 1; // cluster size for cdroms ?
@@ -371,6 +371,32 @@ bool isoDrive::FileStat(const char *name, FileStat_Block *const stat_block) {
 		if (IS_DIR(FLAGS1)) stat_block->attr |= DOS_ATTR_DIRECTORY;
 	}
 	
+	return success;
+}
+
+//DBP: Added GetLongFileName function
+bool isoDrive::GetLongFileName(const char* name, char longname[256])
+{
+	isoDirEntry de;
+	bool success = lookup(&de, name);
+
+	if (success) {
+		Bit8u* buffer = NULL;
+		ReadCachedSector(&buffer, dirIterators[nextFreeDirIterator].currentSector);
+		char *short_ident = (char*)de.ident, *long_ident = (char*)&buffer[dirIterators[nextFreeDirIterator].pos - de.length + 33], *long_ver;
+		size_t short_len = strlen(short_ident), long_len = de.fileIdentLength;
+		de.ident[long_len] = '\0';
+		if (!IS_DIR(FLAGS1) && (long_ver = strchr(long_ident, ';')) != NULL)
+		{
+			*long_ver = '\0';
+			long_len = long_ver - long_ident;
+		}
+		if (long_len > (256 - 1)) return false;
+		if (long_len == short_len) { upcase(short_ident); if (!memcmp(short_ident, long_ident, short_len)) { return false; } }
+		memcpy(longname, long_ident, long_len);
+		longname[long_len] = '\0';
+	}
+
 	return success;
 }
 
@@ -418,7 +444,6 @@ bool isoDrive::GetNextDirEntry(const int dirIteratorHandle, isoDirEntry* de) {
 	bool result = false;
 	Bit8u* buffer = NULL;
 	DirIterator& dirIterator = dirIterators[dirIteratorHandle];
-	fullname[0]=0;
 	
 	// check if the directory entry is valid
 	if (dirIterator.valid && ReadCachedSector(&buffer, dirIterator.currentSector)) {
@@ -511,7 +536,6 @@ int isoDrive :: readDirEntry(isoDirEntry *de, Bit8u *data) {
 			if (de->ident[tmp - 1] == '.') de->ident[tmp - 1] = 0;
 		}
 	}
-	strcpy((char*)fullname,(char*)de->ident);
 	char* dotpos = strchr((char*)de->ident, '.');
 	if (dotpos!=NULL) {
 		if (strlen(dotpos)>4) dotpos[4]=0;
@@ -542,7 +566,7 @@ bool isoDrive :: lookup(isoDirEntry *de, const char *path) {
 	*de = this->rootEntry;
 	if (!strcmp(path, "")) return true;
 	
-	char isoPath[ISO_MAXPATHNAME], longname[ISO_MAXPATHNAME];
+	char isoPath[ISO_MAXPATHNAME];
 	safe_strncpy(isoPath, path, ISO_MAXPATHNAME);
 	strreplace(isoPath, '\\', '/');
 	
@@ -562,8 +586,7 @@ bool isoDrive :: lookup(isoDirEntry *de, const char *path) {
 			// look for the current path element
 			int dirIterator = GetDirIterator(de);
 			while (!found && GetNextDirEntry(dirIterator, de)) {
-				GetLongName((char*)de->ident,longname);
-				if (!IS_ASSOC(FLAGS2) && (0 == strncasecmp((char*) de->ident, name, ISO_MAX_FILENAME_LENGTH)) ||0 == strncasecmp((char*) longname, name, ISO_MAXPATHNAME)) {
+				if (!IS_ASSOC(FLAGS2) && (0 == strncasecmp((char*) de->ident, name, ISO_MAX_FILENAME_LENGTH))) {
 					found = true;
 				}
 			}
@@ -574,16 +597,32 @@ bool isoDrive :: lookup(isoDirEntry *de, const char *path) {
 	return true;
 }
 
-void isoDrive :: GetLongName(char *ident, char *lfindName) {
-	char *c=ident+strlen(ident);
-	int i,j=222-strlen(ident)-6;
-	for (i=5;i<j;i++) {
-		if (*(c+i)=='N'&&*(c+i+1)=='M'&&*(c+i+2)>0&&*(c+i+3)==1&&*(c+i+4)==0&&*(c+i+5)>0)
-			break;
-		}
-	if (i<j&&strcmp(ident,".")&&strcmp(ident,"..")) {
-		strncpy(lfindName,c+i+5,*(c+i+2)-5);
-		lfindName[*(c+i+2)-5]=0;
-	} else
-		strcpy(lfindName,ident);
+bool isoDrive::CheckBootDiskImage(Bit8u** read_image, Bit32u* read_size)
+{
+	Bit8u buf[COOKED_SECTOR_SIZE];
+	if (!readSector(buf, 17) || memcmp((char*)buf+10, "TORITO", 6)) return false; // read boot record volume at fixed sector 17
+	Bit32u bootCatSector = var_read((Bit32u*)&buf[7+64]);
+	if (!bootCatSector || !readSector(buf, bootCatSector)) return false; // read boot catalog sector
+	if (buf[0] != 1 || buf[2] != 0 || buf[3] != 0 || buf[30] != 0x55 || buf[31] != 0xAA) return false; // validate boot catalog
+	if (buf[32] != 0x88) return false; // validate initial/default boot entry
+	Bit8u mediaType = buf[33];
+	Bit32u mediaSize;
+	if      (mediaType == 1) mediaSize = 1228800; // 1.20 MB floppy
+	else if (mediaType == 2) mediaSize = 1474560; // 1.44 MB floppy
+	else if (mediaType == 3) mediaSize = 2949120; // 2.88 MB floppy
+	else return false; // unsupported (hd image, no emulation)
+	Bit32u bootImageSector = var_read((Bit32u*)&buf[40]);
+	if (bootImageSector <= bootCatSector) return false;
+	if (read_image)
+	{
+		*read_size = mediaSize;
+		*read_image = (Bit8u*)malloc(mediaSize);
+		for (Bit32u i = 0, secEnd = mediaSize/COOKED_SECTOR_SIZE; i != secEnd; i++)
+			if (!readSector(*read_image+i*COOKED_SECTOR_SIZE, bootImageSector+i)) { free(*read_image); return false; }
+	}
+	return true;
 }
+
+#ifdef C_DBP_ENABLE_IDE
+CDROM_Interface* isoDrive::GetInterface() { return CDROM_Interface_Image::images[subUnit]; }
+#endif

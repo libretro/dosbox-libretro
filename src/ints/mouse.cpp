@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -36,8 +36,8 @@
 static Bitu call_int33,call_int74,int74_ret_callback,call_mouse_bd;
 static Bit16u ps2cbseg,ps2cbofs;
 static bool useps2callback,ps2callbackinit;
-static Bitu call_ps2;
-static RealPt ps2_callback;
+static Bitu call_ps2,call_uir;
+static RealPt ps2_callback,uir_callback;
 static Bit16s oldmouseX, oldmouseY;
 // forward
 void WriteMouseIntVector(void);
@@ -113,8 +113,8 @@ static struct {
 	Bit16u	dspeed_val;
 	float	senv_x;
 	float	senv_y;
-	Bit16u  updateRegion_x[2];
-	Bit16u  updateRegion_y[2];
+	Bit16s  updateRegion_x[2];
+	Bit16s  updateRegion_y[2];
 	Bit16u  doubleSpeedThreshold;
 	Bit16u  language;
 	Bit16u  cursorType;
@@ -128,6 +128,11 @@ static struct {
 	Bit16s gran_x,gran_y;
 } mouse;
 
+static float mouse_vmware_x, mouse_vmware_y;
+static Bit8u mouse_vmware_cursor;
+static bool mouse_vmware_updated;
+bool mouse_vmware_usep60;
+
 bool Mouse_SetPS2State(bool use) {
 	if (use && (!ps2callbackinit)) {
 		useps2callback = false;
@@ -135,6 +140,7 @@ bool Mouse_SetPS2State(bool use) {
 		return false;
 	}
 	useps2callback = use;
+	Mouse_AutoLock(useps2callback);
 	PIC_SetIRQMask(MOUSE_IRQ,!useps2callback);
 	return true;
 }
@@ -142,11 +148,13 @@ bool Mouse_SetPS2State(bool use) {
 void Mouse_ChangePS2Callback(Bit16u pseg, Bit16u pofs) {
 	if ((pseg==0) && (pofs==0)) {
 		ps2callbackinit = false;
+		Mouse_AutoLock(false);
 	} else {
 		ps2callbackinit = true;
 		ps2cbseg = pseg;
 		ps2cbofs = pofs;
 	}
+	Mouse_AutoLock(ps2callbackinit);
 }
 
 void DoPS2Callback(Bit16u data, Bit16s mouseX, Bit16s mouseY) {
@@ -210,7 +218,10 @@ INLINE void Mouse_AddEvent(Bit8u type) {
 	if (mouse.events<QUEUE_SIZE) {
 		if (mouse.events>0) {
 			/* Skip duplicate events */
-			if (type==MOUSE_HAS_MOVED) return;
+			if (type==MOUSE_HAS_MOVED) {
+				mouse_vmware_updated = true;
+				return;
+			}
 			/* Always put the newest element in the front as that the events are 
 			 * handled backwards (prevents doubleclicks while moving)
 			 */
@@ -226,6 +237,7 @@ INLINE void Mouse_AddEvent(Bit8u type) {
 		PIC_AddEvent(MOUSE_Limit_Events,MOUSE_DELAY);
 		PIC_ActivateIRQ(MOUSE_IRQ);
 	}
+	mouse_vmware_updated = true;
 }
 
 // ***************************************************************************
@@ -248,6 +260,11 @@ void DrawCursorText() {
 	// Restore Background
 	RestoreCursorBackgroundText();
 
+	// Check if cursor in update region
+	if ((POS_Y <= mouse.updateRegion_y[1]) && (POS_Y >= mouse.updateRegion_y[0]) &&
+		(POS_X <= mouse.updateRegion_x[1]) && (POS_X >= mouse.updateRegion_x[0])) {
+		return;
+	}
 
 	// Save Background
 	mouse.backposx		= POS_X>>3;
@@ -381,7 +398,9 @@ void DrawCursor() {
 
 	// Check video page. Seems to be ignored for text mode. 
 	// hence the text mode handled above this
-	if (real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE)!=mouse.page) return;
+	// >>> removed because BIOS page is not actual page in some cases, e.g. QQP games
+//	if (real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE)!=mouse.page) return;
+
 // Check if cursor in update region
 /*	if ((POS_X >= mouse.updateRegion_x[0]) && (POS_X <= mouse.updateRegion_x[1]) &&
 	    (POS_Y >= mouse.updateRegion_y[0]) && (POS_Y <= mouse.updateRegion_y[1])) {
@@ -455,6 +474,10 @@ void DrawCursor() {
 	RestoreVgaRegisters();
 }
 
+//DBP: Do not access real-mode data areas if CPU is in non-virtual 8086 protected mode or the DOS kernel has been shut down by booting into a guest OS (fix page faults in Win9x)
+//     Source: https://github.com/joncampbell123/dosbox-x/commit/aa8d1f8
+#define AllowINT33RMAccess() (!DOSBox_Boot && (!cpu.pmode || GETFLAG(VM)))
+
 void Mouse_CursorMoved(float xrel,float yrel,float x,float y,bool emulate) {
 	float dx = xrel * mouse.pixelPerMickey_x;
 	float dy = yrel * mouse.pixelPerMickey_y;
@@ -473,22 +496,34 @@ void Mouse_CursorMoved(float xrel,float yrel,float x,float y,bool emulate) {
 		mouse.x += dx;
 		mouse.y += dy;
 	} else {
-		if (CurMode->type == M_TEXT) {
+		if (CurMode && CurMode->type == M_TEXT && AllowINT33RMAccess()) {
 			mouse.x = x*real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS)*8;
-			mouse.y = y*(real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS)+1)*8;
+			mouse.y = y*(IS_EGAVGA_ARCH?(real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS)+1):25)*8;
 		} else if ((mouse.max_x < 2048) || (mouse.max_y < 2048) || (mouse.max_x != mouse.max_y)) {
 			if ((mouse.max_x > 0) && (mouse.max_y > 0)) {
 				mouse.x = x*mouse.max_x;
 				mouse.y = y*mouse.max_y;
 			} else {
+#ifdef C_DBP_LIBRETRO // DBP: use same speed for emulate true and false
+				mouse.x += dx;
+				mouse.y += dy;
+#else
 				mouse.x += xrel;
 				mouse.y += yrel;
+#endif
 			}
 		} else { // Games faking relative movement through absolute coordinates. Quite surprising that this actually works..
+#ifdef C_DBP_LIBRETRO // DBP: use same speed for emualte true and false
+			mouse.x += dx;
+			mouse.y += dy;
+#else
 			mouse.x += xrel;
 			mouse.y += yrel;
+#endif
 		}
 	}
+	mouse_vmware_x = x;
+	mouse_vmware_y = y;
 
 	/* ignore constraints if using PS2 mouse callback in the bios */
 
@@ -504,31 +539,36 @@ void Mouse_CursorMoved(float xrel,float yrel,float x,float y,bool emulate) {
 		else if (mouse.y <= -32769.0) mouse.y += 65536.0;
 	}
 	Mouse_AddEvent(MOUSE_HAS_MOVED);
-	DrawCursor();
+	//DBP: Moved call to DrawCursor to INT74_Handler
+	//DrawCursor();
 }
 
 void Mouse_CursorSet(float x,float y) {
 	mouse.x=x;
 	mouse.y=y;
-	DrawCursor();
+	//DBP: Moved call to DrawCursor to INT74_Handler
+	//DrawCursor();
 }
 
 void Mouse_ButtonPressed(Bit8u button) {
 	switch (button) {
 #if (MOUSE_BUTTONS >= 1)
 	case 0:
+		if (mouse.buttons&1) return;
 		mouse.buttons|=1;
 		Mouse_AddEvent(MOUSE_LEFT_PRESSED);
 		break;
 #endif
 #if (MOUSE_BUTTONS >= 2)
 	case 1:
+		if (mouse.buttons&2) return;
 		mouse.buttons|=2;
 		Mouse_AddEvent(MOUSE_RIGHT_PRESSED);
 		break;
 #endif
 #if (MOUSE_BUTTONS >= 3)
 	case 2:
+		if (mouse.buttons&4) return;
 		mouse.buttons|=4;
 		Mouse_AddEvent(MOUSE_MIDDLE_PRESSED);
 		break;
@@ -545,18 +585,21 @@ void Mouse_ButtonReleased(Bit8u button) {
 	switch (button) {
 #if (MOUSE_BUTTONS >= 1)
 	case 0:
+		if (!(mouse.buttons&1)) return;
 		mouse.buttons&=~1;
 		Mouse_AddEvent(MOUSE_LEFT_RELEASED);
 		break;
 #endif
 #if (MOUSE_BUTTONS >= 2)
 	case 1:
+		if (!(mouse.buttons&2)) return;
 		mouse.buttons&=~2;
 		Mouse_AddEvent(MOUSE_RIGHT_RELEASED);
 		break;
 #endif
 #if (MOUSE_BUTTONS >= 3)
 	case 2:
+		if (!(mouse.buttons&4)) return;
 		mouse.buttons&=~4;
 		Mouse_AddEvent(MOUSE_MIDDLE_RELEASED);
 		break;
@@ -623,7 +666,7 @@ void Mouse_AfterNewVideoMode(bool setmode) {
 	case 0x07: {
 		mouse.gran_x = (mode<2)?0xfff0:0xfff8;
 		mouse.gran_y = (Bit16s)0xfff8;
-		Bitu rows = real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS);
+		Bitu rows = IS_EGAVGA_ARCH?real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS):24;
 		if ((rows == 0) || (rows > 250)) rows = 25 - 1;
 		mouse.max_y = 8*(rows+1) - 1;
 		break;
@@ -671,10 +714,7 @@ void Mouse_AfterNewVideoMode(bool setmode) {
 	mouse.language   = 0;
 	mouse.page               = 0;
 	mouse.doubleSpeedThreshold = 64;
-	mouse.updateRegion_x[0] = 1;
-	mouse.updateRegion_y[0] = 1;
-	mouse.updateRegion_x[1] = 1;
-	mouse.updateRegion_y[1] = 1;
+	mouse.updateRegion_y[1] = -1; //offscreen
 	mouse.cursorType = 0; //Test
 	mouse.enabled=true;
 
@@ -693,11 +733,124 @@ static void Mouse_Reset(void) {
 	mouse.mickey_x = 0;
 	mouse.mickey_y = 0;
 
+	mouse.buttons = 0;
+
+	for (Bit16u but=0; but<MOUSE_BUTTONS; but++) {
+		mouse.times_pressed[but] = 0;
+		mouse.times_released[but] = 0;
+		mouse.last_pressed_x[but] = 0;
+		mouse.last_pressed_y[but] = 0;
+		mouse.last_released_x[but] = 0;
+		mouse.last_released_y[but] = 0;
+	}
+
 	// Dont set max coordinates here. it is done by SetResolution!
 	mouse.x = static_cast<float>((mouse.max_x + 1)/ 2);
 	mouse.y = static_cast<float>((mouse.max_y + 1)/ 2);
 	mouse.sub_mask = 0;
 	mouse.in_UIR = false;
+}
+
+static void Mouse_Used(void) {
+	static bool autolock_enabled=false;
+	if (!autolock_enabled) {
+		Mouse_AutoLock(true);
+		autolock_enabled=true;
+	}
+}
+
+//DBP: Added VMware mouse protocol support from DOSBox Staging by FeralChild64
+//     Source: https://github.com/FeralChild64/dosbox-staging/commit/d183abd
+//     Update: https://github.com/FeralChild64/dosbox-staging/commit/c030162
+static Bitu Mouse_VMWare_PortRead(Bitu port, Bitu iolen) {
+	//LOG_MSG("VMWARE: Port Read %x - Len: %u - 0x%08x - %x", (int)port, (int)iolen, reg_eax, reg_ebx);
+	extern bool DBP_UseDirectMouse();
+	if (!DBP_UseDirectMouse() || reg_eax != 0x564D5868u) // magic number for all VMware calls
+		return 0;
+
+	switch (reg_cx)
+	{
+		case 10: //CMD_GETVERSION:
+			reg_eax = 0x3442554a; // VMWare version id
+			reg_ebx = 0x564D5868; // VMWare Magic
+			break;
+		case 39: //CMD_ABSPOINTER_DATA:
+			reg_eax = ((mouse.buttons & 1) ? 0x20 : 0) | ((mouse.buttons & 2) ? 0x10 : 0) | ((mouse.buttons & 4) ? 0x08 : 0);
+			reg_ebx = (Bit32u)(mouse_vmware_x * 0xFFFF);
+			reg_ecx = (Bit32u)(mouse_vmware_y * 0xFFFF);
+			reg_edx = 0; //(mouse_wheel >= 0) ? mouse_wheel : 256 + mouse_wheel; mouse_wheel = 0;
+			mouse_vmware_updated = false;
+			break;
+		case 40: //CMD_ABSPOINTER_STATUS:
+			reg_eax = (mouse_vmware_updated ? 4 : 0);
+			break;
+		case 41: //CMD_ABSPOINTER_COMMAND:
+			switch (reg_ebx)
+			{
+				// For the standard VMware port interface we need regular PS/2 auxilary (mouse) interrupt handling
+				case 0x45414552: mouse_vmware_usep60 = false; mouse_vmware_cursor = 0; break; // ABSPOINTER_ENABLE
+				case 0xF5:       mouse_vmware_usep60 = false; mouse_vmware_cursor = 0; break; // ABSPOINTER_DISABLE
+				case 0x53424152: break; // ABSPOINTER_ABSOLUTE
+				default: LOG_MSG("VMWARE: unknown mouse subcommand 0x%08x", reg_ebx); break;
+			}
+			break;
+		default:
+			LOG_MSG("VMWARE: unknown command 0x%08x", reg_ecx);
+			break;
+	}
+	return reg_ax;
+}
+
+bool Mouse_VMWare_KeyboardWriteP64(Bitu val)
+{
+	extern bool DBP_UseDirectMouse();
+	if (!DBP_UseDirectMouse()) return false;
+
+	switch (val)
+	{
+		// For the keyboard VMware port interface we need special interrupt handling
+		case 0x45414552: mouse_vmware_usep60 = true;  mouse_vmware_cursor = 0; return true; // ABSPOINTER_ENABLE
+		case 0xF5:       mouse_vmware_usep60 = false; mouse_vmware_cursor = 0; return true; // ABSPOINTER_DISABLE
+		case 0x53424152: return true; // ABSPOINTER_ABSOLUTE
+		case 0x4c455252: return true; // ABSPOINTER_RELATIVE
+		default: LOG_MSG("VMWARE: unknown mouse subcommand 0x%08x", (Bit32u)val); return false;
+	}
+}
+
+uint32_t Mouse_VMWare_KeyboardReadP64()
+{
+	// Port 0x64 read handler (remaining events)
+	DBP_ASSERT(mouse_vmware_usep60);
+	switch (mouse_vmware_cursor)
+	{
+		case 0: return (mouse_vmware_updated ? 5 : 1);
+		case 1: return (mouse_vmware_updated ? 4 : 0);
+		case 2: return (mouse_vmware_updated ? 7 : 3);
+		case 3: return (mouse_vmware_updated ? 6 : 2);
+		case 4: return (mouse_vmware_updated ? 5 : 1);
+	}
+	DBP_ASSERT(false);
+	return 0;
+}
+
+uint32_t Mouse_VMWare_KeyboardReadP60()
+{
+	// Port 0x60 read handler (return one event)
+	DBP_ASSERT(mouse_vmware_usep60);
+	switch (mouse_vmware_cursor)
+	{
+		case 0: mouse_vmware_cursor = 1; return 0x3442554a; // VMWare version id
+		case 1:
+			if (!mouse_vmware_updated) { return 0; }
+			mouse_vmware_updated = false;
+			mouse_vmware_cursor = 2;
+			return ((mouse.buttons & 1) ? 0x20 : 0) | ((mouse.buttons & 2) ? 0x10 : 0) | ((mouse.buttons & 4) ? 0x08 : 0); // buttons
+		case 2: mouse_vmware_cursor = 3; return (Bit32u)(mouse_vmware_x * 0xFFFF); // x
+		case 3: mouse_vmware_cursor = 4; return (Bit32u)(mouse_vmware_y * 0xFFFF); // y
+		case 4: mouse_vmware_cursor = 1; return 0; // wheel
+	}
+	DBP_ASSERT(false);
+	return 0;
 }
 
 static Bitu INT33_Handler(void) {
@@ -709,10 +862,13 @@ static Bitu INT33_Handler(void) {
 		reg_ax=0xffff;
 		reg_bx=MOUSE_BUTTONS;
 		Mouse_Reset();
+		Mouse_Used();
 		break;
 	case 0x01:	/* Show Mouse */
 		if(mouse.hidden) mouse.hidden--;
+		mouse.updateRegion_y[1] = -1; //offscreen
 		DrawCursor();
+		if (!mouse.hidden) Mouse_Used();
 		break;
 	case 0x02:	/* Hide Mouse */
 		{
@@ -725,6 +881,7 @@ static Bitu INT33_Handler(void) {
 		reg_bx=mouse.buttons;
 		reg_cx=POS_X;
 		reg_dx=POS_Y;
+		Mouse_Used();
 		break;
 	case 0x04:	/* Position Mouse */
 		/* If position isn't different from current position
@@ -748,8 +905,9 @@ static Bitu INT33_Handler(void) {
 			reg_dx=mouse.last_pressed_y[but];
 			reg_bx=mouse.times_pressed[but];
 			mouse.times_pressed[but]=0;
-			break;
 		}
+		Mouse_Used();
+		break;
 	case 0x06:	/* Return Button Release Data */
 		{
 			Bit16u but=reg_bx;
@@ -759,8 +917,9 @@ static Bitu INT33_Handler(void) {
 			reg_dx=mouse.last_released_y[but];
 			reg_bx=mouse.times_released[but];
 			mouse.times_released[but]=0;
-			break;
 		}
+		Mouse_Used();
+		break;
 	case 0x07:	/* Define horizontal cursor range */
 		{	//lemmings set 1-640 and wants that. iron seeds set 0-640 but doesn't like 640
 			//Iron seed works if newvideo mode with mode 13 sets 0-639
@@ -818,25 +977,32 @@ static Bitu INT33_Handler(void) {
 		}
 		DrawCursor();
 		break;
+	case 0x27:	/* Get Screen/Cursor Masks and Mickey Counts */
+		reg_ax=mouse.textAndMask;
+		reg_bx=mouse.textXorMask;
+		/* FALLTHROUGH */
 	case 0x0b:	/* Read Motion Data */
 		reg_cx=static_cast<Bit16s>(mouse.mickey_x);
 		reg_dx=static_cast<Bit16s>(mouse.mickey_y);
 		mouse.mickey_x=0;
 		mouse.mickey_y=0;
+		Mouse_Used();
 		break;
 	case 0x0c:	/* Define interrupt subroutine parameters */
 		mouse.sub_mask=reg_cx;
 		mouse.sub_seg=SegValue(es);
 		mouse.sub_ofs=reg_dx;
+		if (mouse.sub_mask) Mouse_Used();
 		break;
 	case 0x0f:	/* Define mickey/pixel rate */
 		Mouse_SetMickeyPixelRate(reg_cx,reg_dx);
 		break;
-	case 0x10:      /* Define screen region for updating */
-		mouse.updateRegion_x[0]=reg_cx;
-		mouse.updateRegion_y[0]=reg_dx;
-		mouse.updateRegion_x[1]=reg_si;
-		mouse.updateRegion_y[1]=reg_di;
+	case 0x10:	/* Define screen region for updating */
+		mouse.updateRegion_x[0]=(Bit16s)reg_cx;
+		mouse.updateRegion_y[0]=(Bit16s)reg_dx;
+		mouse.updateRegion_x[1]=(Bit16s)reg_si;
+		mouse.updateRegion_y[1]=(Bit16s)reg_di;
+		DrawCursor();
 		break;
 	case 0x11:      /* Get number of buttons */
 		reg_ax=0xffff;
@@ -874,7 +1040,17 @@ static Bitu INT33_Handler(void) {
 		{
 			LOG(LOG_MOUSE,LOG_WARN)("Loading driver state...");
 			PhysPt src = SegPhys(es)+reg_dx;
+			// DBP: The saved buffer is a raw copy of the whole mouse struct, which also contains internal IRQ-delivery bookkeeping.
+			//      Those must stay in sync with the live MOUSE_Limit_Events PIC event, which is not part of the saved state.
+			bool cur_timer = mouse.timer_in_progress, cur_in_UIR = mouse.in_UIR;
+			Bit8u cur_events = mouse.events;
+			button_event cur_queue[QUEUE_SIZE];
+			memcpy(cur_queue, mouse.event_queue, sizeof(cur_queue));
 			MEM_BlockRead(src, &mouse, sizeof(mouse));
+			mouse.timer_in_progress = cur_timer;
+			mouse.in_UIR = cur_in_UIR;
+			mouse.events = cur_events;
+			memcpy(mouse.event_queue, cur_queue, sizeof(cur_queue));
 		}
 		break;
 	case 0x1a:	/* Set mouse sensitivity */
@@ -1020,10 +1196,19 @@ static Bitu MOUSE_BD_Handler(void) {
 }
 
 static Bitu INT74_Handler(void) {
-	if (mouse.events>0) {
+	if (mouse.events>0 && !mouse.in_UIR) {
 		mouse.events--;
+
+		/* INT 33h emulation: HERE within the IRQ 12 handler is the appropriate place to
+		 * redraw the cursor. OSes like Windows 3.1 expect real-mode code to do it in
+		 * response to IRQ 12, not "out of the blue" from the SDL event handler like
+		 * the original DOSBox code did it. Doing this allows the INT 33h emulation
+		 * to draw the cursor while not causing Windows 3.1 to crash or behave
+		 * erratically. */
+		if (AllowINT33RMAccess()) DrawCursor();
+
 		/* Check for an active Interrupt Handler that will get called */
-		if (mouse.sub_mask & mouse.event_queue[mouse.events].type) {
+		if ((mouse.sub_mask & mouse.event_queue[mouse.events].type) && AllowINT33RMAccess()) {
 			reg_ax=mouse.event_queue[mouse.events].type;
 			reg_bx=mouse.event_queue[mouse.events].buttons;
 			reg_cx=POS_X;
@@ -1031,10 +1216,11 @@ static Bitu INT74_Handler(void) {
 			reg_si=static_cast<Bit16s>(mouse.mickey_x);
 			reg_di=static_cast<Bit16s>(mouse.mickey_y);
 			CPU_Push16(RealSeg(CALLBACK_RealPointer(int74_ret_callback)));
-			CPU_Push16(RealOff(CALLBACK_RealPointer(int74_ret_callback)));
-			SegSet16(cs, mouse.sub_seg);
-			reg_ip = mouse.sub_ofs;
-			if(mouse.in_UIR) LOG(LOG_MOUSE,LOG_ERROR)("Already in UIR!");
+			CPU_Push16(RealOff(CALLBACK_RealPointer(int74_ret_callback))+7);
+			CPU_Push16(RealSeg(uir_callback));
+			CPU_Push16(RealOff(uir_callback));
+			CPU_Push16(mouse.sub_seg);
+			CPU_Push16(mouse.sub_ofs);
 			mouse.in_UIR = true;
 			//LOG(LOG_MOUSE,LOG_ERROR)("INT 74 %X",mouse.event_queue[mouse.events].type );
 		} else if (useps2callback) {
@@ -1054,14 +1240,18 @@ static Bitu INT74_Handler(void) {
 	return CBRET_NONE;
 }
 
-Bitu MOUSE_UserInt_CB_Handler(void) {
-	mouse.in_UIR = false;
+Bitu INT74_Ret_Handler(void) {
 	if (mouse.events) {
 		if (!mouse.timer_in_progress) {
 			mouse.timer_in_progress = true;
 			PIC_AddEvent(MOUSE_Limit_Events,MOUSE_DELAY);
 		}
 	}
+	return CBRET_NONE;
+}
+
+Bitu UIR_Handler(void) {
+	mouse.in_UIR = false;
 	return CBRET_NONE;
 }
 
@@ -1090,22 +1280,29 @@ void MOUSE_Init(Section* /*sec*/) {
 	call_int74=CALLBACK_Allocate();
 	CALLBACK_Setup(call_int74,&INT74_Handler,CB_IRQ12,"int 74");
 	// pseudocode for CB_IRQ12:
+	//	sti
 	//	push ds
 	//	push es
 	//	pushad
-	//	sti
 	//	callback INT74_Handler
-	//		doesn't return here, but rather to CB_IRQ12_RET
-	//		(ps2 callback/user callback inbetween if requested)
+	//		ps2 or user callback if requested
+	//		otherwise jumps to CB_IRQ12_RET
+	//	push ax
+	//	mov al, 0x20
+	//	out 0xa0, al
+	//	out 0x20, al
+	//	pop	ax
+	//	cld
+	//	retf
 
 	int74_ret_callback=CALLBACK_Allocate();
-	CALLBACK_Setup(int74_ret_callback,&MOUSE_UserInt_CB_Handler,CB_IRQ12_RET,"int 74 ret");
+	CALLBACK_Setup(int74_ret_callback,&INT74_Ret_Handler,CB_IRQ12_RET,"int 74 ret");
 	// pseudocode for CB_IRQ12_RET:
-	//	callback MOUSE_UserInt_CB_Handler
 	//	cli
 	//	mov al, 0x20
 	//	out 0xa0, al
 	//	out 0x20, al
+	//	callback INT74_Ret_Handler
 	//	popad
 	//	pop es
 	//	pop ds
@@ -1120,6 +1317,11 @@ void MOUSE_Init(Section* /*sec*/) {
 	CALLBACK_Setup(call_ps2,&PS2_Handler,CB_RETF,"ps2 bios callback");
 	ps2_callback=CALLBACK_RealPointer(call_ps2);
 
+	// Callback for mouse user routine return
+	call_uir=CALLBACK_Allocate();
+	CALLBACK_Setup(call_uir,&UIR_Handler,CB_RETF_CLI,"mouse uir ret");
+	uir_callback=CALLBACK_RealPointer(call_uir);
+
 	memset(&mouse,0,sizeof(mouse));
 	mouse.hidden = 1; //Hide mouse on startup
 	mouse.timer_in_progress = false;
@@ -1132,4 +1334,48 @@ void MOUSE_Init(Section* /*sec*/) {
 	Mouse_ResetHardware();
 	Mouse_Reset();
 	Mouse_SetSensitivity(50,50,50);
+
+	IO_RegisterReadHandler(0x5658, &Mouse_VMWare_PortRead, IO_MD, 2); //VMWARE_PORT, VMWARE_PORTHB
+}
+
+#include <dbp_serialize.h>
+
+DBP_SERIALIZE_SET_POINTER_LIST(PIC_EventHandler, MOUSE, MOUSE_Limit_Events);
+
+void DBPSerialize_Mouse(DBPArchive& ar)
+{
+	Bit8u screenMask_num = (mouse.screenMask ? (mouse.screenMask == defaultScreenMask ? 1 : 2) : 0);
+	Bit8u cursorMask_num = (mouse.cursorMask ? (mouse.cursorMask == defaultCursorMask ? 1 : 2) : 0);
+
+	ar
+		.SerializeExcept(mouse, mouse.screenMask, mouse.cursorMask)
+		.Serialize(ps2cbseg)
+		.Serialize(ps2cbofs)
+		.Serialize(useps2callback)
+		.Serialize(ps2callbackinit)
+		.SerializeArray(userdefScreenMask)
+		.SerializeArray(userdefCursorMask)
+		.SerializeArray(gfxReg3CE)
+		.Serialize(index3C4)
+		.Serialize(gfxReg3C5)
+		.Serialize(screenMask_num).Serialize(cursorMask_num);
+
+	if (ar.mode == DBPArchive::MODE_LOAD)
+	{
+		if (!(ar.flags & DBPArchive::FLAG_NORESETINPUT))
+		{
+			mouse.screenMask = (screenMask_num ? (screenMask_num == 1 ? defaultScreenMask : userdefScreenMask) : NULL);
+			mouse.cursorMask = (cursorMask_num ? (cursorMask_num == 1 ? defaultCursorMask : userdefCursorMask) : NULL);
+			for (Bit8u i = 0; i != MOUSE_BUTTONS; i++)
+				Mouse_ButtonReleased(i);
+			oldmouseX = static_cast<Bit16s>(mouse.x);
+			oldmouseY = static_cast<Bit16s>(mouse.y);
+		}
+		else if (mouse.timer_in_progress)
+		{
+			PIC_RemoveEvents(MOUSE_Limit_Events);
+			PIC_AddEvent(MOUSE_Limit_Events,MOUSE_DELAY);
+		}
+		INT10_SetCurMode(); // done here and not in DBPSerialize_INT10 because this must be called after DBPSerialize_Memory
+	}
 }

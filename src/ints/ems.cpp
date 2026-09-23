@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -52,6 +52,8 @@
 #define ENABLE_VCPI 1
 #define ENABLE_V86_STARTUP 0
 
+#define EMM_VOLATILE 0
+#define EMM_NONVOLATILE 1
 
 /* EMM errors */
 #define EMM_NO_ERROR			0x00
@@ -69,6 +71,7 @@
 #define EMM_PAGE_MAP_SAVED		0x8d
 #define EMM_NO_SAVED_PAGE_MAP	0x8e
 #define EMM_INVALID_SUB			0x8f
+#define EMM_ATTR_UNDEF			0x90
 #define EMM_FEAT_NOSUP			0x91
 #define EMM_MOVE_OVLAP			0x92
 #define EMM_MOVE_OVLAPI			0x97
@@ -115,7 +118,8 @@ public:
 	bool ReadFromControlChannel(PhysPt bufptr,Bit16u size,Bit16u * retcode);
 	bool WriteToControlChannel(PhysPt /*bufptr*/,Bit16u /*size*/,Bit16u * /*retcode*/){return true;}
 private:
-	Bit8u cache;
+	//DBP: Removed unused field
+	//Bit8u cache;
 	bool is_emm386;
 };
 
@@ -475,7 +479,7 @@ static Bit8u EMM_GetPagesForAllHandles(PhysPt table,Bit16u & handles) {
 }
 
 static Bit8u EMM_PartialPageMapping(void) {
-	PhysPt list,data;Bit16u count;
+	PhysPt list,data;Bit16u count,page;
 	switch (reg_al) {
 	case 0x00:	/* Save Partial Page Map */
 		list = SegPhys(ds)+reg_si;
@@ -485,38 +489,41 @@ static Bit8u EMM_PartialPageMapping(void) {
 		for (;count>0;count--) {
 			Bit16u segment=mem_readw(list);list+=2;
 			if ((segment>=EMM_PAGEFRAME) && (segment<EMM_PAGEFRAME+0x1000)) {
-				Bit16u page = (segment-EMM_PAGEFRAME) / (EMM_PAGE_SIZE>>4);
-				mem_writew(data,segment);data+=2;
-				MEM_BlockWrite(data,&emm_mappings[page],sizeof(EMM_Mapping));
-				data+=sizeof(EMM_Mapping);
+				page=(segment-EMM_PAGEFRAME)>>10;
+				mem_writeb(data++,(Bit8u)page);
+				mem_writeb(data++,(Bit8u)emm_mappings[page].handle);
+				mem_writew(data,emm_mappings[page].page);
 			} else if ((ems_type==1) || (ems_type==3) || ((segment>=EMM_PAGEFRAME-0x1000) && (segment<EMM_PAGEFRAME)) || ((segment>=0xa000) && (segment<0xb000))) {
-				mem_writew(data,segment);data+=2;
-				MEM_BlockWrite(data,&emm_segmentmappings[segment>>10],sizeof(EMM_Mapping));
-				data+=sizeof(EMM_Mapping);
+				page=segment>>10;
+				mem_writeb(data++,(Bit8u)page);
+				mem_writeb(data++,(Bit8u)emm_segmentmappings[page].handle);
+				mem_writew(data,emm_segmentmappings[page].page);
 			} else {
 				return EMM_ILL_PHYS;
 			}
+			data+=2;
 		}
 		break;
 	case 0x01:	/* Restore Partial Page Map */
 		data = SegPhys(ds)+reg_si;
 		count= mem_readw(data);data+=2;
 		for (;count>0;count--) {
-			Bit16u segment=mem_readw(data);data+=2;
-			if ((segment>=EMM_PAGEFRAME) && (segment<EMM_PAGEFRAME+0x1000)) {
-				Bit16u page = (segment-EMM_PAGEFRAME) / (EMM_PAGE_SIZE>>4);
-				MEM_BlockRead(data,&emm_mappings[page],sizeof(EMM_Mapping));
-			} else if ((ems_type==1) || (ems_type==3) || ((segment>=EMM_PAGEFRAME-0x1000) && (segment<EMM_PAGEFRAME)) || ((segment>=0xa000) && (segment<0xb000))) {
-				MEM_BlockRead(data,&emm_segmentmappings[segment>>10],sizeof(EMM_Mapping));
+			page=(Bit16u)mem_readb(data++);
+			if (page<EMM_MAX_PHYS) {
+				emm_mappings[page].handle=(Bit16u)mem_readb(data++);
+				emm_mappings[page].page=mem_readw(data);
+			} else if (page<0x40) {
+				emm_segmentmappings[page].handle=(Bit16u)mem_readb(data++);
+				emm_segmentmappings[page].page=mem_readw(data);
 			} else {
 				return EMM_ILL_PHYS;
 			}
-			data+=sizeof(EMM_Mapping);
+			data+=2;
 		}
 		return EMM_RestoreMappingTable();
 		break;
 	case 0x02:	/* Get Partial Page Map Array Size */
-		reg_al=(Bit8u)(2+reg_bx*(2+sizeof(EMM_Mapping)));
+		reg_al=(Bit8u)(2+reg_bx*4);
 		break;
 	default:
 		LOG(LOG_MISC,LOG_ERROR)("EMS:Call %2X Subfunction %2X not supported",reg_ah,reg_al);
@@ -581,6 +588,32 @@ static Bit8u GetSetHandleName(void) {
 
 }
 
+static Bit8u GetSetHandleAttributes(void) {
+	switch (reg_al) {
+	case 0x00:	// Get handle attribubtes
+		if (!ValidHandle(reg_dx)) return EMM_INVALID_HANDLE;
+		reg_al = EMM_VOLATILE;	// We only support volatile
+		break;
+	case 0x01:	// Set handle attributes
+		if (!ValidHandle(reg_dx)) return EMM_INVALID_HANDLE;
+		switch (reg_bl) {
+		case EMM_VOLATILE:
+			break;
+		case EMM_NONVOLATILE:
+			return EMM_FEAT_NOSUP;
+		default:
+			return EMM_ATTR_UNDEF;
+		}
+		break;
+	case 0x02:	// Get attribute capability
+		reg_al = EMM_VOLATILE;	// We only support volatile
+		break;
+	default:
+		LOG(LOG_MISC,LOG_ERROR)("EMS:Call %2X Subfunction %2X not supported",reg_ah,reg_al);
+		return EMM_INVALID_SUB;			
+	}
+	return EMM_NO_ERROR;
+}
 
 static void LoadMoveRegion(PhysPt data,MoveRegion & region) {
 	region.bytes=mem_readd(data+0x0);
@@ -798,6 +831,9 @@ static Bitu INT67_Handler(void) {
 	case 0x51:	/* Reallocate Pages */
 		reg_ah=EMM_ReallocatePages(reg_dx,reg_bx);
 		break;
+	case 0x52: // Set/Get Handle attributes
+		reg_ah=GetSetHandleAttributes();
+		break;	
 	case 0x53: // Set/Get Handlename
 		reg_ah=GetSetHandleName();
 		break;
@@ -820,6 +856,29 @@ static Bitu INT67_Handler(void) {
 		// Set number of pages
 		reg_cx = EMM_MAX_PHYS;
 		reg_ah = EMM_NO_ERROR;
+		break;
+	case 0x59: // Get hardware information
+		reg_ah=EMM_NO_ERROR;
+		switch (reg_al) {
+		case 0x00:	// Get hardware configuration
+			{
+				PhysPt data=SegPhys(es)+reg_di;
+				mem_writew(data,0x0400); data+=2;		// 1 page is 1K paragraphs (16KB)
+				mem_writew(data,0x0000); data+=2;		// No alternate register sets
+				mem_writew(data,sizeof(emm_mappings)); data+=2;	// Context save area size
+				mem_writew(data,0x0000); data+=2;		// No DMA channels
+				mem_writew(data,0x0000);			// Always 0 for LIM standard
+			}
+			break;
+		case 0x01:	// get unallocated raw page count
+			reg_dx=(Bit16u)(MEM_TotalPages()/4);		//Not entirely correct but okay
+			reg_bx=EMM_GetFreePages();
+			break;
+		default:
+			LOG(LOG_MISC,LOG_ERROR)("EMS:Call 59 subfct %2X not supported",reg_al);
+			reg_ah=EMM_INVALID_SUB;
+			break;
+		}
 		break;
 	case 0x5A:              /* Allocate standard/raw Pages */
 		if (reg_al<=0x01) {
@@ -860,7 +919,7 @@ static Bitu INT67_Handler(void) {
 				/* adjust paging entries for page frame (if mapped) */
 				for (ct=0; ct<4; ct++) {
 					Bit16u handle=emm_mappings[ct].handle;
-					if (handle!=0xffff) {
+					if (handle!=NULL_HANDLE) {
 						Bit16u memh=(Bit16u)MEM_NextHandleAt(emm_handles[handle].mem,emm_mappings[ct].page*4);
 						Bit16u entry_addr=reg_di+(EMM_PAGEFRAME>>6)+(ct*0x10);
 						real_writew(SegValue(es),entry_addr+0x00+0x01,(memh+0)*0x10);		// mapping of 1/4 of page
@@ -921,7 +980,7 @@ static Bitu INT67_Handler(void) {
 					else if (mem_seg<EMM_PAGEFRAME+0xc00) phys_page=2;
 					else phys_page=3;
 					Bit16u handle=emm_mappings[phys_page].handle;
-					if (handle==0xffff) {
+					if (handle==NULL_HANDLE) {
 						reg_ah=EMM_ILL_PHYS;
 						break;
 					} else {
@@ -951,7 +1010,7 @@ static Bitu INT67_Handler(void) {
 				break;
 			case 0x0c: {	/* VCPI Switch from V86 to Protected Mode */
 				reg_flags&=(~FLAG_IF);
-				cpu.cpl=0;
+				CPU_SetCPL(0);
 
 				/* Read data from ESI (linear address) */
 				Bit32u new_cr3=mem_readd(reg_esi);
@@ -1307,9 +1366,15 @@ private:
 	/* location in protected unfreeable memory where the ems name and callback are
 	 * stored  32 bytes.*/
 	static Bit16u ems_baseseg;
-	RealPt old4b_pointer,old67_pointer;
+	//DBP: Removed unused field
+	RealPt /*old4b_pointer,*/old67_pointer;
 	CALLBACK_HandlerObject call_vdma,call_vcpi,call_v86mon;
+	//DBP: Changed int67 to use a CALLBACK_HandlerObject so it doesn't leak callback allocations
+	#if 0
 	Bitu call_int67;
+	#else
+	CALLBACK_HandlerObject call_int67;
+	#endif
 
 public:
 	EMS(Section* configuration):Module_base(configuration) {
@@ -1340,8 +1405,13 @@ public:
 		char const* emsname="EMMXXXX0";
 		MEM_BlockWrite(PhysMake(ems_baseseg,0xa),emsname,(Bitu)(strlen(emsname)+1));
 
+		//DBP: Changed int67 to use a CALLBACK_HandlerObject so it doesn't leak callback allocations
+		#if 0
 		call_int67=CALLBACK_Allocate();
 		CALLBACK_Setup(call_int67,&INT67_Handler,CB_IRET,PhysMake(ems_baseseg,4),"Int 67 ems");
+		#else
+		call_int67.Install(&INT67_Handler,CB_IRET,PhysMake(ems_baseseg,4),"Int 67 ems");
+		#endif
 		RealSetVec(0x67,RealMake(ems_baseseg,4),old67_pointer);
 
 		/* Register the ems device */
@@ -1411,7 +1481,7 @@ public:
 				CPU_Push32(SegValue(cs));
 				CPU_Push32(reg_eip&0xffff);
 				/* Switch to V86-mode */
-				cpu.cpl=0;
+				CPU_SetCPL(0);
 				CPU_IRET(true,0);
 			}
 		}
@@ -1451,8 +1521,12 @@ public:
 			CPU_SET_CRX(3, 0);
 			reg_flags&=(~(FLAG_IOPL|FLAG_VM));
 			CPU_LIDT(0x3ff, 0);
-			cpu.cpl=0;
+			CPU_SetCPL(0);
 		}
+
+		//DBP: Added cleanup for restart support
+		extern bool DBP_IsShuttingDown();
+		if (DBP_IsShuttingDown()) ems_baseseg=0;
 	}
 };
 
@@ -1469,3 +1543,17 @@ void EMS_Init(Section* sec) {
 
 //Initialize static members
 Bit16u EMS::ems_baseseg = 0;
+
+#include <dbp_serialize.h>
+
+void DBPSerialize_EMS(DBPArchive& ar_outer)
+{
+	DBPArchiveOptional ar(ar_outer, test, (ems_type != 0));
+	if (ar.IsSkip()) return;
+	ar.Serialize(ems_type);
+	ar.SerializeArray(emm_handles);
+	ar.SerializeArray(emm_mappings);
+	ar.SerializeArray(emm_segmentmappings);
+	ar.Serialize(GEMMIS_seg);
+	ar.Serialize(vcpi);
+}

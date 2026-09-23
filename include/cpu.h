@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -29,6 +29,9 @@
 #ifndef DOSBOX_MEM_H
 #include "mem.h"
 #endif
+#ifndef DOSBOX_PAGING_H
+#include "paging.h"
+#endif
 
 #define CPU_AUTODETERMINE_NONE		0x00
 #define CPU_AUTODETERMINE_CORE		0x01
@@ -43,10 +46,12 @@
 #define CPU_ARCHTYPE_MIXED			0xff
 #define CPU_ARCHTYPE_386SLOW		0x30
 #define CPU_ARCHTYPE_386FAST		0x35
-#define CPU_ARCHTYPE_486OLD		0x40
-#define CPU_ARCHTYPE_486NEW		0x45
-#define CPU_ARCHTYPE_PENTIUM	0x50
-#define CPU_ARCHTYPE_P55C		0x55
+#define CPU_ARCHTYPE_486OLDSLOW		0x40
+#define CPU_ARCHTYPE_486NEWSLOW		0x45
+#define CPU_ARCHTYPE_PENTIUMSLOW	0x50
+#if C_MMX
+#define CPU_ARCHTYPE_PENTIUM_MMX	0x55
+#endif
 
 /* CPU Cycle Timing */
 extern Bit32s CPU_Cycles;
@@ -72,6 +77,7 @@ extern CPU_Decoder * cpudecoder;
 Bits CPU_Core_Normal_Run(void);
 Bits CPU_Core_Normal_Trap_Run(void);
 Bits CPU_Core_Simple_Run(void);
+Bits CPU_Core_Simple_Trap_Run(void);
 Bits CPU_Core_Full_Run(void);
 Bits CPU_Core_Dyn_X86_Run(void);
 Bits CPU_Core_Dyn_X86_Trap_Run(void);
@@ -156,6 +162,7 @@ static INLINE void CPU_SW_Interrupt_NoIOPLCheck(Bitu num,Bitu oldeip) {
 
 bool CPU_PrepareException(Bitu which,Bitu error);
 void CPU_Exception(Bitu which,Bitu error=0);
+void CPU_DebugException(Bit32u triggers,Bitu oldeip);
 
 bool CPU_SetSegGeneral(SegNames seg,Bitu value);
 bool CPU_PopSeg(SegNames seg,bool use32);
@@ -168,7 +175,7 @@ void CPU_Push32(Bitu value);
 
 void CPU_SetFlags(Bitu word,Bitu mask);
 
-
+#define EXCEPTION_DB			1
 #define EXCEPTION_UD			6
 #define EXCEPTION_TS			10
 #define EXCEPTION_NP			11
@@ -181,8 +188,17 @@ void CPU_SetFlags(Bitu word,Bitu mask);
 #define CR0_FPUEMULATION		0x00000004
 #define CR0_TASKSWITCH			0x00000008
 #define CR0_FPUPRESENT			0x00000010
+#define CR0_WRITEPROTECT		0x00010000
 #define CR0_PAGING				0x80000000
 
+// reasons for triggering a debug exception
+#define DBINT_BP0               0x00000001
+#define DBINT_BP1               0x00000002
+#define DBINT_BP2               0x00000004
+#define DBINT_BP3               0x00000008
+#define DBINT_GD                0x00002000
+#define DBINT_STEP              0x00004000
+#define DBINT_TASKSWITCH        0x00008000
 
 // *********************************************************************
 // Descriptor
@@ -375,7 +391,7 @@ public:
 	bool GetDescriptor	(Bitu selector, Descriptor& desc) {
 		selector&=~7;
 		if (selector>=table_limit) return false;
-		desc.Load(table_base+(selector));
+		desc.Load((PhysPt)(table_base+(selector)));
 		return true;
 	}
 protected:
@@ -389,11 +405,11 @@ public:
 		Bitu address=selector & ~7;
 		if (selector & 4) {
 			if (address>=ldt_limit) return false;
-			desc.Load(ldt_base+address);
+			desc.Load((PhysPt)(ldt_base+address));
 			return true;
 		} else {
 			if (address>=table_limit) return false;
-			desc.Load(table_base+address);
+			desc.Load((PhysPt)(table_base+address));
 			return true;
 		}
 	}
@@ -401,11 +417,11 @@ public:
 		Bitu address=selector & ~7;
 		if (selector & 4) {
 			if (address>=ldt_limit) return false;
-			desc.Save(ldt_base+address);
+			desc.Save((PhysPt)(ldt_base+address));
 			return true;
 		} else {
 			if (address>=table_limit) return false;
-			desc.Save(table_base+address);
+			desc.Save((PhysPt)(table_base+address));
 			return true;
 		}
 	} 
@@ -488,5 +504,17 @@ static INLINE void CPU_SetFlagsw(Bitu word) {
 	CPU_SetFlags(word,mask);
 }
 
+static INLINE void CPU_SetCPL(Bitu newcpl) {
+	if (newcpl != cpu.cpl) {
+		if (paging.enabled) {
+			if ( ((cpu.cpl < 3) && (newcpl == 3)) || ((cpu.cpl == 3) && (newcpl < 3)) )
+			PAGING_SwitchCPL(newcpl == 3);
+		}
+		cpu.cpl = newcpl;
+	}
+}
+
+Bitu CPU_ForceV86FakeIO_In(Bitu port,Bitu len);
+void CPU_ForceV86FakeIO_Out(Bitu port,Bitu val,Bitu len);
 
 #endif

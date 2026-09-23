@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN and AUTO MOUNT support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -24,7 +22,6 @@
 #include <algorithm> //std::copy
 #include <iterator>  //std::front_inserter
 #include "shell.h"
-#include "control.h"
 #include "regs.h"
 #include "callback.h"
 #include "support.h"
@@ -33,7 +30,7 @@ void DOS_Shell::ShowPrompt(void) {
 	Bit8u drive=DOS_GetDefaultDrive()+'A';
 	char dir[DOS_PATHLENGTH];
 	dir[0] = 0; //DOS_GetCurrentDir doesn't always return something. (if drive is messed up)
-	DOS_GetCurrentDir(0,dir,uselfn);
+	DOS_GetCurrentDir(0,dir);
 	WriteOut("%c:\\%s>",drive,dir);
 }
 
@@ -60,6 +57,11 @@ void DOS_Shell::InputCommand(char * line) {
 			DOS_CloseFile(input_handle);
 			DOS_OpenFile("con",2,&dummy);
 			LOG(LOG_MISC,LOG_ERROR)("Reopening the input handle. This is a bug!");
+		}
+		//DBP: Added this abort to support restart
+		if (first_shell->exit) {
+			line[0] = '\0'; // abort
+			return;
 		}
 		if (!n) {
 			size=0;			//Kill the while loop
@@ -226,6 +228,7 @@ void DOS_Shell::InputCommand(char * line) {
 			/* Don't care */
 			break;
 		case 0x0d:				/* Return */
+			outc('\r');
 			outc('\n');
 			size=0;			//Kill the while loop
 			break;
@@ -238,20 +241,9 @@ void DOS_Shell::InputCommand(char * line) {
 					// build new completion list
 					// Lines starting with CD will only get directories in the list
 					bool dir_only = (strncasecmp(line,"CD ",3)==0);
-					int q=0;
 
 					// get completion mask
 					char *p_completion_start = strrchr(line, ' ');
-					while (p_completion_start) {
-						q=0;
-						char *i;
-						for (i=line;i<p_completion_start;i++)
-							if (*i=='\"') q++;
-						if (q/2*2==q) break;
-						*i=0;
-						p_completion_start = strrchr(line, ' ');
-						*i=' ';
-					}
 
 					if (p_completion_start) {
 						p_completion_start ++;
@@ -262,22 +254,25 @@ void DOS_Shell::InputCommand(char * line) {
 					}
 
 					char *path;
-					if ((path = strrchr(line+completion_index,':'))) completion_index = (Bit16u)(path-line+1);
 					if ((path = strrchr(line+completion_index,'\\'))) completion_index = (Bit16u)(path-line+1);
 					if ((path = strrchr(line+completion_index,'/'))) completion_index = (Bit16u)(path-line+1);
 
 					// build the completion list
-					char mask[DOS_PATHLENGTH+2],smask[DOS_PATHLENGTH];
+					char mask[DOS_PATHLENGTH] = {0};
+					if (strlen(p_completion_start) + 3 >= DOS_PATHLENGTH) {
+						//Beep;
+						break;
+					}
 					if (p_completion_start) {
-						strcpy(mask, p_completion_start);
+						safe_strncpy(mask, p_completion_start,DOS_PATHLENGTH);
 						char* dot_pos=strrchr(mask,'.');
 						char* bs_pos=strrchr(mask,'\\');
 						char* fs_pos=strrchr(mask,'/');
 						char* cl_pos=strrchr(mask,':');
 						// not perfect when line already contains wildcards, but works
 						if ((dot_pos-bs_pos>0) && (dot_pos-fs_pos>0) && (dot_pos-cl_pos>0))
-							strcat(mask, "*");
-						else strcat(mask, "*.*");
+							strncat(mask, "*",DOS_PATHLENGTH - 1);
+						else strncat(mask, "*.*",DOS_PATHLENGTH - 1);
 					} else {
 						strcpy(mask, "*.*");
 					}
@@ -285,44 +280,31 @@ void DOS_Shell::InputCommand(char * line) {
 					RealPt save_dta=dos.dta();
 					dos.dta(dos.tables.tempdta);
 
-					bool res = false;
-					if (DOS_GetSFNPath(mask,smask,false)) {
-						sprintf(mask,"\"%s\"",smask);
-						res = DOS_FindFirst(mask, 0xffff & ~DOS_ATTR_VOLUME);
-					}
+					bool res = DOS_FindFirst(mask, 0xffff & ~DOS_ATTR_VOLUME);
 					if (!res) {
 						dos.dta(save_dta);
 						break;	// TODO: beep
 					}
 
 					DOS_DTA dta(dos.dta());
-					char name[DOS_NAMELENGTH_ASCII], lname[LFN_NAMELENGTH], qlname[LFN_NAMELENGTH+2];
-					Bit32u sz;Bit16u date;Bit16u time;Bit8u att;
+					char name[DOS_NAMELENGTH_ASCII];Bit32u sz;Bit16u date;Bit16u time;Bit8u att;
 
 					std::list<std::string> executable;
-					q=0;
-					while (*p_completion_start)
-						if (*p_completion_start++=='\"')
-							q++;
 					while (res) {
-						dta.GetResult(name,lname,sz,date,time,att);
-						if (strchr(uselfn?lname:name,' ')!=NULL||q/2*2!=q)
-							sprintf(qlname,"\"%s\"",uselfn?lname:name);
-						else
-							strcpy(qlname,uselfn?lname:name);
+						dta.GetResult(name,sz,date,time,att);
 						// add result to completion list
 
 						char *ext;	// file extension
 						if (strcmp(name, ".") && strcmp(name, "..")) {
 							if (dir_only) { //Handle the dir only case different (line starts with cd)
-								if(att & DOS_ATTR_DIRECTORY) l_completion.push_back(qlname);
+								if(att & DOS_ATTR_DIRECTORY) l_completion.push_back(name);
 							} else {
 								ext = strrchr(name, '.');
 								if (ext && (strcmp(ext, ".BAT") == 0 || strcmp(ext, ".COM") == 0 || strcmp(ext, ".EXE") == 0))
 									// we add executables to the a seperate list and place that list infront of the normal files
-									executable.push_front(qlname);
+									executable.push_front(name);
 								else
-									l_completion.push_back(qlname);
+									l_completion.push_back(name);
 							}
 						}
 						res=DOS_FindNext();
@@ -350,6 +332,7 @@ void DOS_Shell::InputCommand(char * line) {
 		case 0x1b:   /* ESC */
 			//write a backslash and return to the next line
 			outc('\\');
+			outc('\r');
 			outc('\n');
 			*line = 0;      // reset the line.
 			if (l_completion.size()) l_completion.clear(); //reset the completion list.
@@ -390,7 +373,7 @@ void DOS_Shell::InputCommand(char * line) {
 
 	// remove current command from history if it's there
 	if (current_hist) {
-		current_hist=false;
+		// current_hist=false;
 		l_history.pop_front();
 	}
 
@@ -423,93 +406,7 @@ bool DOS_Shell::Execute(char * name,char * args) {
 	/* check for a drive change */
 	if (((strcmp(name + 1, ":") == 0) || (strcmp(name + 1, ":\\") == 0)) && isalpha(*name))
 	{
-		if (strrchr(name,'\\')) { WriteOut(MSG_Get("SHELL_EXECUTE_ILLEGAL_COMMAND"),name); return true; }
 		if (!DOS_SetDrive(toupper(name[0])-'A')) {
-#ifdef WIN32
-			Section_prop * sec=0; sec=static_cast<Section_prop *>(control->GetSection("dos"));
-			if(!sec->Get_bool("automount")) { WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_NOT_FOUND"),toupper(name[0])); return true; }
-			// automount: attempt direct letter to drive map.
-first_1:
-			int drvtype=GetDriveType(name);
-			if(drvtype==1 && strlen(name)==2 && name[1]==':') {
-				char names[4];
-				strcpy(names,name);
-				strcat(names,"\\");
-				drvtype=GetDriveType(names);
-			}
-			if(drvtype==2) {
-				WriteOut(MSG_Get("SHELL_EXECUTE_AUTOMOUNT"));
-				WriteOut("\n");
-				WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_ACCESS_REMOVABLE"),toupper(name[0]));
-			} else if(drvtype==4) {
-				WriteOut(MSG_Get("SHELL_EXECUTE_AUTOMOUNT"));
-				WriteOut("\n");
-				WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_ACCESS_NETWORK"),toupper(name[0]));
-			} else if(drvtype==5) {
-				WriteOut(MSG_Get("SHELL_EXECUTE_AUTOMOUNT"));
-				WriteOut("\n");
-				WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_ACCESS_OPTICAL"),toupper(name[0]));
-			} else if(drvtype==3||drvtype==6) {
-				WriteOut(MSG_Get("SHELL_EXECUTE_AUTOMOUNT"));
-				if(drvtype==3 && strcasecmp(name,"c:")==0)
-					WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_ACCESS_WARNING_WIN"));
-				WriteOut("\n");
-				WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_ACCESS_LOCAL"),toupper(name[0]));
-			} else {
-				WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_NOT_FOUND"),toupper(name[0]));
-				return true;
-			}
-
-first_2:
-		Bit8u c;Bit16u n=1;
-		DOS_ReadFile (STDIN,&c,&n);
-		do switch (c) {
-			case 'n':			case 'N':
-			{
-				DOS_WriteFile (STDOUT,&c, &n);
-				DOS_ReadFile (STDIN,&c,&n);
-				do switch (c) {
-					case 0xD: WriteOut("\n\n"); WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_NOT_FOUND"),toupper(name[0])); return true;
-					case 0x08: WriteOut("\b \b"); goto first_2;
-				} while (DOS_ReadFile (STDIN,&c,&n));
-			}
-			case 'y':			case 'Y':
-			{
-				DOS_WriteFile (STDOUT,&c, &n);
-				DOS_ReadFile (STDIN,&c,&n);
-				do switch (c) {
-					case 0xD: WriteOut("\n"); goto continue_1;
-					case 0x08: WriteOut("\b \b"); goto first_2;
-				} while (DOS_ReadFile (STDIN,&c,&n));
-			}
-			case 0xD: WriteOut("\n"); goto first_1;
-			case '\t': case 0x08: goto first_2;
-			default:
-			{
-				DOS_WriteFile (STDOUT,&c, &n);
-				DOS_ReadFile (STDIN,&c,&n);
-				do switch (c) {
-					case 0xD: WriteOut("\n");goto first_1;
-					case 0x08: WriteOut("\b \b"); goto first_2;
-				} while (DOS_ReadFile (STDIN,&c,&n));
-				goto first_2;
-			}
-		} while (DOS_ReadFile (STDIN,&c,&n));
-
-continue_1:
-
-			char mountstring[DOS_PATHLENGTH+CROSS_LEN+20];
-			sprintf(mountstring,"MOUNT %s ",name);
-
-			if(GetDriveType(name)==5) strcat(mountstring,"-t cdrom ");
-			else if(GetDriveType(name)==2) strcat(mountstring,"-t floppy ");
-			strcat(mountstring,name);
-			strcat(mountstring,"\\");
-//			if(GetDriveType(name)==5) strcat(mountstring," -ioctl");
-			
-			this->ParseLine(mountstring);
-			if (!DOS_SetDrive(toupper(name[0])-'A'))
-#endif
 			WriteOut(MSG_Get("SHELL_EXECUTE_DRIVE_NOT_FOUND"),toupper(name[0]));
 		}
 		return true;
@@ -587,13 +484,13 @@ continue_1:
 		/* Fill the command line */
 		CommandTail cmdtail;
 		cmdtail.count = 0;
-		memset(&cmdtail.buffer,0,CTBUF); //Else some part of the string is unitialized (valgrind)
-		if (strlen(line)>=CTBUF) line[CTBUF-1]=0;
+		memset(&cmdtail.buffer,0,127); //Else some part of the string is unitialized (valgrind)
+		if (strlen(line)>126) line[126]=0;
 		cmdtail.count=(Bit8u)strlen(line);
 		memcpy(cmdtail.buffer,line,strlen(line));
 		cmdtail.buffer[strlen(line)]=0xd;
 		/* Copy command line in stack block too */
-		MEM_BlockWrite(SegPhys(ss)+reg_sp+0x100,&cmdtail,CTBUF+1);
+		MEM_BlockWrite(SegPhys(ss)+reg_sp+0x100,&cmdtail,128);
 
 		
 		/* Split input line up into parameters, using a few special rules, most notable the one for /AAA => A\0AA
@@ -680,8 +577,6 @@ char * DOS_Shell::Which(char * name) {
 	/* Parse through the Path to find the correct entry */
 	/* Check if name is already ok but just misses an extension */
 
-	if (DOS_FileExists(name)) return name;
-	upcase(name);
 	if (DOS_FileExists(name)) return name;
 	/* try to find .com .exe .bat */
 	strcpy(which_ret,name);

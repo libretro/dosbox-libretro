@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -33,16 +33,42 @@
 #include "serialport.h"
 #include <time.h>
 
-#if !(defined(GEKKO) || defined(VITA) || defined(_3DS) || defined(__SWITCH__) || defined(ANDROID) || defined (__GENODE__) || defined (__PS3__)) // No ftime support
+//DBP: Emulate ftime on non-windows platforms
+#if defined(ANDROID) || defined(HAVE_LIBNX) || defined(WIIU) || defined (GEKKO) || defined (_3DS) || defined(PSP) || defined(__linux__) || defined(__unix__) || defined(__MACH__)
+#if defined(__linux__) || defined(__unix__) || defined(__MACH__)
+#include <sys/time.h>
+#endif
+struct FAKEtimeb
+{
+	time_t time;
+	unsigned millitm;
+};
+
+void FAKEftime(struct FAKEtimeb* tb)
+{
+	time(&tb->time);
+
+	#if defined(__linux__) || defined(__unix__) || defined(__MACH__)
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	tb->millitm = tv.tv_usec/1000;
+	#else
+	tb->millitm = 0;
+	#endif
+}
+
+#define ftime FAKEftime
+#define timeb FAKEtimeb
+#else
 #include <sys/timeb.h>
 #endif
-
 
 /* if mem_systems 0 then size_extended is reported as the real size else 
  * zero is reported. ems and xms can increase or decrease the other_memsystems
  * counter using the BIOS_ZeroExtendedSize call */
-static Bit16u size_extended;
-static Bits other_memsystems=0;
+//DBP: Removed static to access this in DBPSerialize_Memory
+Bit16u size_extended;
+Bits other_memsystems=0;
 void CMOS_SetRegister(Bitu regNr, Bit8u val); //For setting equipment word
 
 static Bitu INT70_Handler(void) {
@@ -491,39 +517,16 @@ static Bitu INT11_Handler(void) {
 #define DOSBOX_CLOCKSYNC 0
 #endif
 
-
-//android removed ftime in ndks >= android-ndk-r10
-#if defined(GEKKO) || defined(VITA) || defined(_3DS) || defined(__SWITCH__) || (defined(ANDROID) || defined(__GENODE__) || defined(__PS3__)) // No ftime support
-struct FAKEtimeb
-{
-   time_t time;
-   unsigned millitm;
-};
-
-void FAKEftime(struct FAKEtimeb* tb)
-{
-   time(&tb->time);
-   
-#if defined(__linux__) || defined(__unix__)
-   struct timeval tv;
-   gettimeofday(&tv, NULL);
-   tb->millitm = tv.tv_usec/1000;
-#else
-   //windows cant use gettimeofday,but ftime already works on windows
-   tb->millitm = 0;
-#endif
-   
-}
-
-#define ftime FAKEftime
-#define timeb FAKEtimeb
-
-#endif
-
-
-
 static void BIOS_HostTimeSync() {
 	Bit32u milli = 0;
+#if defined(DB_HAVE_CLOCK_GETTIME) && ! defined(WIN32)
+	struct timespec tp;
+	clock_gettime(CLOCK_REALTIME,&tp);
+	
+	struct tm *loctime;
+	loctime = localtime(&tp.tv_sec);
+	milli = (Bit32u) (tp.tv_nsec / 1000000);
+#else
 	/* Setup time and date */
 	struct timeb timebuffer;
 	ftime(&timebuffer);
@@ -531,7 +534,7 @@ static void BIOS_HostTimeSync() {
 	struct tm *loctime;
 	loctime = localtime (&timebuffer.time);
 	milli = (Bit32u) timebuffer.millitm;
-
+#endif
 	/*
 	loctime->tm_hour = 23;
 	loctime->tm_min = 59;
@@ -584,11 +587,11 @@ static Bitu INT8_Handler(void) {
 #endif
 	mem_writed(BIOS_TIMER,value);
 
-	/* decrease floppy motor timer */
+	/* decrement FDD motor timeout counter; roll over on earlier PC, stop at zero on later PC */
 	Bit8u val = mem_readb(BIOS_DISK_MOTOR_TIMEOUT);
-	if (val) mem_writeb(BIOS_DISK_MOTOR_TIMEOUT,val-1);
-	/* and running drive */
-	mem_writeb(BIOS_DRIVE_RUNNING,mem_readb(BIOS_DRIVE_RUNNING) & 0xF0);
+	if (val || !IS_EGAVGA_ARCH) mem_writeb(BIOS_DISK_MOTOR_TIMEOUT,val-1);
+	/* clear FDD motor bits when counter reaches zero */
+	if (val == 1) mem_writeb(BIOS_DRIVE_RUNNING,mem_readb(BIOS_DRIVE_RUNNING) & 0xF0);
 	return CBRET_NONE;
 }
 #undef DOSBOX_CLOCKSYNC
@@ -613,10 +616,6 @@ static Bitu INT17_Handler(void) {
 	case 0x02:		/* PRINTER: Get Status */
 		reg_ah=0;	
 		break;
-	case 0x20:		/* Some sort of printerdriver install check*/
-		break;
-	default:
-		E_Exit("Unhandled INT 17 call %2X",reg_ah);
 	};
 	return CBRET_NONE;
 }
@@ -743,11 +742,37 @@ static Bitu INT14_Handler(void) {
 	return CBRET_NONE;
 }
 
+//DBP: Moved out of the function, added reinit to zero
+Bit16u biosConfigSeg=0;
+static bool biosAPMConnected;
+
 static Bitu INT15_Handler(void) {
-	static Bit16u biosConfigSeg=0;
 	switch (reg_ah) {
-	case 0x06:
-		LOG(LOG_BIOS,LOG_NORMAL)("INT15 Unkown Function 6");
+	case 0x24:		//A20 stuff
+		switch (reg_al) {
+		case 0:	//Disable a20
+			MEM_A20_Enable(false);
+			reg_ah = 0;                   //call successful
+			CALLBACK_SCF(false);             //clear on success
+			break;
+		case 1:	//Enable a20
+			MEM_A20_Enable( true );
+			reg_ah = 0;                   //call successful
+			CALLBACK_SCF(false);             //clear on success
+			break;
+		case 2:	//Query a20
+			reg_al = MEM_A20_Enabled() ? 0x1 : 0x0;
+			reg_ah = 0;                   //call successful
+			CALLBACK_SCF(false);
+			break;
+		case 3:	//Get a20 support
+			reg_bx = 0x3;		//Bitmask, keyboard and 0x92
+			reg_ah = 0;         //call successful
+			CALLBACK_SCF(false);
+			break;
+		default:
+			goto unhandled;
+		}
 		break;
 	case 0xC0:	/* Get Configuration*/
 		{
@@ -853,13 +878,24 @@ static Bitu INT15_Handler(void) {
 				break;
 			}
 			Bit32u count=(reg_cx<<16)|reg_dx;
+			double timeout=PIC_FullIndex()+((double)count/1000.0)+1.0;
 			mem_writed(BIOS_WAIT_FLAG_POINTER,RealMake(0,BIOS_WAIT_FLAG_TEMP));
 			mem_writed(BIOS_WAIT_FLAG_COUNT,count);
 			mem_writeb(BIOS_WAIT_FLAG_ACTIVE,1);
+			/* Unmask IRQ 8 if masked */
+			Bit8u mask=IO_Read(0xa1);
+			if (mask&1) IO_Write(0xa1,mask&~1);
 			/* Reprogram RTC to start */
 			IO_Write(0x70,0xb);
 			IO_Write(0x71,IO_Read(0x71)|0x40);
 			while (mem_readd(BIOS_WAIT_FLAG_COUNT)) {
+				if (PIC_FullIndex()>timeout) {
+					/* RTC timer not working for some reason */
+					mem_writeb(BIOS_WAIT_FLAG_ACTIVE,0);
+					IO_Write(0x70,0xb);
+					IO_Write(0x71,IO_Read(0x71)&~0x40);
+					break;
+				}
 				CALLBACK_Idle();
 			}
 			CALLBACK_SCF(false);
@@ -934,6 +970,12 @@ static Bitu INT15_Handler(void) {
 			reg_bx=0x00aa;	// mouse
 			// fall through
 		case 0x05:		// initialize
+			if ((reg_al==0x05) && (reg_bh!=0x03)) {
+				// non-standard data packet sizes not supported
+				CALLBACK_SCF(true);
+				reg_ah=2;
+				break;
+			}
 			Mouse_SetPS2State(false);
 			CALLBACK_SCF(false);
 			reg_ah=0;
@@ -976,7 +1018,127 @@ static Bitu INT15_Handler(void) {
 		LOG(LOG_BIOS,LOG_NORMAL)("INT15:Function %X called, bios mouse not supported",reg_ah);
 		CALLBACK_SCF(true);
 		break;
+	//DBP: Added implementation of 0xe8 extensions from Taewoong's Daum branch (might help with win9x support?)
+	case 0xe8:
+		switch (reg_al) {
+		case 0x01:
+			{ /* E801: memory size */
+				Bitu sz = MEM_TotalPages()*4;
+				if (sz >= 1024) sz -= 1024;
+				else sz = 0;
+				reg_ax = reg_cx = (sz > 0x3C00) ? 0x3C00 : sz; /* extended memory between 1MB and 16MB in KBs */
+				sz -= reg_ax;
+				sz /= 64;   /* extended memory size from 16MB in 64KB blocks */
+				if (sz > 65535) sz = 65535;
+				reg_bx = reg_dx = sz;
+				CALLBACK_SCF(false);
+			}
+			break;
+		case 0x20: //E820: MEMORY LISTING
+			if (reg_edx == 0x534D4150 && reg_ecx >= 20 && (MEM_TotalPages()*4) >= 24000) {
+				/* return a minimalist list:
+					*
+					*    0) 0x000000-0x09EFFF       Free memory
+					*    1) 0x0C0000-0x0FFFFF       Reserved
+					*    2) 0x100000-...            Free memory (no ACPI tables) */
+				if (reg_ebx < 3) {
+					uint32_t base = 0,len = 0,type = 0;
+					Bitu seg = SegValue(es);
+
+					switch (reg_ebx) {
+						case 0: base=0x000000; len=0x09F000; type=1; break;
+						case 1: base=0x0C0000; len=0x040000; type=2; break;
+						case 2: base=0x100000; len=(MEM_TotalPages()*4096)-0x100000; type=1; break;
+						default: E_Exit("Despite checks EBX is wrong value"); /* BUG! */
+					}
+
+					/* write to ES:DI */
+					real_writed(seg,reg_di+0x00,base);
+					real_writed(seg,reg_di+0x04,0);
+					real_writed(seg,reg_di+0x08,len);
+					real_writed(seg,reg_di+0x0C,0);
+					real_writed(seg,reg_di+0x10,type);
+					reg_ecx = 20;
+
+					/* return EBX pointing to next entry. wrap around, as most BIOSes do.
+						* the program is supposed to stop on CF=1 or when we return EBX == 0 */
+					if (++reg_ebx >= 3) reg_ebx = 0;
+				}
+				else {
+					CALLBACK_SCF(true);
+				}
+
+				reg_eax = 0x534D4150;
+			}
+			else {
+				reg_eax = 0x8600;
+				CALLBACK_SCF(true);
+			}
+			break;
+		default:
+			goto unhandled;
+		}
+		break;
+	//DBP: Added very simple handling of APM command to allow Windows to automatically shut down
+	case 0x53: {
+		Bit8u errcode = 0;
+		switch (reg_al) {
+		case 0x00: // installation check
+			// We return "not supported" during protected mode to avoid Windows 9x installing a APM system device driver which then forever
+			// shows an exclamation mark due to there being no 32-bit protected mode interface. This does not prevent the automatic
+			// shutdown of the emulator via Windows 9x shutdown because that happens in real mode without the need for a driver.
+			if (cpu.pmode) { errcode = 0x08; break; } // 0x08: not supported
+			reg_ax = 0x0102; // version 1.2
+			reg_bx = 0x504d; // 'PM'
+			reg_cx = 0; // flags (0x01: allow in 16-bit protected mode, 0x02: allow in 32-bit protected mode)
+			break;
+		case 0x01: // connect real mode interface
+			if      (reg_bx != 0)      errcode = 0x09; // 0x09: unrecognized device ID
+			else if (biosAPMConnected) errcode = 0x02; // 0x02: already connected to real mode interface
+			else biosAPMConnected = true;
+			break;
+		case 0x04: // disconnect interface
+			if      (reg_bx != 0)       errcode = 0x09; // 0x09: unrecognized device ID
+			else if (!biosAPMConnected) errcode = 0x03; // 0x03: interface not connected
+			else biosAPMConnected = false;
+			break;
+		case 0x0e: // set APM version
+			if      (reg_bx != 0)       errcode = 0x09; // 0x09: unrecognized device ID
+			else if (!biosAPMConnected) errcode = 0x03; // 0x03: interface not connected
+			else if (reg_ch != 1)       errcode = 0x0A; // 0x0A: invalid parameter value in CX
+			else { reg_ah = 1; reg_al = (reg_cl < 2 ? reg_cl : 2); } // desired version in CH,CL, return actual version in AH,AL
+			break;
+		case 0x08: // enable power management
+			if      (reg_bx > 1)        errcode = 0x09; // 0x09: unrecognized device ID
+			else if (!biosAPMConnected) errcode = 0x03; // 0x03: interface not connected
+			else if (reg_cx > 1)        errcode = 0x0A; // 0x0A: invalid parameter value in CX
+			break;
+		case 0x0d: // CPU Idle (according to dosbox-x source code this needs to be answered to avoid hanging in Windows 98)
+			if      (reg_bx > 1)        errcode = 0x09; // 0x09: unrecognized device ID
+			else if (!biosAPMConnected) errcode = 0x03; // 0x03: interface not connected
+			else if (reg_cx > 1)        errcode = 0x0A; // 0x0A: invalid parameter value in CX
+			break;
+		case 0x07: // power off
+			if      (reg_bx > 1)        errcode = 0x09; // 0x09: unrecognized device ID
+			else if (!biosAPMConnected) errcode = 0x03; // 0x03: interface not connected
+			else if (reg_cx != 3)       errcode = 0x0A; // 0x0A: invalid parameter value in CX (we only support power state off)
+			else
+			{
+				LOG_MSG("Power down by BIOS APM requested");
+				void DBP_OnBIOSPoweroff();
+				DBP_OnBIOSPoweroff();
+				return CBRET_STOP;
+			}
+			break;
+		default: // Ignore others (i.e. 0x0f: APM engage/disengage)
+			goto unhandled;
+		}
+		if (errcode) reg_ah = errcode;
+		CALLBACK_SCF(errcode != 0);
+		break;
+	}
 	default:
+	unhandled:
 		LOG(LOG_BIOS,LOG_ERROR)("INT15:Unknown call %4X",reg_ax);
 		reg_ah=0x86;
 		CALLBACK_SCF(true);
@@ -988,7 +1150,30 @@ static Bitu INT15_Handler(void) {
 	return CBRET_NONE;
 }
 
+static Bitu Default_IRQ_Handler(void) {
+	IO_WriteB(0x20,0x0b);
+	Bit8u master_isr=IO_ReadB(0x20);
+	if (master_isr) {
+		IO_WriteB(0xa0,0x0b);
+		Bit8u slave_isr=IO_ReadB(0xa0);
+		if (slave_isr) {
+			IO_WriteB(0xa1,IO_ReadB(0xa1)|slave_isr);
+			IO_WriteB(0xa0,0x20);
+		} else IO_WriteB(0x21,IO_ReadB(0x21)|(master_isr&~4));
+		IO_WriteB(0x20,0x20);
+#if C_DEBUG
+		Bit16u irq=0,isr=master_isr;
+		if (slave_isr) isr=slave_isr<<8;
+		while (isr>>=1) irq++;
+		LOG(LOG_BIOS,LOG_WARN)("Unexpected IRQ %u",irq);
+#endif
+	} else master_isr=0xff;
+	mem_writeb(BIOS_LAST_UNEXPECTED_IRQ,master_isr);
+	return CBRET_NONE;
+}
+
 static Bitu Reboot_Handler(void) {
+#ifdef C_DBP_USE_SDL
 	// switch to text mode, notify user (let's hope INT10 still works)
 	const char* const text = "\n\n   Reboot requested, quitting now.";
 	reg_ax = 0;
@@ -1003,7 +1188,18 @@ static Bitu Reboot_Handler(void) {
 	double start = PIC_FullIndex();
 	while((PIC_FullIndex()-start)<3000) CALLBACK_Idle();
 	throw 1;
+#else
+	LOG(LOG_BIOS,LOG_WARN)("BIOS Reboot");
+	void DBP_OnBIOSReboot();
+	DBP_OnBIOSReboot();
+#endif
 	return CBRET_NONE;
+}
+
+void BIOS_SetEquipment(Bit16u equipment) {
+	mem_writew(BIOS_CONFIGURATION,equipment);
+	if (IS_EGAVGA_ARCH) equipment &= ~0x30; //EGA/VGA startup display mode differs in CMOS
+	CMOS_SetRegister(0x14,(Bit8u)(equipment&0xff)); //Should be updated on changes
 }
 
 void BIOS_ZeroExtendedSize(bool in) {
@@ -1123,6 +1319,16 @@ public:
 		Bitu call_irq2=CALLBACK_Allocate();	
 		CALLBACK_Setup(call_irq2,NULL,CB_IRET_EOI_PIC1,Real2Phys(BIOS_DEFAULT_IRQ2_LOCATION),"irq 2 bios");
 		RealSetVec(0x0a,BIOS_DEFAULT_IRQ2_LOCATION);
+
+		/* Default IRQ handler */
+		Bitu call_irq_default=CALLBACK_Allocate();
+		CALLBACK_Setup(call_irq_default,&Default_IRQ_Handler,CB_IRET,"irq default");
+		RealSetVec(0x0b,CALLBACK_RealPointer(call_irq_default)); // IRQ 3
+		RealSetVec(0x0c,CALLBACK_RealPointer(call_irq_default)); // IRQ 4
+		RealSetVec(0x0d,CALLBACK_RealPointer(call_irq_default)); // IRQ 5
+		RealSetVec(0x0f,CALLBACK_RealPointer(call_irq_default)); // IRQ 7
+		RealSetVec(0x72,CALLBACK_RealPointer(call_irq_default)); // IRQ 10
+		RealSetVec(0x73,CALLBACK_RealPointer(call_irq_default)); // IRQ 11
 
 		// INT 05h: Print Screen
 		// IRQ1 handler calls it when PrtSc key is pressed; does nothing unless hooked
@@ -1279,8 +1485,7 @@ public:
 		if (machine==MCH_PCJR) config |= 0x100;
 		// Gameport
 		config |= 0x1000;
-		mem_writew(BIOS_CONFIGURATION,config);
-		CMOS_SetRegister(0x14,(Bit8u)(config&0xff)); //Should be updated on changes
+		BIOS_SetEquipment(config);
 		/* Setup extended memory size */
 		IO_Write(0x70,0x30);
 		size_extended=IO_Read(0x71);
@@ -1313,6 +1518,9 @@ public:
 			delete tandy_DAC_callback[1];
 			tandy_DAC_callback[0]=NULL;
 			tandy_DAC_callback[1]=NULL;
+			//DBP: Moved out of the function, added reinit to zero
+			biosConfigSeg=0;
+			biosAPMConnected=false;
 		}
 	}
 };
@@ -1333,8 +1541,7 @@ void BIOS_SetComPorts(Bit16u baseaddr[]) {
 	equipmentword = mem_readw(BIOS_CONFIGURATION);
 	equipmentword &= (~0x0E00);
 	equipmentword |= (portcount << 9);
-	mem_writew(BIOS_CONFIGURATION,equipmentword);
-	CMOS_SetRegister(0x14,(Bit8u)(equipmentword&0xff)); //Should be updated on changes
+	BIOS_SetEquipment(equipmentword);
 }
 
 

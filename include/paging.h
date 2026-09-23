@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -29,9 +29,7 @@
 
 // disable this to reduce the size of the TLB
 // NOTE: does not work with the dynamic core (dynrec is fine)
-#ifndef GEKKO // __LIBRETRO__: Save 20 MB of bss
 #define USE_FULL_TLB
-#endif
 
 class PageDirectory;
 
@@ -50,9 +48,11 @@ class PageDirectory;
 #define PFLAG_READABLE		0x1
 #define PFLAG_WRITEABLE		0x2
 #define PFLAG_HASROM		0x4
-#define PFLAG_HASCODE		0x8				//Page contains dynamic code
+#define PFLAG_HASCODE32		0x8				//Page contains 32-bit dynamic code
 #define PFLAG_NOCODE		0x10			//No dynamic code can be generated here
 #define PFLAG_INIT			0x20			//No dynamic code can be generated here
+#define PFLAG_HASCODE16		0x40			//Page contains 16-bit dynamic code
+#define PFLAG_HASCODE		(PFLAG_HASCODE32|PFLAG_HASCODE16)
 
 #define LINK_START	((1024+64)/4)			//Start right after the HMA
 
@@ -82,6 +82,9 @@ public:
 /* Some other functions */
 void PAGING_Enable(bool enabled);
 bool PAGING_Enabled(void);
+void PAGING_ChangedWP(void);
+void PAGING_SwitchCPL(bool isUser);
+void PAGING_OnChangeCore(void);
 
 Bitu PAGING_GetDirBase(void);
 void PAGING_SetDirBase(Bitu cr3);
@@ -174,6 +177,18 @@ struct PagingBlock {
 		Bitu used;
 		Bit32u entries[PAGING_LINKS];
 	} links;
+	struct {
+		Bitu used;
+		Bit32u entries[PAGING_LINKS];
+	} ur_links;
+	struct {
+		Bitu used;
+		Bit32u entries[PAGING_LINKS];
+	} krw_links;
+	struct {
+		Bitu used;
+		Bit32u entries[PAGING_LINKS];
+	} kr_links; // WP-only
 	Bit32u		firstmb[LINK_START];
 	bool		enabled;
 };
@@ -226,7 +241,7 @@ void PAGING_InitTLBBank(tlb_entry **bank);
 
 static INLINE tlb_entry *get_tlb_entry(PhysPt address) {
 	Bitu index=(address>>12);
-	if (TLB_BANKS && (index > TLB_SIZE)) {
+	if (TLB_BANKS && (index >= TLB_SIZE)) {
 		Bitu bank=(address>>BANK_SHIFT) - 1;
 		if (!paging.tlbh_banks[bank])
 			PAGING_InitTLBBank(&paging.tlbh_banks[bank]);
@@ -280,8 +295,16 @@ static INLINE Bit32u mem_readd_inline(PhysPt address) {
 	if ((address & 0xfff)<0xffd) {
 		HostPt tlb_addr=get_tlb_read(address);
 		if (tlb_addr) return host_readd(tlb_addr+address);
-		else return (get_tlb_readhandler(address))->readd(address);
+		else return (Bit32u)(get_tlb_readhandler(address))->readd(address);
 	} else return mem_unalignedreadd(address);
+}
+
+static INLINE Bit64u mem_readq_inline(PhysPt address) {
+	if ((address & 0xfff)<0xff9) {
+		HostPt tlb_addr=get_tlb_read(address);
+		if (tlb_addr) return ((Bit64u)host_readd(tlb_addr+address)|((Bit64u)host_readd(tlb_addr+address+4)<<32));
+		else { PageHandler* ph = get_tlb_readhandler(address); return ((Bit64u)ph->readd(address)|((Bit64u)ph->readd(address+4)<<32)); }
+	} else return ((Bit64u)mem_unalignedreadd(address)|((Bit64u)mem_unalignedreadd(address+4)<<32));
 }
 
 static INLINE void mem_writeb_inline(PhysPt address,Bit8u val) {
@@ -304,6 +327,14 @@ static INLINE void mem_writed_inline(PhysPt address,Bit32u val) {
 		if (tlb_addr) host_writed(tlb_addr+address,val);
 		else (get_tlb_writehandler(address))->writed(address,val);
 	} else mem_unalignedwrited(address,val);
+}
+
+static INLINE void mem_writeq_inline(PhysPt address,Bit64u val) {
+	if ((address & 0xfff)<0xff9) {
+		HostPt tlb_addr=get_tlb_write(address);
+		if (tlb_addr) { host_writed(tlb_addr+address,(Bit32u)val); host_writed(tlb_addr+address+4,(Bit32u)(val>>32)); }
+		else { PageHandler* ph = get_tlb_writehandler(address); ph->writed(address,(Bit32u)val); ph->writed(address+4,(Bit32u)(val>>32)); }
+	} else { mem_unalignedwrited(address,(Bit32u)val); mem_unalignedwrited(address+4,(Bit32u)(val>>32)); }
 }
 
 
@@ -363,5 +394,55 @@ static INLINE bool mem_writed_checked(PhysPt address,Bit32u val) {
 	} else return mem_unalignedwrited_checked(address,val);
 }
 
+extern bool paging_prevent_exception_jump;
+
+#if 1 // use C++ exceptions
+#include <exception>
+struct GuestPageFaultException : std::exception {
+	GuestPageFaultException(Bitu n_faultcode) : faultcode(n_faultcode) {}
+	Bitu faultcode;
+};
+
+#define THROW_PAGE_FAULT(CODE) throw GuestPageFaultException(CODE)
+
+#define PAGE_FAULT_TRY \
+	restartloop2: \
+	try \
+	{
+
+#define PAGE_FAULT_CATCH \
+	} \
+	catch (GuestPageFaultException& pf) { \
+		paging_prevent_exception_jump = true; \
+		CPU_Exception(EXCEPTION_PF,pf.faultcode); \
+		paging_prevent_exception_jump = false; \
+		goto restartloop2; \
+	}
+
+#define PAGE_FAULT_CLEANUP_SETUP(...) __VA_ARGS__
+#define PAGE_FAULT_CLEANUP_TRY(...) { __VA_ARGS__ try {
+#define PAGE_FAULT_CLEANUP_CATCH(...) } catch (GuestPageFaultException&) { __VA_ARGS__ throw; } }
+
+#else // use C longjmp (incomplete)
+#include <csetjmp>
+extern Bitu pagefault_faultcode;
+extern std::jmp_buf pagefault_jmp_buf;
+extern Bit32u pagefault_old_esp;
+
+#define THROW_PAGE_FAULT(CODE) \
+		pagefault_faultcode = (CODE); \
+		std::longjmp(pagefault_jmp_buf, 1)
+
+#define PAGE_FAULT_TRY \
+	if (looprecursion == 1 && setjmp(pagefault_jmp_buf)) \
+	{ \
+		if (pagefault_old_esp) { reg_esp = pagefault_old_esp; pagefault_old_esp = 0; } \
+		paging_prevent_exception_jump = true; \
+		CPU_Exception(EXCEPTION_PF,pagefault_faultcode); \
+		paging_prevent_exception_jump = false; \
+	}
+
+#define PAGE_FAULT_CATCH TODO
+#endif
 
 #endif

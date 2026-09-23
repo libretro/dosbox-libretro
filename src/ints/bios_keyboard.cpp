@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -25,7 +25,12 @@
 #include "regs.h"
 #include "inout.h"
 #include "dos_inc.h"
+#ifdef C_DBP_USE_SDL
 #include "SDL.h"
+#else
+#define SDL_VERSION_ATLEAST(...) 0
+#define CAN_USE_LOCK 1
+#endif
 
 /* SDL by default treats numlock and scrolllock different from all other keys.
  * In recent versions this can disabled by a environment variable which we set in sdlmain.cpp
@@ -191,9 +196,11 @@ static bool check_key(Bit16u &code) {
 	Bit16u head,tail;
 	head =mem_readw(BIOS_KEYBOARD_BUFFER_HEAD);
 	tail =mem_readw(BIOS_KEYBOARD_BUFFER_TAIL);
-	if (head==tail) return false;
 	code = real_readw(0x40,head);
-	return true;
+	// cpu flags from instruction comparing head and tail pointers
+	CALLBACK_SZF(head==tail);
+	CALLBACK_SCF(head<tail);
+	return (head!=tail);
 }
 
 	/*	Flag Byte 1 
@@ -229,6 +236,19 @@ static bool check_key(Bit16u &code) {
 	*/
 
 
+// DBP: Added for syncing host LEDs (and states) with DOSBox
+#ifdef C_DBP_LIBRETRO
+KBD_LEDS biosKeyLEDOverwrite;
+static Bit8u biosKeyLEDOverwriteMask;
+void BIOS_SetKeyboardLEDOverwrite(KBD_KEYS event_key, KBD_LEDS leds) {
+	biosKeyLEDOverwriteMask |= (Bit8u)leds;
+	biosKeyLEDOverwrite = leds;
+	if (event_key == KBD_scrolllock || event_key == KBD_numlock || event_key == KBD_capslock) return; // let IRQ1_Handler or booted OS deal with it
+	phys_writeb(BIOS_KEYBOARD_FLAGS1, (phys_readb(BIOS_KEYBOARD_FLAGS1) & ~(biosKeyLEDOverwriteMask<<4)) | ((Bit8u)leds<<4));
+	phys_writeb(BIOS_KEYBOARD_LEDS, (phys_readb(BIOS_KEYBOARD_LEDS) & ~biosKeyLEDOverwriteMask) | (Bit8u)leds);
+}
+#endif
+
 /* the scancode is in reg_al */
 static Bitu IRQ1_Handler(void) {
 /* handling of the locks key is difficult as sdl only gives
@@ -246,11 +266,18 @@ static Bitu IRQ1_Handler(void) {
 #else
 	flags2&=~(0x40+0x20);//remove numlock/capslock pressed (hack for sdl only reporting states)
 #endif
+#ifdef C_DBP_LIBRETRO
+	Bit8u fixFlags1 = (flags1 & ~(biosKeyLEDOverwriteMask<<4)) | ((Bit8u)biosKeyLEDOverwrite<<4);
+	if (flags1 != fixFlags1) { flags1 = fixFlags1; mem_writeb(BIOS_KEYBOARD_FLAGS1,flags1); }
+	Bit8u fixLeds = (leds & ~biosKeyLEDOverwriteMask) | (Bit8u)biosKeyLEDOverwrite;
+	if (leds != fixLeds) { leds = fixLeds; mem_writeb(BIOS_KEYBOARD_LEDS,leds); }
+#endif
 	if (DOS_LayoutKey(scancode,flags1,flags2,flags3)) return CBRET_NONE;
 //LOG_MSG("key input %d %d %d %d",scancode,flags1,flags2,flags3);
 	switch (scancode) {
 	/* First the hard ones  */
-	case 0xfa:	/* ack. Do nothing for now */
+	case 0xfa:	/* Acknowledge */
+		leds |=0x10;
 		break;
 	case 0xe1:	/* Extended key special. Only pause uses this */
 		flags3 |=0x01;
@@ -330,7 +357,9 @@ static Bitu IRQ1_Handler(void) {
 				/* normal pause key, enter loop */
 				mem_writeb(BIOS_KEYBOARD_FLAGS2,flags2|8);
 				IO_Write(0x20,0x20);
-				while (mem_readb(BIOS_KEYBOARD_FLAGS2)&8) CALLBACK_Idle();	// pause loop
+				//DBP: Added check for restart support
+				extern bool DBP_IsShuttingDown();
+				while ((mem_readb(BIOS_KEYBOARD_FLAGS2)&8) && !DBP_IsShuttingDown()) CALLBACK_Idle();	// pause loop
 				reg_ip+=5;	// skip out 20,20
 				return CBRET_NONE;
 			}
@@ -524,37 +553,32 @@ static Bitu INT16_Handler(void) {
 		// enable interrupt-flag after IRET of this int16
 		CALLBACK_SIF(true);
 		for (;;) {
-			if (check_key(temp)) {
+			if (check_key(temp)) { //  check_key changes ZF and CF as required
 				if (!IsEnhancedKey(temp)) {
 					/* normal key, return translated key in ax */
-					CALLBACK_SZF(false);
-					reg_ax=temp;
 					break;
 				} else {
 					/* remove enhanced key from buffer and ignore it */
 					get_key(temp);
 				}
 			} else {
-				/* no key available */
-				CALLBACK_SZF(true);
+				/* no key available, return key at buffer head anyway */
 				break;
 			}
 //			CALLBACK_Idle();
 		}
+		reg_ax=temp;
 		break;
 	case 0x11: /* CHECK FOR KEYSTROKE (enhanced keyboards only) */
 		// enable interrupt-flag after IRET of this int16
 		CALLBACK_SIF(true);
-		if (!check_key(temp)) {
-			CALLBACK_SZF(true);
-		} else {
-			CALLBACK_SZF(false);
+		if (check_key(temp)) { // check_key changes ZF and CF as required
 			if (((temp&0xff)==0xf0) && (temp>>8)) {
 				/* special enhanced key, clear low part before returning key */
 				temp&=0xff00;
 			}
-			reg_ax=temp;
 		}
+		reg_ax=temp;
 		break;
 	case 0x02:	/* GET SHIFT FLAGS */
 		reg_al=mem_readb(BIOS_KEYBOARD_FLAGS1);
@@ -594,8 +618,10 @@ static Bitu INT16_Handler(void) {
 }
 
 //Keyboard initialisation. src/gui/sdlmain.cpp
+#if SDL_VERSION_ATLEAST(1, 2, 14) || defined(C_DBP_USE_SDL)
 extern bool startup_state_numlock;
 extern bool startup_state_capslock;
+#endif
 
 static void InitBiosSegment(void) {
 	/* Setup the variables for keyboard in the bios data segment */
@@ -608,9 +634,12 @@ static void InitBiosSegment(void) {
 
 #if SDL_VERSION_ATLEAST(1, 2, 14)
 //Nothing, mapper handles all.
-#else
+#elif defined(C_DBP_USE_SDL)
 	if (startup_state_capslock) { flag1|=0x40; leds|=0x04;}
 	if (startup_state_numlock)  { flag1|=0x20; leds|=0x02;}
+#else
+	flag1|=(Bit8u)(biosKeyLEDOverwrite<<4);
+	leds|=(Bit8u)biosKeyLEDOverwrite;
 #endif
 
 	mem_writeb(BIOS_KEYBOARD_FLAGS1,flag1);

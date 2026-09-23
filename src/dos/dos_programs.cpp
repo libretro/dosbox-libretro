@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN and AUTO MOUNT support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -61,11 +59,89 @@ Bitu DEBUG_EnableDebugger(void);
 void MSCDEX_SetCDInterface(int intNr, int forceCD);
 static Bitu ZDRIVE_NUM = 25;
 
+static const char* UnmountHelper(char umount) {
+	int i_drive;
+	if (umount < '0' || umount > 3+'0')
+		i_drive = toupper(umount) - 'A';
+	else
+		i_drive = umount - '0';
+
+	if (i_drive >= DOS_DRIVES || i_drive < 0)
+		return MSG_Get("PROGRAM_MOUNT_UMOUNT_NOT_MOUNTED");
+
+	if (i_drive < MAX_DISK_IMAGES && Drives[i_drive] == NULL && imageDiskList[i_drive] == NULL)
+		return MSG_Get("PROGRAM_MOUNT_UMOUNT_NOT_MOUNTED");
+
+	if (i_drive >= MAX_DISK_IMAGES && Drives[i_drive] == NULL)
+		return MSG_Get("PROGRAM_MOUNT_UMOUNT_NOT_MOUNTED");
+
+	if (Drives[i_drive]) {
+		#ifdef C_DBP_ENABLE_DRIVE_MANAGER
+		switch (DriveManager::UnmountDrive(i_drive)) {
+			case 1: return MSG_Get("PROGRAM_MOUNT_UMOUNT_NO_VIRTUAL");
+			case 2: return MSG_Get("MSCDEX_ERROR_MULTIPLE_CDROMS");
+		}
+		Drives[i_drive] = 0;
+		mem_writeb(Real2Phys(dos.tables.mediaid)+i_drive*9,0);
+		#else
+		if (dynamic_cast<Virtual_Drive*>(Drives[i_drive])) return MSG_Get("PROGRAM_MOUNT_UMOUNT_NO_VIRTUAL");
+		void DBP_Unmount(char drive);
+		DBP_Unmount('A' + i_drive);
+		DBP_ASSERT(!Drives[i_drive]);
+		#endif
+		if (i_drive == DOS_GetDefaultDrive()) {
+			DOS_SetDrive(ZDRIVE_NUM);
+		}
+
+	}
+
+	if (i_drive < MAX_DISK_IMAGES && imageDiskList[i_drive]) {
+		delete imageDiskList[i_drive];
+		imageDiskList[i_drive] = NULL;
+	}
+
+	return MSG_Get("PROGRAM_MOUNT_UMOUNT_SUCCESS");
+}
+
 class MOUNT : public Program {
 public:
+	void Move_Z(char new_z) {
+		char newz_drive = (char) toupper(new_z);
+		int i_newz = newz_drive - 'A';
+		if (i_newz >= 0 && i_newz < DOS_DRIVES-1 && !Drives[i_newz]) {
+			ZDRIVE_NUM = i_newz;
+			/* remap drives */
+			Drives[i_newz] = Drives[25];
+			Drives[25] = 0;
+			if (!first_shell) return; //Should not be possible			
+			/* Update environment */
+			std::string line = "";
+			char ppp[2] = {newz_drive,0};
+			std::string tempenv = ppp; tempenv += ":\\";
+			if (first_shell->GetEnvStr("PATH",line)){
+				std::string::size_type idx = line.find('=');
+				std::string value = line.substr(idx +1 , std::string::npos);
+				while ( (idx = value.find("Z:\\")) != std::string::npos ||
+					(idx = value.find("z:\\")) != std::string::npos  )
+					value.replace(idx,3,tempenv);
+				line = value;
+			}
+			if (!line.size()) line = tempenv;
+			first_shell->SetEnv("PATH",line.c_str());
+			tempenv += "COMMAND.COM";
+			first_shell->SetEnv("COMSPEC",tempenv.c_str());
+
+			/* Update batch file if running from Z: (very likely: autoexec) */
+			if(first_shell->bf) {
+				std::string &name = first_shell->bf->filename;
+				if(name.length() >2 &&  name[0] == 'Z' && name[1] == ':') name[0] = newz_drive;
+			}
+			/* Change the active drive */
+			if (DOS_GetDefaultDrive() == 25) DOS_SetDrive(i_newz);
+		}
+	}
 	void ListMounts(void) {
-		char name[DOS_NAMELENGTH_ASCII],lname[LFN_NAMELENGTH];
-		Bit32u size;Bit16u date;Bit16u time;Bit8u attr;
+		char name[DOS_NAMELENGTH_ASCII];Bit32u size;Bit16u date;Bit16u time;Bit8u attr;
 		/* Command uses dta so set it to our internal dta */
 		RealPt save_dta = dos.dta();
 		dos.dta(dos.tables.tempdta);
@@ -81,7 +157,7 @@ public:
 			char root[7] = {static_cast<char>('A'+d),':','\\','*','.','*',0};
 			bool ret = DOS_FindFirst(root,DOS_ATTR_VOLUME);
 			if (ret) {
-				dta.GetResult(name,lname,size,date,time,attr);
+				dta.GetResult(name,size,date,time,attr);
 				DOS_FindNext(); //Mark entry as invalid
 			} else name[0] = 0;
 
@@ -118,72 +194,25 @@ public:
 			WriteOut(MSG_Get("PROGRAM_CONFIG_SECURE_DISALLOW"));
 			return;
 		}
+#ifdef C_DBP_NATIVE_CONFIGFILE
 		bool path_relative_to_last_config = false;
 		if (cmd->FindExist("-pr",true)) path_relative_to_last_config = true;
+#endif
 
 		/* Check for unmounting */
 		if (cmd->FindString("-u",umount,false)) {
-			umount[0] = toupper(umount[0]);
-			int i_drive = umount[0]-'A';
-				if (i_drive < DOS_DRIVES && i_drive >= 0 && Drives[i_drive]) {
-					switch (DriveManager::UnmountDrive(i_drive)) {
-					case 0:
-						Drives[i_drive] = 0;
-						if(i_drive == DOS_GetDefaultDrive()) 
-							DOS_SetDrive(ZDRIVE_NUM);
-						WriteOut(MSG_Get("PROGRAM_MOUNT_UMOUNT_SUCCESS"),umount[0]);
-						break;
-					case 1:
-						WriteOut(MSG_Get("PROGRAM_MOUNT_UMOUNT_NO_VIRTUAL"));
-						break;
-					case 2:
-						WriteOut(MSG_Get("MSCDEX_ERROR_MULTIPLE_CDROMS"));
-						break;
-					}
-				} else {
-					WriteOut(MSG_Get("PROGRAM_MOUNT_UMOUNT_NOT_MOUNTED"),umount[0]);
-				}
+			WriteOut(UnmountHelper(umount[0]), toupper(umount[0]));
 			return;
 		}
 		
 		/* Check for moving Z: */
 		/* Only allowing moving it once. It is merely a convenience added for the wine team */
 		if (ZDRIVE_NUM == 25 && cmd->FindString("-z", newz,false)) {
-			newz[0] = toupper(newz[0]);
-			int i_newz = newz[0] - 'A';
-			if (i_newz >= 0 && i_newz < DOS_DRIVES-1 && !Drives[i_newz]) {
-				ZDRIVE_NUM = i_newz;
-				/* remap drives */
-				Drives[i_newz] = Drives[25];
-				Drives[25] = 0;
-				DOS_Shell *fs = static_cast<DOS_Shell *>(first_shell); //dynamic ?				
-				/* Update environment */
-				std::string line = "";
-				char ppp[2] = {newz[0],0};
-				std::string tempenv = ppp; tempenv += ":\\";
-				if (fs->GetEnvStr("PATH",line)){
-					std::string::size_type idx = line.find('=');
-					std::string value = line.substr(idx +1 , std::string::npos);
-					while ( (idx = value.find("Z:\\")) != std::string::npos ||
-					        (idx = value.find("z:\\")) != std::string::npos  )
-						value.replace(idx,3,tempenv);
-					line = value;
-				}
-				if (!line.size()) line = tempenv;
-				fs->SetEnv("PATH",line.c_str());
-				tempenv += "COMMAND.COM";
-				fs->SetEnv("COMSPEC",tempenv.c_str());
-
-				/* Update batch file if running from Z: (very likely: autoexec) */
-				if(fs->bf) {
-					std::string &name = fs->bf->filename;
-					if(name.length() >2 &&  name[0] == 'Z' && name[1] == ':') name[0] = newz[0];
-				}
-				/* Change the active drive */
-				if (DOS_GetDefaultDrive() == 25) DOS_SetDrive(i_newz);
-			}
+			Move_Z(newz[0]);
 			return;
 		}
+
+#ifdef C_DBP_USE_SDL
 		/* Show list of cdroms */
 		if (cmd->FindExist("-cd",false)) {
 			int num = SDL_CDNumDrives();
@@ -193,18 +222,27 @@ public:
 			};
 			return;
 		}
+#endif
 
 		std::string type="dir";
 		cmd->FindString("-t",type,true);
 		bool iscdrom = (type =="cdrom"); //Used for mscdex bug cdrom label name emulation
-		if (type=="floppy" || type=="dir" || type=="cdrom") {
-			Bit16u sizes[4];
+		if (type=="floppy" || type=="dir" || type=="cdrom"
+#ifdef C_DBP_NATIVE_OVERLAY
+			|| type =="overlay"
+#endif
+			) {
+			Bit16u sizes[4] ={0};
 			Bit8u mediaid;
-			std::string str_size;
+			std::string str_size = "";
 			if (type=="floppy") {
 				str_size="512,1,2880,2880";/* All space free */
 				mediaid=0xF0;		/* Floppy 1.44 media */
-			} else if (type=="dir") {
+			} else if (type=="dir"
+#ifdef C_DBP_NATIVE_OVERLAY
+				|| type == "overlay"
+#endif
+				) {
 				// 512*32*32765==~500MB total size
 				// 512*32*16000==~250MB total free size
 				str_size="512,32,32765,16000";
@@ -236,26 +274,47 @@ public:
 			}
 		   
 			cmd->FindString("-size",str_size,true);
-			char number[20];const char * scan=str_size.c_str();
-			Bitu index=0;Bitu count=0;
+			char number[21] = { 0 };const char * scan = str_size.c_str();
+			Bitu index = 0;Bitu count = 0;
 			/* Parse the str_size string */
-			while (*scan) {
+			while (*scan && index < 20 && count < 4) {
 				if (*scan==',') {
-					number[index]=0;sizes[count++]=atoi(number);
-					index=0;
-				} else number[index++]=*scan;
+					number[index] = 0;
+					sizes[count++] = atoi(number);
+					index = 0;
+				} else number[index++] = *scan;
 				scan++;
 			}
-			number[index]=0;sizes[count++]=atoi(number);
+			if (count < 4) {
+				number[index] = 0; //always goes correct as index is max 20 at this point.
+				sizes[count] = atoi(number);
+			}
 		
 			// get the drive letter
 			cmd->FindCommand(1,temp_line);
 			if ((temp_line.size() > 2) || ((temp_line.size()>1) && (temp_line[1]!=':'))) goto showusage;
-			drive=toupper(temp_line[0]);
-			if (!isalpha(drive)) goto showusage;
+			int i_drive = toupper(temp_line[0]);
+			if (!isalpha(i_drive)) goto showusage;
+			if ((i_drive - 'A') >= DOS_DRIVES || (i_drive-'A') < 0 ) goto showusage;
+			drive = static_cast<char>(i_drive);
+#ifdef C_DBP_NATIVE_OVERLAY
+			if (type == "overlay") {
+				//Ensure that the base drive exists:
+				if (!Drives[drive-'A']) {
+					WriteOut(MSG_Get("PROGRAM_MOUNT_OVERLAY_NO_BASE"));
+					return;
+				}
+			}
+			else
+#endif
+			if (Drives[drive-'A']) {
+				WriteOut(MSG_Get("PROGRAM_MOUNT_ALREADY_MOUNTED"),drive,Drives[drive-'A']->GetInfo());
+				return;
+			}
 
 			if (!cmd->FindCommand(2,temp_line)) goto showusage;
 			if (!temp_line.size()) goto showusage;
+#ifdef C_DBP_NATIVE_CONFIGFILE
 			if(path_relative_to_last_config && control->configfiles.size() && !Cross::IsPathAbsolute(temp_line)) {
 				std::string lastconfigdir(control->configfiles[control->configfiles.size()-1]);
 				std::string::size_type pos = lastconfigdir.rfind(CROSS_FILESPLIT);
@@ -263,6 +322,8 @@ public:
 				lastconfigdir.erase(pos);
 				if (lastconfigdir.length())	temp_line = lastconfigdir + CROSS_FILESPLIT + temp_line;
 			}
+#endif
+#ifndef C_DBP_HAVE_FPATH_NOCASE
 			struct stat test;
 			//Win32 : strip tailing backslashes
 			//os2: some special drive check
@@ -271,11 +332,12 @@ public:
 #if defined (WIN32) || defined(OS2)
 			/* Removing trailing backslash if not root dir so stat will succeed */
 			if(temp_line.size() > 3 && temp_line[temp_line.size()-1]=='\\') temp_line.erase(temp_line.size()-1,1);
-			if (stat(temp_line.c_str(),&test)) {
+			if (stat(temp_line.c_str(),&test))
 #endif
 #if defined(WIN32)
 // Nothing to do here.
 #elif defined (OS2)
+			{
 				if (temp_line.size() <= 2) // Seems to be a drive.
 				{
 					failed = true;
@@ -293,7 +355,7 @@ public:
 					}
 				}
 			}
-			if (failed) {
+			if (failed)
 #else
 			if (stat(temp_line.c_str(),&test)) {
 				failed = true;
@@ -301,8 +363,9 @@ public:
 				//Try again after resolving ~
 				if(!stat(temp_line.c_str(),&test)) failed = false;
 			}
-			if(failed) {
+			if(failed)
 #endif
+			/* IF IS ABOVE INSIDE PREPROCESSOR IF BLOCK */ {
 				WriteOut(MSG_Get("PROGRAM_MOUNT_ERROR_1"),temp_line.c_str());
 				return;
 			}
@@ -324,10 +387,19 @@ public:
 				return;
 #endif
 			}
+#else
+			#ifdef C_DBP_NATIVE_HOMEDIR
+			Cross::ResolveHomedir(temp_line);
+			#endif
+			bool path_is_dir;
+			if (!fpath_nocase(temp_line, &path_is_dir)) { WriteOut(MSG_Get("PROGRAM_MOUNT_ERROR_1"),temp_line.c_str()); return; }
+			if (!path_is_dir) { WriteOut(MSG_Get("PROGRAM_MOUNT_ERROR_2"),temp_line.c_str()); return; }
+#endif
 
 			if (temp_line[temp_line.size()-1]!=CROSS_FILESPLIT) temp_line+=CROSS_FILESPLIT;
 			Bit8u bit8size=(Bit8u) sizes[1];
 			if (type=="cdrom") {
+#ifdef C_DBP_NATIVE_CDROM
 				int num = -1;
 				cmd->FindInt("-usecd",num,true);
 				int error = 0;
@@ -359,6 +431,9 @@ public:
 					MSCDEX_SetCDInterface(CDROM_USE_IOCTL_DIO, num);
 #endif
 				}
+#else
+				int error = 0;
+#endif /* C_DBP_NATIVE_CDROM */
 				newdrive  = new cdromDrive(drive,temp_line.c_str(),sizes[0],bit8size,sizes[2],0,mediaid,error);
 				// Check Mscdex, if it worked out...
 				switch (error) {
@@ -383,33 +458,75 @@ public:
 #else
 				if(temp_line == "/") WriteOut(MSG_Get("PROGRAM_MOUNT_WARNING_OTHER"));
 #endif
-				newdrive=new localDrive(temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid);
+#ifdef C_DBP_NATIVE_OVERLAY
+				if(type == "overlay") {
+					localDrive* ldp = dynamic_cast<localDrive*>(Drives[drive-'A']);
+					cdromDrive* cdp = dynamic_cast<cdromDrive*>(Drives[drive-'A']);
+					if (!ldp || cdp) {
+						WriteOut(MSG_Get("PROGRAM_MOUNT_OVERLAY_INCOMPAT_BASE"));
+						return;
+					}
+					std::string base = ldp->getBasedir();
+					Bit8u o_error = 0;
+					newdrive = new Overlay_Drive(base.c_str(),temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid,o_error);
+					//Erase old drive on success
+					if (newdrive) {
+						if (o_error) { 
+							if (o_error == 1) WriteOut(MSG_Get("PROGRAM_MOUNT_OVERLAY_MIXED_BASE"));
+							else if (o_error == 2) WriteOut(MSG_Get("PROGRAM_MOUNT_OVERLAY_SAME_AS_BASE"));
+							else WriteOut(MSG_Get("PROGRAM_MOUNT_OVERLAY_GENERIC_ERROR"));
+							delete newdrive;
+							return;
+						}
+
+						//Copy current directory if not marked as deleted.
+						if (newdrive->TestDir(ldp->curdir)) {
+							strcpy(newdrive->curdir,ldp->curdir);
+						}
+
+						delete Drives[drive-'A'];
+						Drives[drive-'A'] = 0;
+					} else { 
+						WriteOut(MSG_Get("PROGRAM_MOUNT_OVERLAY_GENERIC_ERROR"));
+						return;
+					}
+				} else
+#endif /* C_DBP_NATIVE_OVERLAY */
+				{
+					newdrive = new localDrive(temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid);
+				}
 			}
 		} else {
 			WriteOut(MSG_Get("PROGRAM_MOUNT_ILL_TYPE"),type.c_str());
 			return;
 		}
-		if (Drives[drive-'A']) {
-			WriteOut(MSG_Get("PROGRAM_MOUNT_ALREADY_MOUNTED"),drive,Drives[drive-'A']->GetInfo());
-			if (newdrive) delete newdrive;
-			return;
-		}
 		if (!newdrive) E_Exit("DOS:Can't create drive");
 		Drives[drive-'A']=newdrive;
 		/* Set the correct media byte in the table */
-		mem_writeb(Real2Phys(dos.tables.mediaid)+(drive-'A')*2,newdrive->GetMediaByte());
-		WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"),drive,newdrive->GetInfo());
+		mem_writeb(Real2Phys(dos.tables.mediaid)+(drive-'A')*9,newdrive->GetMediaByte());
+#ifdef C_DBP_NATIVE_OVERLAY
+		if (type == "overlay") {
+			WriteOut(MSG_Get("PROGRAM_MOUNT_OVERLAY_STATUS"),temp_line.c_str(),drive);
+		} else
+#endif
+		{
+			WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"),drive,newdrive->GetInfo());
+		}
 		/* check if volume label is given and don't allow it to updated in the future */
-		if (cmd->FindString("-label",label,true)) newdrive->dirCache.SetLabel(label.c_str(),iscdrom,false);
+		if (cmd->FindString("-label",label,true)) newdrive->label.SetLabel(label.c_str(),iscdrom,false);
 		/* For hard drives set the label to DRIVELETTER_Drive.
 		 * For floppy drives set the label to DRIVELETTER_Floppy.
 		 * This way every drive except cdroms should get a label.*/
-		else if(type == "dir") { 
+		else if(type == "dir"
+#ifdef C_DBP_NATIVE_OVERLAY
+			|| type == "overlay"
+#endif
+			) { 
 			label = drive; label += "_DRIVE";
-			newdrive->dirCache.SetLabel(label.c_str(),iscdrom,true);
+			newdrive->label.SetLabel(label.c_str(),false,false);
 		} else if(type == "floppy") {
 			label = drive; label += "_FLOPPY";
-			newdrive->dirCache.SetLabel(label.c_str(),iscdrom,true);
+			newdrive->label.SetLabel(label.c_str(),false,true);
 		}
 		if(type == "floppy") incrementFDD();
 		return;
@@ -443,9 +560,7 @@ public:
 
 		Bit16u seg,blocks;blocks=0xffff;
 		DOS_AllocateMemory(&seg,&blocks);
-		if ((machine==MCH_PCJR) && (real_readb(0x2000,0)==0x5a) && (real_readw(0x2000,1)==0) && (real_readw(0x2000,3)==0x7ffe)) {
-			WriteOut(MSG_Get("PROGRAM_MEM_CONVEN"),0x7ffe*16/1024);
-		} else WriteOut(MSG_Get("PROGRAM_MEM_CONVEN"),blocks*16/1024);
+		WriteOut(MSG_Get("PROGRAM_MEM_CONVEN"),blocks*16/1024);
 
 		if (umb_start!=0xffff) {
 			DOS_LinkUMBsToMemChain(1);
@@ -501,6 +616,21 @@ extern Bit32u floppytype;
 
 class BOOT : public Program {
 private:
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+	DOS_File *getFSFile(char const * filename, Bit32u *ksize, Bit32u *bsize,bool tryload=false) {
+		bool writable;
+		DOS_File *f = FindAndOpenDosFile(filename, bsize, &writable);
+		if (!f)
+		{
+			WriteOut(MSG_Get("PROGRAM_BOOT_NOT_EXIST"));
+			return NULL;
+		}
+		if (!writable)
+			WriteOut(MSG_Get("PROGRAM_BOOT_WRITE_PROTECTED"));
+		*ksize = (*bsize / 1024);
+		return f;
+	}
+#else /*C_DBP_SUPPORT_DISK_MOUNT_DOSFILE*/
    
 	FILE *getFSFile_mounted(char const* filename, Bit32u *ksize, Bit32u *bsize, Bit8u *error) {
 		//if return NULL then put in error the errormessage code if an error was requested
@@ -513,7 +643,9 @@ private:
 		localDrive* ldp=0;
 		if (!DOS_MakeName(const_cast<char*>(filename),fullname,&drive)) return NULL;
 
+#ifdef C_DBP_ENABLE_EXCEPTIONS //this try catch is meaningless anyway, nothing in it throws
 		try {		
+#endif
 			ldp=dynamic_cast<localDrive*>(Drives[drive]);
 			if(!ldp) return NULL;
 
@@ -542,10 +674,12 @@ private:
 			}
 
 			return tmpfile;
+#ifdef C_DBP_ENABLE_EXCEPTIONS
 		}
 		catch(...) {
 			return NULL;
 		}
+#endif
 	}
    
 	FILE *getFSFile(char const * filename, Bit32u *ksize, Bit32u *bsize,bool tryload=false) {
@@ -555,9 +689,9 @@ private:
 		//File not found on mounted filesystem. Try regular filesystem
 		std::string filename_s(filename);
 		Cross::ResolveHomedir(filename_s);
-		tmpfile = fopen(filename_s.c_str(),"rb+");
+		tmpfile = fopen_wrap(filename_s.c_str(),"rb+");
 		if(!tmpfile) {
-			if( (tmpfile = fopen(filename_s.c_str(),"rb")) ) {
+			if( (tmpfile = fopen_wrap(filename_s.c_str(),"rb")) ) {
 				//File exists; So can't be opened in correct mode => error 2
 //				fclose(tmpfile);
 //				if(tryload) error = 2;
@@ -577,6 +711,7 @@ private:
 		*bsize = ftell(tmpfile);
 		return tmpfile;
 	}
+#endif /*C_DBP_SUPPORT_DISK_MOUNT_DOSFILE*/
 
 	void printError(void) {
 		WriteOut(MSG_Get("PROGRAM_BOOT_PRINT_ERROR"));
@@ -592,6 +727,11 @@ private:
 		dos_sec->HandleInputline(test);
 		strcpy(test,"ems=false");
 		dos_sec->HandleInputline(test);
+#ifdef C_DBP_LIBRETRO
+		dos_sec->GetProp("umb")->MarkFixed();
+		dos_sec->GetProp("xms")->MarkFixed();
+		dos_sec->GetProp("ems")->MarkFixed();
+#endif
 		dos_sec->ExecuteInit(false);
      }
 
@@ -607,8 +747,14 @@ public:
 			return;
 		}
 
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+		imageDisk *usefile_1=NULL;
+		imageDisk *usefile_2=NULL;
+		std::string first_img_path;
+#else
 		FILE *usefile_1=NULL;
 		FILE *usefile_2=NULL;
+#endif
 		Bitu i=0; 
 		Bit32u floppysize=0;
 		Bit32u rombytesize_1=0;
@@ -654,19 +800,58 @@ public:
 					continue;
 				}
 
+#ifdef C_DBP_ENABLE_DISKSWAP
+				if (imageDiskList[0] != NULL || imageDiskList[1] != NULL) {
+					WriteOut(MSG_Get("PROGRAM_BOOT_IMAGE_MOUNTED"));
+					return;
+				}
+
+				if ( i >= MAX_SWAPPABLE_DISKS ) {
+					return; //TODO give a warning.
+				}
+#endif
 				WriteOut(MSG_Get("PROGRAM_BOOT_IMAGE_OPEN"), temp_line.c_str());
 				Bit32u rombytesize;
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+				DOS_File *usefile = getFSFile(temp_line.c_str(), &floppysize, &rombytesize);
+#else
 				FILE *usefile = getFSFile(temp_line.c_str(), &floppysize, &rombytesize);
+#endif
 				if(usefile != NULL) {
+#ifdef C_DBP_ENABLE_DISKSWAP
+#error Old code, i is probably wrong, should be drive?
 					if(diskSwap[i] != NULL) delete diskSwap[i];
-					diskSwap[i] = new imageDisk(usefile, (Bit8u *)temp_line.c_str(), floppysize, false);
+					diskSwap[i] = new imageDisk(usefile, temp_line.c_str(), floppysize, false);
 					if (usefile_1==NULL) {
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+						first_img_path = temp_line;
+						usefile_1=diskSwap[i];
+#else
 						usefile_1=usefile;
+#endif
 						rombytesize_1=rombytesize;
 					} else {
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+						usefile_2=diskSwap[i];
+#else
 						usefile_2=usefile;
+#endif
 						rombytesize_2=rombytesize;
 					}
+#else
+					imageDisk* disk = new imageDisk(usefile, temp_line.c_str(), floppysize, false);
+					if (usefile_1==NULL) {
+						first_img_path = temp_line;
+						usefile_1=disk;
+						rombytesize_1=rombytesize;
+					} else if (usefile_2==NULL) {
+						usefile_2=disk;
+						rombytesize_2=rombytesize;
+					} else {
+						delete disk;
+					}
+#endif
+
 				} else {
 					WriteOut(MSG_Get("PROGRAM_BOOT_IMAGE_NOT_OPEN"), temp_line.c_str());
 					return;
@@ -676,14 +861,27 @@ public:
 			i++;
 		}
 
+#ifdef C_DBP_ENABLE_DISKSWAP
 		swapPosition = 0;
 
 		swapInDisks();
+#else
+		// assign to image disk list drive if not already mounted same file (which might also have a fatDrive in Drives[] array that is in use)
+		if (usefile_1 && (!imageDiskList[drive-65] || strcmp(imageDiskList[drive-65]->diskname, first_img_path.c_str())))
+		{
+			if (imageDiskList[drive-65]) delete imageDiskList[0];
+			imageDiskList[drive-65]=usefile_1;
+		}
+#endif
 
 		if(imageDiskList[drive-65]==NULL) {
 			WriteOut(MSG_Get("PROGRAM_BOOT_UNABLE"), drive);
 			return;
 		}
+
+#ifdef C_DBP_LIBRETRO
+		DOSBox_Boot = true;
+#endif
 
 		bootSector bootarea;
 		imageDiskList[drive-65]->Read_Sector(0,0,1,(Bit8u *)&bootarea);
@@ -694,8 +892,12 @@ public:
 				Bits cfound_at=-1;
 				if (cart_cmd!="") {
 					/* read cartridge data into buffer */
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+					imageDiskList[drive-65]->Read_Raw(rombuf, 0x200, rombytesize_1-0x200);
+#else
 					fseek(usefile_1,0x200L, SEEK_SET);
 					fread(rombuf, 1, rombytesize_1-0x200, usefile_1);
+#endif
 
 					char cmdlist[1024];
 					cmdlist[0]=0;
@@ -718,6 +920,7 @@ public:
 						} else {
 							WriteOut(MSG_Get("PROGRAM_BOOT_CART_NO_CMDS"));
 						}
+#ifdef C_DBP_ENABLE_DISKSWAP
 						for(Bitu dct=0;dct<MAX_SWAPPABLE_DISKS;dct++) {
 							if(diskSwap[dct]!=NULL) {
 								delete diskSwap[dct];
@@ -725,6 +928,10 @@ public:
 							}
 						}
 						//fclose(usefile_1); //delete diskSwap closes the file
+#else
+						if (usefile_1) delete usefile_1; // clears imageDiskList[drive-65] if needed
+						if (usefile_2) delete usefile_2;
+#endif
 						return;
 					} else {
 						while (clen!=0) {
@@ -750,6 +957,7 @@ public:
 							} else {
 								WriteOut(MSG_Get("PROGRAM_BOOT_CART_NO_CMDS"));
 							}
+#ifdef C_DBP_ENABLE_DISKSWAP
 							for(Bitu dct=0;dct<MAX_SWAPPABLE_DISKS;dct++) {
 								if(diskSwap[dct]!=NULL) {
 									delete diskSwap[dct];
@@ -757,6 +965,10 @@ public:
 								}
 							}
 							//fclose(usefile_1); //Delete diskSwap closes the file
+#else
+							if (usefile_1) delete usefile_1; // clears imageDiskList[drive-65] if needed
+							if (usefile_2) delete usefile_2;
+#endif
 							return;
 						}
 					}
@@ -768,6 +980,19 @@ public:
 
 				if (usefile_1==NULL) return;
 
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+				DOS_File* tfile = FindAndOpenDosFile("system.rom", NULL, NULL, first_img_path.c_str());
+				if (tfile!=NULL) {
+					Bit32u seek;
+					tfile->Seek(&(seek = 0x3000), DOS_SEEK_SET);
+					Bit16u read_size = 0xb000;
+					if (tfile->Read(rombuf, &read_size) && read_size == 0xb000) {
+						for(i=0;i<0xb000;i++) phys_writeb(0xf3000+i,rombuf[i]);
+					}
+					tfile->Close();
+					delete tfile;
+				}
+#else
 				Bit32u sz1,sz2;
 				FILE *tfile = getFSFile("system.rom", &sz1, &sz2, true);
 				if (tfile!=NULL) {
@@ -778,40 +1003,62 @@ public:
 					}
 					fclose(tfile);
 				}
+#endif
 
 				if (usefile_2!=NULL) {
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+					usefile_2->Read_Raw(rombuf, 0x0, 0x200);
+#else
 					fseek(usefile_2, 0x0L, SEEK_SET);
 					fread(rombuf, 1, 0x200, usefile_2);
+#endif
 					PhysPt romseg_pt=host_readw(&rombuf[0x1ce])<<4;
 
 					/* read cartridge data into buffer */
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+					usefile_2->Read_Raw(rombuf, 0x200, rombytesize_2-0x200);
+#else
 					fseek(usefile_2, 0x200L, SEEK_SET);
 					fread(rombuf, 1, rombytesize_2-0x200, usefile_2);
+#endif
 					//fclose(usefile_2); //usefile_2 is in diskSwap structure which should be deleted to close the file
 
 					/* write cartridge data into ROM */
 					for(i=0;i<rombytesize_2-0x200;i++) phys_writeb(romseg_pt+i,rombuf[i]);
 				}
 
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+				usefile_1->Read_Raw(rombuf, 0x0, 0x200);
+#else
 				fseek(usefile_1, 0x0L, SEEK_SET);
 				fread(rombuf, 1, 0x200, usefile_1);
+#endif
 				Bit16u romseg=host_readw(&rombuf[0x1ce]);
 
 				/* read cartridge data into buffer */
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+				usefile_1->Read_Raw(rombuf, 0x200, rombytesize_1-0x200);
+#else
 				fseek(usefile_1,0x200L, SEEK_SET);
 				fread(rombuf, 1, rombytesize_1-0x200, usefile_1);
+#endif
 				//fclose(usefile_1); //usefile_1 is in diskSwap structure which should be deleted to close the file
 
 				/* write cartridge data into ROM */
 				for(i=0;i<rombytesize_1-0x200;i++) phys_writeb((romseg<<4)+i,rombuf[i]);
 
 				//Close cardridges
+#ifdef C_DBP_ENABLE_DISKSWAP
 				for(Bitu dct=0;dct<MAX_SWAPPABLE_DISKS;dct++) {
 					if(diskSwap[dct]!=NULL) {
 						delete diskSwap[dct];
 						diskSwap[dct]=NULL;
 					}
 				}
+#else
+				if (usefile_1) delete usefile_1; // might clear imageDiskList[drive-65] if needed
+				if (usefile_2) delete usefile_2;
+#endif
 
 
 				if (cart_cmd=="") {
@@ -845,6 +1092,17 @@ public:
 			WriteOut(MSG_Get("PROGRAM_BOOT_BOOT"), drive);
 			for(i=0;i<512;i++) real_writeb(0, 0x7c00 + i, bootarea.rawdata[i]);
 
+#ifdef C_DBP_ENABLE_IDE
+			// Also enable IDE CDROM when using boot from the command line (as opposed to using the Start Menu)
+			for (Bit8u i = (Bit8u)('D'-'A'); i != DOS_DRIVES; i++)
+			{
+				if (!Drives[i] || !dynamic_cast<isoDrive*>(Drives[i])) continue;
+				void IDE_SetupControllers(bool alwaysHaveCDROM);
+				IDE_SetupControllers(false);
+				break;
+			}
+#endif
+
 			/* create appearance of floppy drive DMA usage (Demon's Forge) */
 			if (!IS_TANDY_ARCH && floppysize!=0) GetDMAChannel(2)->tcount=true;
 
@@ -865,6 +1123,10 @@ public:
 			reg_eax = 0;
 			reg_edx = 0; //Head 0 drive 0
 			reg_ebx= 0x7c00; //Real code probably uses bx to load the image
+#ifndef C_DBP_ENABLE_DISKSWAP
+			if (usefile_1 && imageDiskList[drive-65]!=usefile_1) delete usefile_1; // was already mounted
+			if (usefile_2) delete usefile_2;
+#endif
 		}
 	}
 };
@@ -887,7 +1149,9 @@ public:
 		localDrive* ldp=0;
 		if (!DOS_MakeName((char *)temp_line.c_str(),fullname,&drive)) return;
 
+#ifdef C_DBP_ENABLE_EXCEPTIONS //this try catch is meaningless anyway, nothing in it throws
 		try {
+#endif
 			/* try to read ROM file into buffer */
 			ldp=dynamic_cast<localDrive*>(Drives[drive]);
 			if(!ldp) return;
@@ -911,7 +1175,7 @@ public:
 			/* try to identify ROM type */
 			PhysPt rom_base = 0;
 			if (data_read >= 0x4000 && rom_buffer[0] == 0x55 && rom_buffer[1] == 0xaa &&
-				rom_buffer[3] == 0xeb && strncmp((char*)(&rom_buffer[0x1e]), "IBM", 3) == 0) {
+				(rom_buffer[3] & 0xfc) == 0xe8 && strncmp((char*)(&rom_buffer[0x1e]), "IBM", 3) == 0) {
 
 				if (!IS_EGAVGA_ARCH) {
 					WriteOut(MSG_Get("PROGRAM_LOADROM_INCOMPATIBLE"));
@@ -939,10 +1203,12 @@ public:
 				else WriteOut(MSG_Get("PROGRAM_LOADROM_BASIC_LOADED"));
 			}
 			else WriteOut(MSG_Get("PROGRAM_LOADROM_UNRECOGNIZED"));
+#ifdef C_DBP_ENABLE_EXCEPTIONS
 		}
 		catch(...) {
 			return;
 		}
+#endif
 	}
 };
 
@@ -950,6 +1216,68 @@ static void LOADROM_ProgramStart(Program * * make) {
 	*make=new LOADROM;
 }
 
+#if C_DEBUG
+class BIOSTEST : public Program {
+public:
+	void Run(void) {
+		if (!(cmd->FindCommand(1, temp_line))) {
+			WriteOut("Must specify BIOS file to load.\n");
+			return;
+		}
+
+		Bit8u drive;
+		char fullname[DOS_PATHLENGTH];
+		localDrive* ldp = 0;
+		if (!DOS_MakeName((char *)temp_line.c_str(), fullname, &drive)) return;
+
+#ifdef C_DBP_ENABLE_EXCEPTIONS //this try catch is meaningless anyway, nothing in it throws
+		try {
+#endif
+			/* try to read ROM file into buffer */
+			ldp = dynamic_cast<localDrive*>(Drives[drive]);
+			if (!ldp) return;
+
+			FILE *tmpfile = ldp->GetSystemFilePtr(fullname, "rb");
+			if (tmpfile == NULL) {
+				WriteOut("Can't open a file");
+				return;
+			}
+			fseek(tmpfile, 0L, SEEK_END);
+			if (ftell(tmpfile) > 64 * 1024) {
+				WriteOut("BIOS File too large");
+				fclose(tmpfile);
+				return;
+			}
+			fseek(tmpfile, 0L, SEEK_SET);
+			Bit8u buffer[64*1024];
+			Bitu data_read = fread(buffer, 1, sizeof( buffer), tmpfile);
+			fclose(tmpfile);
+
+			Bit32u rom_base = PhysMake(0xf000, 0); // override regular dosbox bios
+			/* write buffer into ROM */
+			for (Bitu i = 0; i < data_read; i++) phys_writeb(rom_base + i, buffer[i]);
+
+			//Start executing this bios
+			memset(&cpu_regs, 0, sizeof(cpu_regs));
+			memset(&Segs, 0, sizeof(Segs));
+
+			
+			SegSet16(cs, 0xf000);
+			reg_eip = 0xfff0;
+		}
+#ifdef C_DBP_ENABLE_EXCEPTIONS
+		catch (...) {
+			return;
+		}
+#endif
+	}
+};
+
+static void BIOSTEST_ProgramStart(Program * * make) {
+	*make = new BIOSTEST;
+}
+
+#endif
 
 // LOADFIX
 
@@ -991,16 +1319,15 @@ void LOADFIX::Run(void)
 			char filename[128];
 			safe_strncpy(filename,temp_line.c_str(),128);
 			// Setup commandline
-			bool ok;
-			char args[256];
+			char args[256+1];
 			args[0] = 0;
-			do {
-				ok = cmd->FindCommand(commandNr++,temp_line);
-				if(sizeof(args)-strlen(args)-1 < temp_line.length()+1)
-					break;
+			bool found = cmd->FindCommand(commandNr++,temp_line);
+			while (found) {
+				if (strlen(args)+temp_line.length()+1>256) break;
 				strcat(args,temp_line.c_str());
-				strcat(args," ");
-			} while (ok);			
+				found = cmd->FindCommand(commandNr++,temp_line);
+				if (found) strcat(args," ");
+			}
 			// Use shell to start program
 			DOS_Shell shell;
 			shell.Execute(filename,args);
@@ -1055,6 +1382,7 @@ static void RESCAN_ProgramStart(Program * * make) {
 	*make=new RESCAN;
 }
 
+#ifdef C_DBP_ENABLE_INTROPROGRAM
 class INTRO : public Program {
 public:
 	void DisplayMount(void) {
@@ -1100,6 +1428,7 @@ public:
 static void INTRO_ProgramStart(Program * * make) {
 	*make=new INTRO;
 }
+#endif /* C_DBP_ENABLE_INTROPROGRAM */
 
 class IMGMOUNT : public Program {
 public:
@@ -1112,324 +1441,410 @@ public:
 			WriteOut(MSG_Get("PROGRAM_CONFIG_SECURE_DISALLOW"));
 			return;
 		}
-		DOS_Drive * newdrive = NULL;
-		imageDisk * newImage = NULL;
-		Bit32u imagesize;
+
 		char drive;
 		std::string label;
 		std::vector<std::string> paths;
 		std::string umount;
 		/* Check for unmounting */
 		if (cmd->FindString("-u",umount,false)) {
-			umount[0] = toupper(umount[0]);
-			int i_drive = umount[0]-'A';
-				if (i_drive < DOS_DRIVES && i_drive >= 0 && Drives[i_drive]) {
-					switch (DriveManager::UnmountDrive(i_drive)) {
-					case 0:
-						Drives[i_drive] = 0;
-						if (i_drive == DOS_GetDefaultDrive()) 
-							DOS_SetDrive(toupper('Z') - 'A');
-						WriteOut(MSG_Get("PROGRAM_MOUNT_UMOUNT_SUCCESS"),umount[0]);
-						break;
-					case 1:
-						WriteOut(MSG_Get("PROGRAM_MOUNT_UMOUNT_NO_VIRTUAL"));
-						break;
-					case 2:
-						WriteOut(MSG_Get("MSCDEX_ERROR_MULTIPLE_CDROMS"));
-						break;
-					}
-				} else {
-					WriteOut(MSG_Get("PROGRAM_MOUNT_UMOUNT_NOT_MOUNTED"),umount[0]);
-				}
+			WriteOut(UnmountHelper(umount[0]), toupper(umount[0]));
 			return;
 		}
 
 
-		std::string type="hdd";
-		std::string fstype="fat";
+		std::string type   = "hdd";
+		std::string fstype = "fat";
 		cmd->FindString("-t",type,true);
 		cmd->FindString("-fs",fstype,true);
 		if(type == "cdrom") type = "iso"; //Tiny hack for people who like to type -t cdrom
-		Bit8u mediaid;
-		if (type=="floppy" || type=="hdd" || type=="iso") {
-			Bit16u sizes[4];
-			bool imgsizedetect=false;
-			
-			std::string str_size;
-			mediaid=0xF8;
 
-			if (type=="floppy") {
-				mediaid=0xF0;		
-			} else if (type=="iso") {
-				//str_size="2048,1,65535,0";	// ignored, see drive_iso.cpp (AllocationInfo)
-				mediaid=0xF8;		
-				fstype = "iso";
-			} 
-			cmd->FindString("-size",str_size,true);
-			if ((type=="hdd") && (str_size.size()==0)) {
-				imgsizedetect=true;
-			} else {
-				char number[20];
-				const char * scan=str_size.c_str();
-				Bitu index=0;Bitu count=0;
-				
-				while (*scan) {
-					if (*scan==',') {
-						number[index]=0;sizes[count++]=atoi(number);
-						index=0;
-					} else number[index++]=*scan;
-					scan++;
-				}
-				number[index]=0;sizes[count++]=atoi(number);
-			}
-		
-			if(fstype=="fat" || fstype=="iso") {
-				// get the drive letter
-				if (!cmd->FindCommand(1,temp_line) || (temp_line.size() > 2) || ((temp_line.size()>1) && (temp_line[1]!=':'))) {
-					WriteOut_NoParsing(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY_DRIVE"));
-					return;
-				}
-				drive=toupper(temp_line[0]);
-				if (!isalpha(drive)) {
-					WriteOut_NoParsing(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY_DRIVE"));
-					return;
-				}
-			} else if (fstype=="none") {
-				cmd->FindCommand(1,temp_line);
-				if ((temp_line.size() > 1) || (!isdigit(temp_line[0]))) {
-					WriteOut_NoParsing(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY2"));
-					return;
-				}
-				drive=temp_line[0];
-				if ((drive<'0') || (drive>3+'0')) {
-					WriteOut_NoParsing(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY2"));
-					return;
-				}
-			} else {
-				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_FORMAT_UNSUPPORTED"),fstype.c_str());
-				return;
-			}
-			
-			// find all file parameters, assuming that all option parameters have been removed
-			while(cmd->FindCommand((unsigned int)(paths.size() + 2), temp_line) && temp_line.size()) {
-				
-				struct stat test;
-				if (stat(temp_line.c_str(),&test)) {
-					//See if it works if the ~ are written out
-					std::string homedir(temp_line);
-					Cross::ResolveHomedir(homedir);
-					if(!stat(homedir.c_str(),&test)) {
-						temp_line = homedir;
-					} else {
-						// convert dosbox filename to system filename
-						char fullname[CROSS_LEN];
-						char tmp[CROSS_LEN];
-						safe_strncpy(tmp, temp_line.c_str(), CROSS_LEN);
-
-						Bit8u dummy;
-						if (!DOS_MakeName(tmp, fullname, &dummy) || strncmp(Drives[dummy]->GetInfo(),"local directory",15)) {
-							WriteOut(MSG_Get("PROGRAM_IMGMOUNT_NON_LOCAL_DRIVE"));
-							return;
-						}
-
-						localDrive *ldp = dynamic_cast<localDrive*>(Drives[dummy]);
-						if (ldp==NULL) {
-							WriteOut(MSG_Get("PROGRAM_IMGMOUNT_FILE_NOT_FOUND"));
-							return;
-						}
-						ldp->GetSystemFilename(tmp, fullname);
-						temp_line = tmp;
-
-						if (stat(temp_line.c_str(),&test)) {
-							WriteOut(MSG_Get("PROGRAM_IMGMOUNT_FILE_NOT_FOUND"));
-							return;
-						}
-					}
-				}
-				if (S_ISDIR(test.st_mode)) {
-					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_MOUNT"));
-					return;
-				}
-				paths.push_back(temp_line);
-			}
-			if (paths.size() == 0) {
-				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY_FILE"));
-				return;	
-			}
-			if (paths.size() == 1)
-				temp_line = paths[0];
-
-			if(fstype=="fat") {
-				if (imgsizedetect) {
-					FILE * diskfile = fopen(temp_line.c_str(), "rb+");
-					if (!diskfile) {
-						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
-						return;
-					}
-					fseek(diskfile, 0L, SEEK_END);
-					Bit32u fcsize = (Bit32u)(ftell(diskfile) / 512L);
-					Bit8u buf[512];
-					fseek(diskfile, 0L, SEEK_SET);
-					if (fread(buf,sizeof(Bit8u),512,diskfile)<512) {
-						fclose(diskfile);
-						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
-						return;
-					}
-					fclose(diskfile);
-					if ((buf[510]!=0x55) || (buf[511]!=0xaa)) {
-						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_GEOMETRY"));
-						return;
-					}
-					Bitu sectors=(Bitu)(fcsize/(16*63));
-					if (sectors*16*63!=fcsize) {
-						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_GEOMETRY"));
-						return;
-					}
-					sizes[0]=512;	sizes[1]=63;	sizes[2]=16;	sizes[3]=sectors;
-					LOG_MSG("autosized image file: %d:%d:%d:%d",sizes[0],sizes[1],sizes[2],sizes[3]);
-				}
-
-				if (Drives[drive-'A']) {
-					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_ALREADY_MOUNTED"));
-					return;
-				}
-
-				std::vector<DOS_Drive*> imgDisks;
-				std::vector<std::string>::size_type i;
-				std::vector<DOS_Drive*>::size_type ct;
-				
-				for (i = 0; i < paths.size(); i++) {
-					DOS_Drive* newDrive = new fatDrive(paths[i].c_str(),sizes[0],sizes[1],sizes[2],sizes[3],0);
-					imgDisks.push_back(newDrive);
-					if(!(dynamic_cast<fatDrive*>(newDrive))->created_successfully) {
-						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_CANT_CREATE"));
-						for(ct = 0; ct < imgDisks.size(); ct++) {
-							delete imgDisks[ct];
-						}
-						return;
-					}
-				}
-
-				// Update DriveManager
-				for(ct = 0; ct < imgDisks.size(); ct++) {
-					DriveManager::AppendDisk(drive - 'A', imgDisks[ct]);
-				}
-				DriveManager::InitializeDrive(drive - 'A');
-
-				// Set the correct media byte in the table 
-				mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 2, mediaid);
-				
-				/* Command uses dta so set it to our internal dta */
-				RealPt save_dta = dos.dta();
-				dos.dta(dos.tables.tempdta);
-
-				for(ct = 0; ct < imgDisks.size(); ct++) {
-					DriveManager::CycleAllDisks();
-
-					char root[7] = {drive,':','\\','*','.','*',0};
-					DOS_FindFirst(root, DOS_ATTR_VOLUME); // force obtaining the label and saving it in dirCache
-				}
-				dos.dta(save_dta);
-
-				std::string tmp(paths[0]);
-				for (i = 1; i < paths.size(); i++) {
-					tmp += "; " + paths[i];
-				}
-				WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"), drive, tmp.c_str());
-
-				if (paths.size() == 1) {
-					newdrive = imgDisks[0];
-					if(((fatDrive *)newdrive)->loadedDisk->hardDrive) {
-						if(imageDiskList[2] == NULL) {
-							imageDiskList[2] = ((fatDrive *)newdrive)->loadedDisk;
-							updateDPT();
-							return;
-						}
-						if(imageDiskList[3] == NULL) {
-							imageDiskList[3] = ((fatDrive *)newdrive)->loadedDisk;
-							updateDPT();
-							return;
-						}
-					}
-					if(!((fatDrive *)newdrive)->loadedDisk->hardDrive) {
-						imageDiskList[0] = ((fatDrive *)newdrive)->loadedDisk;
-					}
-				}
-			} else if (fstype=="iso") {
-
-				if (Drives[drive-'A']) {
-					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_ALREADY_MOUNTED"));
-					return;
-				}
-				MSCDEX_SetCDInterface(CDROM_USE_SDL, -1);
-				// create new drives for all images
-				std::vector<DOS_Drive*> isoDisks;
-				std::vector<std::string>::size_type i;
-				std::vector<DOS_Drive*>::size_type ct;
-				for (i = 0; i < paths.size(); i++) {
-					int error = -1;
-					DOS_Drive* newDrive = new isoDrive(drive, paths[i].c_str(), mediaid, error);
-					isoDisks.push_back(newDrive);
-					switch (error) {
-						case 0  :	break;
-						case 1  :	WriteOut(MSG_Get("MSCDEX_ERROR_MULTIPLE_CDROMS"));	break;
-						case 2  :	WriteOut(MSG_Get("MSCDEX_ERROR_NOT_SUPPORTED"));	break;
-						case 3  :	WriteOut(MSG_Get("MSCDEX_ERROR_OPEN"));				break;
-						case 4  :	WriteOut(MSG_Get("MSCDEX_TOO_MANY_DRIVES"));		break;
-						case 5  :	WriteOut(MSG_Get("MSCDEX_LIMITED_SUPPORT"));		break;
-						case 6  :	WriteOut(MSG_Get("MSCDEX_INVALID_FILEFORMAT"));		break;
-						default :	WriteOut(MSG_Get("MSCDEX_UNKNOWN_ERROR"));			break;
-					}
-					// error: clean up and leave
-					if (error) {
-						for(ct = 0; ct < isoDisks.size(); ct++) {
-							delete isoDisks[ct];
-						}
-						return;
-					}
-				}
-				// Update DriveManager
-				for(ct = 0; ct < isoDisks.size(); ct++) {
-					DriveManager::AppendDisk(drive - 'A', isoDisks[ct]);
-				}
-				DriveManager::InitializeDrive(drive - 'A');
-				
-				// Set the correct media byte in the table 
-				mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 2, mediaid);
-				
-				// Print status message (success)
-				WriteOut(MSG_Get("MSCDEX_SUCCESS"));
-				std::string tmp(paths[0]);
-				for (i = 1; i < paths.size(); i++) {
-					tmp += "; " + paths[i];
-				}
-				WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"), drive, tmp.c_str());
-
-			} else {
-				FILE *newDisk = fopen(temp_line.c_str(), "rb+");
-				if (!newDisk) {
-					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
-					return;
-				}
-				fseek(newDisk,0L, SEEK_END);
-				imagesize = (ftell(newDisk) / 1024);
-
-				newImage = new imageDisk(newDisk, (Bit8u *)temp_line.c_str(), imagesize, (imagesize > 2880));
-				if(imagesize>2880) newImage->Set_Geometry(sizes[2],sizes[3],sizes[1],sizes[0]);
-			}
-		} else {
+		//Check type and exit early.
+		if (type != "floppy" && type != "hdd" && type != "iso"
+#ifndef C_DBP_ENABLE_DRIVE_MANAGER
+				&& type != "zip"
+#endif
+			) {
 			WriteOut(MSG_Get("PROGRAM_IMGMOUNT_TYPE_UNSUPPORTED"),type.c_str());
 			return;
 		}
 
-		if (fstype=="none") {
-			if(imageDiskList[drive-'0'] != NULL) delete imageDiskList[drive-'0'];
-			imageDiskList[drive-'0'] = newImage;
-			updateDPT();
-			WriteOut(MSG_Get("PROGRAM_IMGMOUNT_MOUNT_NUMBER"),drive-'0',temp_line.c_str());
+		Bit16u sizes[4] = {0};
+		bool imgsizedetect = false;
+		
+		std::string str_size = "";
+#ifdef C_DBP_ENABLE_DRIVE_MANAGER
+		Bit8u mediaid = 0xF8;
+
+		if (type == "floppy") {
+			mediaid = 0xF0;		
+		} else if (type == "iso") {
+			//str_size="2048,1,65535,0";	// ignored, see drive_iso.cpp (AllocationInfo)
+			mediaid = 0xF8;		
+			fstype = "iso";
+		}
+#else
+		if (type == "iso") {
+			fstype = "iso";
+		}
+#endif
+
+		cmd->FindString("-size",str_size,true);
+		if ((type=="hdd") && (str_size.size()==0)) {
+			imgsizedetect = true;
+		} else {
+			char number[21] = { 0 };const char * scan = str_size.c_str();
+			Bitu index = 0;Bitu count = 0;
+			/* Parse the str_size string */
+			while (*scan && index < 20 && count < 4) {
+				if (*scan==',') {
+					number[index] = 0;
+					sizes[count++] = atoi(number);
+					index = 0;
+				} else number[index++] = *scan;
+				scan++;
+			}
+			if (count < 4) {
+				number[index] = 0; //always goes correct as index is max 20 at this point.
+				sizes[count] = atoi(number);
+			}
 		}
 
-		// check if volume label is given. becareful for cdrom
+		if(fstype=="fat" || fstype=="iso") {
+			// get the drive letter
+			if (!cmd->FindCommand(1,temp_line) || (temp_line.size() > 2) || ((temp_line.size()>1) && (temp_line[1]!=':'))) {
+				WriteOut_NoParsing(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY_DRIVE"));
+				return;
+			}
+			int i_drive = toupper(temp_line[0]);
+			if (!isalpha(i_drive) || (i_drive - 'A') >= DOS_DRIVES || (i_drive - 'A') <0) {
+				WriteOut_NoParsing(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY_DRIVE"));
+				return;
+			}
+			drive = static_cast<char>(i_drive);
+		} else if (fstype=="none") {
+			cmd->FindCommand(1,temp_line);
+			if ((temp_line.size() > 1) || (!isdigit(temp_line[0]))) {
+				WriteOut_NoParsing(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY2"));
+				return;
+			}
+			drive = temp_line[0];
+			if ((drive<'0') || (drive>=(MAX_DISK_IMAGES+'0'))) {
+				WriteOut_NoParsing(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY2"));
+				return;
+			}
+		} else {
+			WriteOut(MSG_Get("PROGRAM_IMGMOUNT_FORMAT_UNSUPPORTED"),fstype.c_str());
+			return;
+		}
+		
+		// find all file parameters, assuming that all option parameters have been removed
+		while(cmd->FindCommand((unsigned int)(paths.size() + 2), temp_line) && temp_line.size()) {
+#if defined(C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE) && defined(C_DBP_SUPPORT_DISK_MOUNT_DOSFILE)
+			paths.emplace_back();
+			DOS_File *test = FindAndOpenDosFile(temp_line.c_str(), NULL, NULL, NULL, &paths.back());
+			if (test==NULL) {
+				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_FILE_NOT_FOUND"));
+				return;
+			}
+			if (test->IsOpen()) test->Close();
+			if (test->RemoveRef() <= 0) delete test;
+#else
+			
+			struct stat test;
+			if (stat(temp_line.c_str(),&test)) {
+				//See if it works if the ~ are written out
+				std::string homedir(temp_line);
+				Cross::ResolveHomedir(homedir);
+				if(!stat(homedir.c_str(),&test)) {
+					temp_line = homedir;
+				} else {
+					// convert dosbox filename to system filename
+					char fullname[CROSS_LEN];
+					char tmp[CROSS_LEN];
+					safe_strncpy(tmp, temp_line.c_str(), CROSS_LEN);
+
+					Bit8u dummy;
+					if (!DOS_MakeName(tmp, fullname, &dummy) || strncmp(Drives[dummy]->GetInfo(),"local directory",15)) {
+						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_NON_LOCAL_DRIVE"));
+						return;
+					}
+
+					localDrive *ldp = dynamic_cast<localDrive*>(Drives[dummy]);
+					if (ldp==NULL) {
+						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_FILE_NOT_FOUND"));
+						return;
+					}
+					ldp->GetSystemFilename(tmp, fullname);
+					temp_line = tmp;
+
+					if (stat(temp_line.c_str(),&test)) {
+						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_FILE_NOT_FOUND"));
+						return;
+					}
+				}
+			}
+			if (S_ISDIR(test.st_mode)) {
+				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_MOUNT"));
+				return;
+			}
+			paths.push_back(temp_line);
+#endif
+		}
+		if (paths.size() == 0) {
+			WriteOut(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY_FILE"));
+			return;	
+		}
+		if (paths.size() == 1)
+			temp_line = paths[0];
+
+		if(fstype=="fat") {
+			if (imgsizedetect) {
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+				// fatDrive constructor does the geometry detection
+				sizes[0]=512;
+#else
+#if defined(C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE) && defined(C_DBP_SUPPORT_DISK_MOUNT_DOSFILE)
+				Bit32u disksize;
+				DOS_File *diskfile = FindAndOpenDosFile(temp_line.c_str(), &disksize);
+				if (!diskfile) {
+					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
+					return;
+				}
+				Bit32u fcsize = (Bit32u)(disksize / 512L);
+				Bit8u buf[512];
+				Bit16u readsize = 512;
+				if (!diskfile->Read(buf, &readsize)) readsize = 0;
+				if (diskfile->IsOpen()) diskfile->Close();
+				if (diskfile->RemoveRef() <= 0) delete diskfile;
+				if (readsize != 512) {
+					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
+					return;
+				}
+#else
+				FILE * diskfile = fopen_wrap(temp_line.c_str(), "rb+");
+				if (!diskfile) {
+					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
+					return;
+				}
+				fseek(diskfile, 0L, SEEK_END);
+				Bit32u fcsize = (Bit32u)(ftell(diskfile) / 512L);
+				Bit8u buf[512];
+				fseek(diskfile, 0L, SEEK_SET);
+				if (fread(buf,sizeof(Bit8u),512,diskfile)<512) {
+					fclose(diskfile);
+					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
+					return;
+				}
+				fclose(diskfile);
+#endif
+				if ((buf[510]!=0x55) || (buf[511]!=0xaa)) {
+					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_GEOMETRY"));
+					return;
+				}
+				Bitu sectors=(Bitu)(fcsize/(16*63));
+				if (sectors*16*63!=fcsize) {
+					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_GEOMETRY"));
+					return;
+				}
+				sizes[0]=512;	sizes[1]=63;	sizes[2]=16;	sizes[3]=sectors;
+
+				LOG_MSG("autosized image file: %d:%d:%d:%d",sizes[0],sizes[1],sizes[2],sizes[3]);
+#endif
+			}
+
+			if (Drives[drive-'A']) {
+				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_ALREADY_MOUNTED"));
+				return;
+			}
+
+#ifdef C_DBP_ENABLE_DRIVE_MANAGER
+			std::vector<DOS_Drive*> imgDisks;
+			std::vector<std::string>::size_type i;
+			std::vector<DOS_Drive*>::size_type ct;
+			
+			for (i = 0; i < paths.size(); i++) {
+				DOS_Drive* newDrive = new fatDrive(paths[i].c_str(),sizes[0],sizes[1],sizes[2],sizes[3],0);
+				imgDisks.push_back(newDrive);
+				if(!(dynamic_cast<fatDrive*>(newDrive))->created_successfully) {
+					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_CANT_CREATE"));
+					for(ct = 0; ct < imgDisks.size(); ct++) {
+						delete imgDisks[ct];
+					}
+					return;
+				}
+			}
+
+			// Update DriveManager
+			for(ct = 0; ct < imgDisks.size(); ct++) {
+				DriveManager::AppendDisk(drive - 'A', imgDisks[ct]);
+			}
+			DriveManager::InitializeDrive(drive - 'A');
+
+			// Set the correct media byte in the table 
+			mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 9, mediaid);
+			
+			/* Command uses dta so set it to our internal dta */
+			RealPt save_dta = dos.dta();
+			dos.dta(dos.tables.tempdta);
+
+			for(ct = 0; ct < imgDisks.size(); ct++) {
+				DriveManager::CycleDisks(drive - 'A', (ct == (imgDisks.size() - 1)));
+
+				char root[7] = {drive,':','\\','*','.','*',0};
+				DOS_FindFirst(root, DOS_ATTR_VOLUME); // force obtaining the label and saving it in label
+			}
+			dos.dta(save_dta);
+
+			std::string tmp(paths[0]);
+			for (i = 1; i < paths.size(); i++) {
+				tmp += "; " + paths[i];
+			}
+			WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"), drive, tmp.c_str());
+
+			DOS_Drive * newdrive = imgDisks[0];
+			switch (drive - 'A') {
+				case 0:
+				case 1:
+					if(!((fatDrive *)newdrive)->loadedDisk->hardDrive) {
+						if(imageDiskList[drive - 'A'] != NULL) delete imageDiskList[drive - 'A'];
+						imageDiskList[drive - 'A'] = ((fatDrive *)newdrive)->loadedDisk;
+					}
+					break;
+				case 2:
+				case 3:
+					if(((fatDrive *)newdrive)->loadedDisk->hardDrive) {
+						if(imageDiskList[drive - 'A'] != NULL) delete imageDiskList[drive - 'A'];
+						imageDiskList[drive - 'A'] = ((fatDrive *)newdrive)->loadedDisk;
+						updateDPT();
+					}
+					break;
+			}
+#else
+			const bool is_zip = (type == "zip");
+			void DBP_ImgMountLoadDisks(char drive, const std::vector<std::string>& paths, bool fat, bool iso, bool zip);
+			DBP_ImgMountLoadDisks(drive, paths, !is_zip, false, is_zip);
+			if ((drive - 'A') < MAX_DISK_IMAGES && !imageDiskList[drive - 'A']) {
+				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_CANT_CREATE"));
+				return;
+			}
+			std::string tmp(paths[0]);
+			for (std::vector<std::string>::size_type i = 1; i < paths.size(); i++) {
+				tmp += "; " + paths[i];
+			}
+			WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"), drive, tmp.c_str());
+#endif
+		} else if (fstype=="iso") {
+
+			if (Drives[drive-'A']) {
+				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_ALREADY_MOUNTED"));
+				return;
+			}
+
+#ifdef C_DBP_ENABLE_DRIVE_MANAGER
+#ifdef C_DBP_NATIVE_CDROM
+			MSCDEX_SetCDInterface(0, -1);
+#endif
+			// create new drives for all images
+			std::vector<DOS_Drive*> isoDisks;
+			std::vector<std::string>::size_type i;
+			std::vector<DOS_Drive*>::size_type ct;
+			for (i = 0; i < paths.size(); i++) {
+				int error = -1;
+				DOS_Drive* newDrive = new isoDrive(drive, paths[i].c_str(), mediaid, error);
+				isoDisks.push_back(newDrive);
+				switch (error) {
+					case 0  :	break;
+					case 1  :	WriteOut(MSG_Get("MSCDEX_ERROR_MULTIPLE_CDROMS"));	break;
+					case 2  :	WriteOut(MSG_Get("MSCDEX_ERROR_NOT_SUPPORTED"));	break;
+					case 3  :	WriteOut(MSG_Get("MSCDEX_ERROR_OPEN"));				break;
+					case 4  :	WriteOut(MSG_Get("MSCDEX_TOO_MANY_DRIVES"));		break;
+					case 5  :	WriteOut(MSG_Get("MSCDEX_LIMITED_SUPPORT"));		break;
+					case 6  :	WriteOut(MSG_Get("MSCDEX_INVALID_FILEFORMAT"));		break;
+					default :	WriteOut(MSG_Get("MSCDEX_UNKNOWN_ERROR"));			break;
+				}
+				// error: clean up and leave
+				if (error) {
+					for(ct = 0; ct < isoDisks.size(); ct++) {
+						delete isoDisks[ct];
+					}
+					return;
+				}
+			}
+			// Update DriveManager
+			for(ct = 0; ct < isoDisks.size(); ct++) {
+				DriveManager::AppendDisk(drive - 'A', isoDisks[ct]);
+			}
+			DriveManager::InitializeDrive(drive - 'A');
+			
+			// Set the correct media byte in the table 
+			mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 9, mediaid);
+#else
+			void DBP_ImgMountLoadDisks(char drive, const std::vector<std::string>& paths, bool fat, bool iso, bool zip);
+			DBP_ImgMountLoadDisks(drive, paths, false, true, false);
+
+			std::vector<std::string>::size_type i;
+#endif
+			
+			// Print status message (success)
+			WriteOut(MSG_Get("MSCDEX_SUCCESS"));
+			std::string tmp(paths[0]);
+			for (i = 1; i < paths.size(); i++) {
+				tmp += "; " + paths[i];
+			}
+			WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"), drive, tmp.c_str());
+
+		} else if (fstype == "none") {
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+			Bit32u imagesize;
+			bool writable;
+			DOS_File *newDisk = FindAndOpenDosFile(temp_line.c_str(), &imagesize, &writable);
+			if (!newDisk) {
+				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
+				return;
+			}
+			imagesize /= 1024;
+#else
+			FILE *newDisk = fopen_wrap(temp_line.c_str(), "rb+");
+			if (!newDisk) {
+				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_INVALID_IMAGE"));
+				return;
+			}
+			fseek(newDisk,0L, SEEK_END);
+			Bit32u imagesize = (ftell(newDisk) / 1024);
+#endif
+			const bool hdd = (imagesize > 2880);
+			//Seems to make sense to require a valid geometry..
+			if (hdd && sizes[0] == 0 && sizes[1] == 0 && sizes[2] == 0 && sizes[3] == 0) {
+#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+				newDisk->Close();
+				delete newDisk;
+#else
+				fclose(newDisk);
+#endif
+				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_SPECIFY_GEOMETRY"));
+				return;
+			}
+
+			imageDisk * newImage = new imageDisk(newDisk, temp_line.c_str(), imagesize, hdd);
+
+			if (hdd) newImage->Set_Geometry(sizes[2],sizes[3],sizes[1],sizes[0]);
+			if(imageDiskList[drive - '0'] != NULL)
+			{
+				//DBP: Need to unmount fat drives using this image disk first
+				DBP_ASSERT(imageDiskList[drive - '0'] != newImage); // shouldn't be possible with fstype == "none"
+				for (Bit16u i=0;i<DOS_DRIVES;i++)
+					if (fatDrive* fat_drive = (Drives[i] ? dynamic_cast<fatDrive*>(Drives[i]) : NULL))
+						if (fat_drive->loadedDisk == imageDiskList[drive - '0'])
+							UnmountHelper('A' + (char)i);
+				delete imageDiskList[drive - '0'];
+			}
+			imageDiskList[drive - '0'] = newImage;
+			if ((drive == '2' || drive == '3') && hdd) updateDPT();
+			WriteOut(MSG_Get("PROGRAM_IMGMOUNT_MOUNT_NUMBER"),drive - '0',temp_line.c_str());
+		}
+
+		// check if volume label is given. be careful for cdrom
 		//if (cmd->FindString("-label",label,true)) newdrive->dirCache.SetLabel(label.c_str());
 		return;
 	}
@@ -1534,6 +1949,14 @@ void DOS_SetupPrograms(void) {
 	MSG_Add("PROGRAM_MOUNT_UMOUNT_NO_VIRTUAL","Virtual Drives can not be unMOUNTed.\n");
 	MSG_Add("PROGRAM_MOUNT_WARNING_WIN","\033[31;1mMounting c:\\ is NOT recommended. Please mount a (sub)directory next time.\033[0m\n");
 	MSG_Add("PROGRAM_MOUNT_WARNING_OTHER","\033[31;1mMounting / is NOT recommended. Please mount a (sub)directory next time.\033[0m\n");
+#ifdef C_DBP_NATIVE_OVERLAY
+	MSG_Add("PROGRAM_MOUNT_OVERLAY_NO_BASE","A normal directory needs to be MOUNTed first before an overlay can be added on top.\n");
+	MSG_Add("PROGRAM_MOUNT_OVERLAY_INCOMPAT_BASE","The overlay is NOT compatible with the drive that is specified.\n");
+	MSG_Add("PROGRAM_MOUNT_OVERLAY_MIXED_BASE","The overlay needs to be specified using the same addressing as the underlying drive. No mixing of relative and absolute paths.");
+	MSG_Add("PROGRAM_MOUNT_OVERLAY_SAME_AS_BASE","The overlay directory can not be the same as underlying drive.\n");
+	MSG_Add("PROGRAM_MOUNT_OVERLAY_GENERIC_ERROR","Something went wrong.\n");
+	MSG_Add("PROGRAM_MOUNT_OVERLAY_STATUS","Overlay %s on drive %c mounted.\n");
+#endif
 
 	MSG_Add("PROGRAM_MEM_CONVEN","%10d Kb free conventional memory\n");
 	MSG_Add("PROGRAM_MEM_EXTEND","%10d Kb free extended memory\n");
@@ -1557,6 +1980,7 @@ void DOS_SetupPrograms(void) {
 
 	MSG_Add("PROGRAM_RESCAN_SUCCESS","Drive cache cleared.\n");
 
+#ifdef C_DBP_ENABLE_INTROPROGRAM
 	MSG_Add("PROGRAM_INTRO",
 		"\033[2J\033[32;1mWelcome to DOSBox\033[0m, an x86 emulator with sound and graphics.\n"
 		"DOSBox creates a shell for you which looks like old plain DOS.\n"
@@ -1647,10 +2071,12 @@ void DOS_SetupPrograms(void) {
 		"\033[33;1mCTRL-F7\033[0m     : Decrease frameskip.\n"
 		"\033[33;1mCTRL-F8\033[0m     : Increase frameskip.\n"
 		"\033[33;1mCTRL-F9\033[0m     : Kill DOSBox.\n"
+		"\033[33;1mCTRL-F10\033[0m    : Capture/Release the mouse.\n"
 		"\033[33;1mCTRL-F11\033[0m    : Slow down emulation (Decrease DOSBox Cycles).\n"
 		"\033[33;1mCTRL-F12\033[0m    : Speed up emulation (Increase DOSBox Cycles).\n"
 		"\033[33;1mALT-F12\033[0m     : Unlock speed (turbo button/fast forward).\n"
 		);
+#endif
 	MSG_Add("PROGRAM_BOOT_NOT_EXIST","Bootdisk file does not exist.  Failing.\n");
 	MSG_Add("PROGRAM_BOOT_NOT_OPEN","Cannot open bootdisk file.  Failing.\n");
 	MSG_Add("PROGRAM_BOOT_WRITE_PROTECTED","Image file is read-only! Might create problems.\n");
@@ -1665,6 +2091,7 @@ void DOS_SetupPrograms(void) {
 		"\033[34;1mBOOT [diskimg1.img diskimg2.img] [-l driveletter]\033[0m\n"
 		);
 	MSG_Add("PROGRAM_BOOT_UNABLE","Unable to boot off of drive %c");
+	MSG_Add("PROGRAM_BOOT_IMAGE_MOUNTED","Floppy image(s) already mounted.\n");
 	MSG_Add("PROGRAM_BOOT_IMAGE_OPEN","Opening image file: %s\n");
 	MSG_Add("PROGRAM_BOOT_IMAGE_NOT_OPEN","Cannot open %s");
 	MSG_Add("PROGRAM_BOOT_BOOT","Booting from drive %c...\n");
@@ -1722,9 +2149,15 @@ void DOS_SetupPrograms(void) {
 	PROGRAMS_MakeFile("MEM.COM",MEM_ProgramStart);
 	PROGRAMS_MakeFile("LOADFIX.COM",LOADFIX_ProgramStart);
 	PROGRAMS_MakeFile("RESCAN.COM",RESCAN_ProgramStart);
+#ifdef C_DBP_ENABLE_INTROPROGRAM
 	PROGRAMS_MakeFile("INTRO.COM",INTRO_ProgramStart);
+#endif
 	PROGRAMS_MakeFile("BOOT.COM",BOOT_ProgramStart);
+#if C_DEBUG
+	PROGRAMS_MakeFile("BIOSTEST.COM", BIOSTEST_ProgramStart);
+#endif
 	PROGRAMS_MakeFile("LOADROM.COM", LOADROM_ProgramStart);
 	PROGRAMS_MakeFile("IMGMOUNT.COM", IMGMOUNT_ProgramStart);
 	PROGRAMS_MakeFile("KEYB.COM", KEYB_ProgramStart);
+
 }
