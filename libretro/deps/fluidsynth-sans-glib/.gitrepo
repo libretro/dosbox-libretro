@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/realnc/fluidsynth-sans-glib.git
+	branch = v2.2.7-sans-glib
+	commit = 11ce6d193181a391df2109f55580ca89b87aa1b7
+	parent = 2842ce354bb953ed118291e471c4bcd9a6096195
+	method = merge
+	cmdver = 0.4.3

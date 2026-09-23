@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/munt/munt.git
+	branch = libmt32emu_2_6_1
+	commit = 004800c20b1edaab921e08f69133fc2a4bd3b8e8
+	parent = 72dab7fa6f9bfe503c76b6f5cacf9596e8c8c0d4
+	method = merge
+	cmdver = 0.4.3

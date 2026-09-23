@@ -1,0 +1,186 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        config:
+          - {os: ubuntu-latest, bass_os: linux, CC: gcc-9, CXX: g++-9}
+          - {os: macos-10.15, bass_os: osx, CC: clang, CXX: clang++}
+
+    runs-on: ${{ matrix.config.os }}
+
+    env:
+      CC: ${{ matrix.config.CC }}
+      CXX: ${{ matrix.config.CXX }}
+      CFLAGS: -isystem /usr/local/include
+      CXXFLAGS: -isystem /usr/local/include
+      CMAKE_GENERATOR: Ninja
+      BASS_VERSION: 24
+      BASSMIDI_VERSION: 24
+      FSYNTH_VERSION: 2.1.5
+      ADLMIDI_VERSION: 1.5.0.1
+      WILDMIDI_VERSION: 0.4.4
+
+    steps:
+    - run: sudo apt-get update
+      if: runner.os == 'Linux'
+
+    - name: Install Linux deps
+      if: runner.os == 'Linux'
+      run: sudo apt-get install -y
+        libmodplug-dev
+        libmpcdec-dev
+        libmpg123-dev
+        libopenmpt-dev
+        libopusfile-dev
+        libsamplerate0-dev
+        libsdl-dev
+        libsdl2-dev
+        libsndfile1-dev
+        libsoxr-dev
+        libvorbis-dev
+        libwildmidi-dev
+        libxmp-dev
+        ninja-build
+
+    - name: Install macOS deps
+      if: runner.os == 'macOS'
+      run: brew install
+          fluidsynth
+          glib
+          libmodplug
+          libopenmpt
+          libsamplerate
+          libsndfile
+          libsoxr
+          libvorbis
+          libxmp
+          mpg123
+          musepack
+          ninja
+          opusfile
+          pkg-config
+          sdl
+          sdl2
+
+    - name: Install FluidSynth
+      if: runner.os == 'Linux'
+      working-directory: /tmp
+      run: |
+        wget -nv "https://github.com/FluidSynth/fluidsynth/archive/v$FSYNTH_VERSION.tar.gz" -O- | tar xz
+        mkdir "fluidsynth-$FSYNTH_VERSION"/build
+        cd "fluidsynth-$FSYNTH_VERSION"/build
+        cmake \
+          -DLIB_INSTALL_DIR=lib \
+          ..
+        sudo cmake --build . --target install -v
+
+    - name: Install BASSMIDI
+      working-directory: /tmp
+      run: |
+        wget -nv "http://uk.un4seen.com/files/bass$BASS_VERSION-${{ matrix.config.bass_os }}.zip"
+        mkdir bass
+        cd bass
+        unzip "../bass$BASS_VERSION-${{ matrix.config.bass_os }}.zip"
+        sudo cp bass.h /usr/local/include/
+        if [[ ${{ runner.os }} == "Linux" ]]; then
+          sudo cp x64/libbass.so /usr/local/lib/
+        else
+          sudo cp libbass.dylib /usr/local/lib/
+        fi
+        cd ..
+        wget -nv "http://uk.un4seen.com/files/bassmidi$BASSMIDI_VERSION-${{ matrix.config.bass_os }}.zip"
+        mkdir bassmidi
+        cd bassmidi
+        unzip "../bassmidi$BASSMIDI_VERSION-${{ matrix.config.bass_os }}.zip"
+        sudo cp bassmidi.h /usr/local/include/
+        if [[ ${{ runner.os }} == "Linux" ]]; then
+          sudo cp x64/libbassmidi.so /usr/local/lib/
+        else
+          sudo cp libbassmidi.dylib /usr/local/lib/
+        fi
+
+    - name: Install libADLMIDI
+      working-directory: /tmp
+      run: |
+        wget -nv "https://github.com/Wohlstand/libADLMIDI/archive/v$ADLMIDI_VERSION.tar.gz" -O- | tar xz
+        cd "libADLMIDI-$ADLMIDI_VERSION"
+        mkdir build
+        cd build
+        cmake \
+          -DlibADLMIDI_SHARED=on \
+          -DlibADLMIDI_STATIC=off \
+          -DEXAMPLE_SDL2_AUDIO=off \
+          ..
+        sudo cmake --build . --target install -v
+
+    - name: Install WildMIDI
+      if: runner.os == 'macOS'
+      working-directory: /tmp
+      run: |
+        wget -nv "https://github.com/Mindwerks/wildmidi/releases/download/wildmidi-$WILDMIDI_VERSION/wildmidi-$WILDMIDI_VERSION-macosx.tar.gz" -O- | tar xz
+        cd "wildmidi-$WILDMIDI_VERSION-macosx"
+        sudo cp -a *.dylib /usr/local/lib/
+        sudo cp wildmidi_lib.h /usr/local/include/
+
+    - uses: actions/checkout@v2
+    - name: Build (SDL 1)
+      run: |
+        mkdir build_sdl1
+        cd build_sdl1
+        if [[ ${{ runner.os }} == "Linux" ]]; then
+          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:/usr/local/lib/pkgconfig"
+        fi
+        cmake \
+          -DUSE_SDL1=ON \
+          -DUSE_RESAMP_SRC=ON \
+          -DUSE_RESAMP_SOXR=ON \
+          -DUSE_DEC_OPENMPT=ON \
+          -DUSE_DEC_XMP=ON \
+          -DUSE_DEC_MODPLUG=ON \
+          -DUSE_DEC_MPG123=ON \
+          -DUSE_DEC_SNDFILE=ON \
+          -DUSE_DEC_LIBVORBIS=ON \
+          -DUSE_DEC_LIBOPUSFILE=ON \
+          -DUSE_DEC_MUSEPACK=ON \
+          -DUSE_DEC_FLUIDSYNTH=ON \
+          -DUSE_DEC_BASSMIDI=ON \
+          -DUSE_DEC_WILDMIDI=ON \
+          -DUSE_DEC_ADLMIDI=ON \
+          -DENABLE_SDLMIXER_EMU=OFF \
+          -DBUILD_EXAMPLE=ON \
+          ..
+        sudo cmake --build . --target install -v
+
+    - name: Build (SDL 2)
+      run: |
+        mkdir build_sdl2
+        cd build_sdl2
+        if [[ ${{ runner.os }} == "Linux" ]]; then
+          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:/usr/local/lib/pkgconfig"
+        fi
+        cmake \
+          -DUSE_SDL1=OFF \
+          -DUSE_RESAMP_SRC=ON \
+          -DUSE_RESAMP_SOXR=ON \
+          -DUSE_DEC_OPENMPT=ON \
+          -DUSE_DEC_XMP=ON \
+          -DUSE_DEC_MODPLUG=ON \
+          -DUSE_DEC_MPG123=ON \
+          -DUSE_DEC_SNDFILE=ON \
+          -DUSE_DEC_LIBVORBIS=ON \
+          -DUSE_DEC_LIBOPUSFILE=ON \
+          -DUSE_DEC_MUSEPACK=ON \
+          -DUSE_DEC_FLUIDSYNTH=ON \
+          -DUSE_DEC_BASSMIDI=ON \
+          -DUSE_DEC_WILDMIDI=ON \
+          -DUSE_DEC_ADLMIDI=ON \
+          -DENABLE_SDLMIXER_EMU=OFF \
+          -DBUILD_EXAMPLE=ON \
+          ..
+        sudo cmake --build . --target install -v

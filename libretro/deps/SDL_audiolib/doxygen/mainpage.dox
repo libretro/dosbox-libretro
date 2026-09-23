@@ -1,0 +1,142 @@
+/*!
+\mainpage
+
+With SDL_audiolib, you can play many forms of audio files in your programs. It uses
+[SDL](http://www.libsdl.org) to access the audio hardware, and uses existing libraries
+to handle the decoding of various audio formats.
+
+Only mono and stereo output are supported.
+
+As of right now, only a C++ API is provided, and is not finalized yet. That means if you use this,
+expect API breaking changes every day. A C API will hopefully also be provided in the future.
+
+The provided decoders are:
+
+- Aulib::DecoderDrflac - uses built-in [dr_flac](https://mackron.github.io/dr_flac)
+
+  It can decode raw FLAC or Ogg/FLAC audio. This decoder is built-in into SDL_audiolib and has no
+  external library dependencies.
+
+- Aulib::DecoderDrmp3 - uses built-in [dr_mp3](https://github.com/mackron/dr_libs)
+
+  This decoder is built-in into SDL_audiolib and has no external library dependencies.
+
+- Aulib::DecoderDrwav - uses built-in [dr_wav](https://mackron.github.io/dr_wav)
+
+  This decoder is built-in into SDL_audiolib and has no external library dependencies.
+
+- Aulib::DecoderVorbis - uses [libvorbis](http://xiph.org/vorbis)
+
+  It can decode Ogg/Vorbis audio.
+
+- Aulib::DecoderOpus - uses [Opusfile](http://www.opus-codec.org)
+
+  It can decode Ogg/Opus audio.
+
+- Aulib::DecoderMusepack - uses [Musepack SV8](http://www.musepack.net)
+
+  It can decode Musepack audio.
+
+- Aulib::DecoderMpg123 - uses [libmpg123](http://www.mpg123.de)
+
+  It can decode MPEG 1.0/2.0/2.5 for layers 1, 2 and 3. Like MP3, for example.
+
+- Aulib::DecoderSndfile - uses [libsndfile](http://www.mega-nerd.com/libsndfile)
+
+  It can decode many various audio formats, including FLAC, WAV, AIFF/AIFC, AU/SND, IFF/SVX, VOC,
+  CAF and Ogg/Vorbis.
+
+  Note that even though Ogg/Vorbis is supported in this decoder, it is highly recommended to use
+  Aulib::DecoderVorbis instead, since the libsndfile-based decoder does not handle all types of
+  Vorbis audio (streams with sample rate changes in the middle of them, for example.)
+
+- Aulib::DecoderOpenmpt - uses [libopenmpt](https://lib.openmpt.org)
+
+  It can render various MOD file formats, like MOD, XM, S3M, IT, etc. This is the recommended
+  decoder for MOD audio files.
+
+- Aulib::DecoderXmp - uses [libxmp](http://xmp.sourceforge.net)
+
+  Similar to OpenMPT. It can render various MOD file formats.
+
+- Aulib::DecoderModplug - uses [libmodplug](http://modplug-xmms.sourceforge.net)
+
+  It can render various MOD file formats, like MOD, XM, S3M, IT, etc. Note that libmodplug has
+  been superseded by libopenmpt.
+
+- Aulib::DecoderFluidsynth - uses [FluidSynth](http://fluidsynth.elementsofsound.org)
+
+  It can render MIDI files using SoundFont (SF2) instrument files.
+
+- Aulib::DecoderBassmidi - uses [BASSMIDI](http://www.un4seen.com/bass.html)
+
+  It can render MIDI files using SoundFont (SF2) instrument files.
+
+- Aulib::DecoderWildmidi - uses [WildMIDI](http://www.mindwerks.net/projects/wildmidi)
+
+  It can render MIDI files using Gravis Ultrasound patch files.
+
+- Aulib::DecoderAdlmidi - uses [libADLMIDI](https://github.com/Wohlstand/libADLMIDI)
+
+  A Yamaha OPL3 (YMF262) emulation library.
+
+If the decoded audio does not match the output sample rate with which the library was initialized,
+it is resampled using one of the available resamplers:
+
+ - Aulib::ResamplerSpeex
+
+   It uses the Speex resampler from the [Opus codec](http://www.opus-codec.org). This resampler is
+   built-in into SDL_audiolib and has no external library dependencies.
+
+ - Aulib::ResamplerSrc
+
+   It uses the [SRC (aka "libsamplerate")](http://www.mega-nerd.com/SRC) resampler.
+
+ - Aulib::ResamplerSox
+
+   It uses the [SoxR](https://sourceforge.net/p/soxr/wiki/Home) resampler.
+
+Usage of the library is fairly simple. To play a music.ogg file containing Vorbis audio and having the
+audio automatically resampled by the internal resampler to the sample rate that the audio device is
+opened with (in this case 44.1kHz,) you would do:
+
+\code{.cpp}
+#include <Aulib/DecoderVorbis.h>
+#include <Aulib/ResamplerSpeex.h>
+#include <Aulib/Stream.h>
+#include <SDL.h>
+#include <iostream>
+
+int main()
+{
+    // The library uses std::chrono for durations, seeking and fading.
+    using namespace std::chrono_literals;
+
+    // Initialize the SDL_audiolib library. Set the output sample rate to
+    // 44.1kHz, the audio format to 16-bit signed, use 2 output channels
+    // (stereo), and an 8kB output buffer.
+    if (Aulib::init(44100, AUDIO_S16SYS, 2, 8192) != 0) {
+        std::cerr << "Couldn't initialize audio: " << SDL_GetError() << '\n';
+        return EXIT_FAILURE;
+    }
+
+    // Create an audio stream that will play our Vorbis file using a Vorbis
+    // decoder and a Speex resampler.
+    Aulib::Stream music("music.ogg",
+                        std::make_unique<Aulib::DecoderVorbis>(),
+                        std::make_unique<Aulib::ResamplerSpeex>());
+
+    // Play it once with a fade-in of 700 milliseconds.
+    music.play(1, 700ms);
+
+    // Wait while the music is still playing.
+    while (music.isPlaying()) {
+        SDL_Delay(200);
+    }
+
+    // Shut down and clean up. Calling this manually is optional, since the
+    // library will call this automatically when the program exits.
+    Aulib::quit();
+}
+\endcode
+*/

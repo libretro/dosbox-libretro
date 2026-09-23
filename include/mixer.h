@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -72,19 +72,34 @@ public:
 	void AddSamples_s16u_nonnative(Bitu len, const Bit16u * data);
 	void AddSamples_m32_nonnative(Bitu len, const Bit32s * data);
 	void AddSamples_s32_nonnative(Bitu len, const Bit32s * data);
-
+	
 	void AddStretched(Bitu len,Bit16s * data);		//Strech block up into needed data
+
 	void FillUp(void);
 	void Enable(bool _yesno);
 	MIXER_Handler handler;
 	float volmain[2];
 	float scale;
 	Bit32s volmul[2];
-	Bitu freq_add,freq_index;
-	Bitu done,needed;
+	
+	//This gets added the frequency counter each mixer step
 	Bits last[2];
+	Bitu freq_add, freq_index;
+	//When this flows over a new sample needs to be read from the device
+	Bitu freq_counter;
+	//Timing on how many samples have been done and were needed by th emixer
+	Bitu done, needed;
+	//Previous and next samples
+	Bits prevSample[2];
+	Bits nextSample[2];
+	//Simple way to lower the impact of DC offset. if MIXER_UPRAMP_STEPS is >0.
+	//Still work in progress and thus disabled for now.
+	Bits offset[2];
 	const char * name;
+	bool interpolate;
 	bool enabled;
+	bool last_samples_were_stereo;
+	bool last_samples_were_silence;
 	MixerChannel * next;
 };
 
@@ -109,5 +124,11 @@ public:
 /* PC Speakers functions, tightly related to the timer functions */
 void PCSPEAKER_SetCounter(Bitu cntr,Bitu mode);
 void PCSPEAKER_SetType(Bitu mode);
+
+#ifdef __LIBRETRO__
+auto MIXER_RETRO_GetAvailableFrames() noexcept -> Bitu;
+auto MIXER_RETRO_GetFrequency() -> Bit32u;
+void MIXER_CallBack(void* userdata, uint8_t* stream, int len);
+#endif
 
 #endif

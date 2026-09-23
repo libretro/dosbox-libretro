@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/catchorg/textflowcpp.git
+	branch = master
+	commit = 12010ddc8d15538ceea20622d22977e7c5a25da5
+	parent = 4f4ca5529ebffa92dc2a4b1627298b74f09f7ca9
+	method = merge
+	cmdver = 0.4.3

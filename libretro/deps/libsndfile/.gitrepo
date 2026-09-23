@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/erikd/libsndfile.git
+	branch = 1.0.31
+	commit = d60deb5d8691997b6bb28d88e3b43f322073d146
+	parent = d78ba4c47f7e34fd653c05fac2890d31c6ba9549
+	method = merge
+	cmdver = 0.4.3

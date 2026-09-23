@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/xiph/ogg.git
+	branch = v1.3.5
+	commit = e1774cd77f471443541596e09078e78fdc342e4f
+	parent = c572bba7d6b39daea74a3a7f37a7326dea297285
+	method = merge
+	cmdver = 0.4.3
