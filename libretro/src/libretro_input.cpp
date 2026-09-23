@@ -5,6 +5,9 @@
 #include "dosbox.h"
 #include "joystick.h"
 #include "keyboard.h"
+#include "automap.h"
+#include "joystick.h"
+#include "mouse.h"
 #include "libretro.h"
 #include "libretro-vkbd.h"
 #include "libretro_core_options.h"
@@ -232,6 +235,181 @@ private:
     unsigned from_retropad_id_;
     unsigned to_retro_kb_id_;
     InputItem<GamepadToKeyboard> item_;
+};
+
+// While the start menu is up it reads the gamepad itself, so the automatic
+// mapping must not also turn the same presses into keys.
+bool zipmenu_active = false;
+
+// The buttons held on the first two gamepad ports, for the start menu.
+unsigned libretro_joypad_state()
+{
+    return static_cast<unsigned>(static_cast<uint16_t>(joypad_bits[0]))
+        | static_cast<unsigned>(static_cast<uint16_t>(joypad_bits[1]));
+}
+
+// Plays one code of the automatic mapping: a key, or a mouse or joystick
+// action of DOSBox Pure's special mappings. Mouse movement is left to the
+// per-frame tick, as it goes on for as long as the button is held.
+static void automap_play(const unsigned char code, const bool down)
+{
+    if (code > KBD_NONE && code < KBD_LAST) {
+        KEYBOARD_AddKey(static_cast<KBD_KEYS>(code), down);
+        return;
+    }
+    switch (code) {
+    case AUTOMAP_MOUSE_LEFT_CLICK:
+    case AUTOMAP_MOUSE_RIGHT_CLICK:
+    case AUTOMAP_MOUSE_MIDDLE:
+        if (down) {
+            Mouse_ButtonPressed(code - AUTOMAP_MOUSE_LEFT_CLICK);
+        } else {
+            Mouse_ButtonReleased(code - AUTOMAP_MOUSE_LEFT_CLICK);
+        }
+        break;
+    case AUTOMAP_JOY_UP: JOYSTICK_Move_Y(0, down ? -1.0f : 0.0f); break;
+    case AUTOMAP_JOY_DOWN: JOYSTICK_Move_Y(0, down ? 1.0f : 0.0f); break;
+    case AUTOMAP_JOY_LEFT: JOYSTICK_Move_X(0, down ? -1.0f : 0.0f); break;
+    case AUTOMAP_JOY_RIGHT: JOYSTICK_Move_X(0, down ? 1.0f : 0.0f); break;
+    case AUTOMAP_JOY_BUTTON1: JOYSTICK_Button(0, 0, down); break;
+    case AUTOMAP_JOY_BUTTON2: JOYSTICK_Button(0, 1, down); break;
+    case AUTOMAP_JOY_BUTTON3: JOYSTICK_Button(1, 0, down); break;
+    case AUTOMAP_JOY_BUTTON4: JOYSTICK_Button(1, 1, down); break;
+    case AUTOMAP_JOY2_UP: JOYSTICK_Move_Y(1, down ? -1.0f : 0.0f); break;
+    case AUTOMAP_JOY2_DOWN: JOYSTICK_Move_Y(1, down ? 1.0f : 0.0f); break;
+    case AUTOMAP_JOY2_LEFT: JOYSTICK_Move_X(1, down ? -1.0f : 0.0f); break;
+    case AUTOMAP_JOY2_RIGHT: JOYSTICK_Move_X(1, down ? 1.0f : 0.0f); break;
+    default: break;
+    }
+}
+
+// Moves the mouse for a mapped movement code held down, by amount (0..1) of
+// full speed.
+static void automap_mouse_move(const unsigned char code, const float amount)
+{
+    constexpr float speed = 6.0f; // mickeys per frame at full tilt
+    switch (code) {
+    case AUTOMAP_MOUSE_UP: Mouse_CursorMoved(0, -speed * amount, 0, 0, true); break;
+    case AUTOMAP_MOUSE_DOWN: Mouse_CursorMoved(0, speed * amount, 0, 0, true); break;
+    case AUTOMAP_MOUSE_LEFT: Mouse_CursorMoved(-speed * amount, 0, 0, 0, true); break;
+    case AUTOMAP_MOUSE_RIGHT: Mouse_CursorMoved(speed * amount, 0, 0, 0, true); break;
+    default: break;
+    }
+}
+
+// A gamepad button pressing the game's keys, from the automatic mapping.
+class AutoMapButton final: public Processable
+{
+public:
+    AutoMapButton(const unsigned retro_port, const unsigned retro_id, std::vector<unsigned char> keys)
+        : retro_port_(retro_port)
+        , retro_id_(retro_id)
+        , keys_(std::move(keys))
+    { }
+
+    void process() override
+    {
+        const bool held = !zipmenu_active && (joypad_bits[retro_port_] & (1 << retro_id_));
+        item_.process(*this, held);
+        if (held) {
+            for (const auto k : keys_) {
+                automap_mouse_move(k, 1.0f);
+            }
+        }
+    }
+
+    void press() const
+    {
+        for (const auto k : keys_) {
+            automap_play(k, true);
+        }
+    }
+
+    void release() const
+    {
+        for (const auto k : keys_) {
+            automap_play(k, false);
+        }
+    }
+
+private:
+    unsigned retro_port_;
+    unsigned retro_id_;
+    std::vector<unsigned char> keys_;
+    InputItem<AutoMapButton> item_;
+};
+
+// A stick axis playing one code one way and another the other way. A pair
+// of joystick directions of the same axis follows the stick in proportion,
+// as does a pair of mouse movements; anything else is pressed past half way.
+class AutoMapAxis final: public Processable
+{
+public:
+    AutoMapAxis(const unsigned retro_port, const unsigned stick, const unsigned axis,
+        const unsigned char negative, const unsigned char positive)
+        : retro_port_(retro_port)
+        , stick_(stick)
+        , axis_(axis)
+        , negative_(negative)
+        , positive_(positive)
+    { }
+
+    void process() override
+    {
+        const int value = zipmenu_active ? 0 : input_cb(retro_port_, RETRO_DEVICE_ANALOG, stick_, axis_);
+        const float amount = value / 32768.0f;
+        if (is_joy_axis_pair()) {
+            const bool second = negative_ >= AUTOMAP_JOY2_UP;
+            const bool vertical = negative_ == AUTOMAP_JOY_UP || negative_ == AUTOMAP_JOY2_UP;
+            if (vertical) {
+                JOYSTICK_Move_Y(second ? 1 : 0, amount);
+            } else {
+                JOYSTICK_Move_X(second ? 1 : 0, amount);
+            }
+            return;
+        }
+        if (is_mouse_axis_pair()) {
+            if (value < -4096) {
+                automap_mouse_move(negative_, -amount);
+            } else if (value > 4096) {
+                automap_mouse_move(positive_, amount);
+            }
+            return;
+        }
+        const int dir = value < -0x4000 ? -1 : value > 0x4000 ? 1 : 0;
+        if (dir == dir_) {
+            return;
+        }
+        if (dir_ != 0) {
+            automap_play(dir_ < 0 ? negative_ : positive_, false);
+        }
+        if (dir != 0) {
+            automap_play(dir < 0 ? negative_ : positive_, true);
+        }
+        dir_ = dir;
+    }
+
+private:
+    bool is_joy_axis_pair() const
+    {
+        return (negative_ == AUTOMAP_JOY_UP && positive_ == AUTOMAP_JOY_DOWN)
+            || (negative_ == AUTOMAP_JOY_LEFT && positive_ == AUTOMAP_JOY_RIGHT)
+            || (negative_ == AUTOMAP_JOY2_UP && positive_ == AUTOMAP_JOY2_DOWN)
+            || (negative_ == AUTOMAP_JOY2_LEFT && positive_ == AUTOMAP_JOY2_RIGHT);
+    }
+
+    bool is_mouse_axis_pair() const
+    {
+        return (negative_ == AUTOMAP_MOUSE_UP && positive_ == AUTOMAP_MOUSE_DOWN)
+            || (negative_ == AUTOMAP_MOUSE_LEFT && positive_ == AUTOMAP_MOUSE_RIGHT);
+    }
+
+    unsigned retro_port_;
+    unsigned stick_;
+    unsigned axis_;
+    unsigned char negative_;
+    unsigned char positive_;
+    int dir_ = 0;
 };
 
 enum class AnalogDirection
@@ -818,7 +996,42 @@ void libretro_input_init()
 
     const auto [active_port_count, first_retro_port, second_retro_port] = get_active_ports();
 
-    if (active_port_count == 2) {
+    if (!automap_binds().empty() && active_port_count >= 1) {
+        // The game is in the automatic mapping database: the first gamepad
+        // presses its keys, and the DOS joystick is left out.
+        retro::logDebug("Automatic gamepad mapping for {}.", automap_title());
+        if (automap_uses_joystick()) {
+            // Buttons 3 and 4 are the second joystick's, so both stay on.
+            ::joytype = JOY_4AXIS;
+            update_dosbox_variable(false, "joystick", "joysticktype", "4axis");
+        } else {
+            update_dosbox_variable(false, "joystick", "joysticktype", "none");
+            JOYSTICK_Enable(0, false);
+            JOYSTICK_Enable(1, false);
+        }
+        static std::vector<std::string> descriptions;
+        descriptions.clear();
+        descriptions.reserve(automap_binds().size() * 2);
+        for (const auto& bind : automap_binds()) {
+            if (bind.analog) {
+                const unsigned stick = bind.button < 18 ? RETRO_DEVICE_INDEX_ANALOG_LEFT
+                                                        : RETRO_DEVICE_INDEX_ANALOG_RIGHT;
+                const unsigned axis = (bind.button & 1) ? RETRO_DEVICE_ID_ANALOG_Y
+                                                        : RETRO_DEVICE_ID_ANALOG_X;
+                input_list.push_back(std::make_unique<AutoMapAxis>(
+                    first_retro_port, stick, axis, bind.keys[0], bind.keys[1]));
+                descriptions.push_back(bind.name.empty() ? "Keys" : bind.name);
+                retro_desc.push_back({static_cast<unsigned>(first_retro_port), RETRO_DEVICE_ANALOG,
+                    stick, axis, descriptions.back().c_str()});
+            } else {
+                input_list.push_back(
+                    std::make_unique<AutoMapButton>(first_retro_port, bind.button, bind.keys));
+                descriptions.push_back(bind.name.empty() ? "Key" : bind.name);
+                retro_desc.push_back({static_cast<unsigned>(first_retro_port), RETRO_DEVICE_JOYPAD,
+                    0, bind.button, descriptions.back().c_str()});
+            }
+        }
+    } else if (active_port_count == 2) {
         int dos_port = 0;
         retro::logDebug("Both ports connected, deferring to two axis, two button pads.");
         update_dosbox_variable(false, "joystick", "joysticktype", "2axis");

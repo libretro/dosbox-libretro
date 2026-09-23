@@ -28,6 +28,7 @@ inline constexpr const char* CORE_OPTCAT_FILE_AND_DISK = "file_and_disk";
 inline constexpr const char* CORE_OPT_MOUNT_C_AS = "mount_c_as";
 inline constexpr const char* CORE_OPT_DEFAULT_MOUNT_FREESIZE = "default_mount_freesize";
 inline constexpr const char* CORE_OPT_SAVE_OVERLAY = "save_overlay";
+inline constexpr const char* CORE_OPT_ZIP_START_MENU = "zip_start_menu";
 
 inline constexpr const char* CORE_OPTCAT_VIDEO_EMULATION = "video_emulation";
 inline constexpr const char* CORE_OPT_MACHINE_TYPE = "machine";
@@ -44,6 +45,7 @@ inline constexpr const char* CORE_OPT_EMS = "ems";
 inline constexpr const char* CORE_OPT_UMB = "umb";
 inline constexpr const char* CORE_OPT_CPU_CORE = "core";
 inline constexpr const char* CORE_OPT_CPU_TYPE = "cputype";
+inline constexpr const char* CORE_OPT_CPU_CYCLES_BY_YEAR = "cpu_cycles_by_year";
 inline constexpr const char* CORE_OPT_CPU_CYCLES_MODE = "cpu_cycles_mode";
 inline constexpr const char* CORE_OPT_CPU_CYCLES_MULTIPLIER_REALMODE =
     "cpu_cycles_multiplier_realmode";
@@ -64,6 +66,7 @@ inline constexpr const char* CORE_OPT_ASPECT_CORRECTION = "aspect";
 inline constexpr const char* CORE_OPT_SCALER = "scaler";
 
 inline constexpr const char* CORE_OPTCAT_INPUT = "input";
+inline constexpr const char* CORE_OPT_AUTO_MAPPING = "auto_mapping";
 inline constexpr const char* CORE_OPT_JOYSTICK_FORCE_2AXIS = "joystick_force_2axis";
 inline constexpr const char* CORE_OPT_JOYSTICK_TIMED = "timed";
 inline constexpr const char* CORE_OPT_EMULATED_MOUSE_DEADZONE = "emulated_mouse_deadzone";

@@ -78,6 +78,9 @@ public:
 	virtual void	AddRef()					{ refCtr++; };
 	virtual Bits	RemoveRef()					{ return --refCtr; };
 	virtual bool	UpdateDateTimeFromHost()	{ return true; }
+	// 64-bit seek for archives past 4 GB (from DOSBox Pure); files that
+	// cannot do better fall back to the 32-bit one.
+	virtual bool	Seek64(Bit64u * pos,Bit32u type) { Bit32u i = (Bit32u)*pos; bool j = Seek(&i, type); *pos = i; return j; }
 	void SetDrive(Bit8u drv) { hdrive=drv;}
 	Bit8u GetDrive(void) { return hdrive;}
 	Bit32u flags;
@@ -87,6 +90,7 @@ public:
 	Bits refCtr;
 	bool open;
 	char* name;
+	bool newtime = false; // time and date were changed and are to be written on close (DOSBox Pure's drives)
 /* Some Device Specific Stuff */
 private:
 	Bit8u hdrive;
@@ -256,6 +260,12 @@ public:
 	virtual bool isRemote(void)=0;
 	virtual bool isRemovable(void)=0;
 	virtual Bits UnMount(void)=0;
+	// From DOSBox Pure, for the ZIP, memory and union drives: the long name
+	// behind an 8.3 one, the drives layered underneath this one, and closing
+	// every file still open on it.
+	virtual bool GetLongFileName(const char* name, char longname[256]) { return false; }
+	virtual DOS_Drive* GetShadow(int n, bool only_owned) { return NULL; }
+	void ForceCloseAll();
 
 	char * GetInfo(void);
 	char curdir[DOS_PATHLENGTH];

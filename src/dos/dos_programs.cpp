@@ -314,7 +314,7 @@ public:
 #ifdef __LIBRETRO__
 			// See if it exists in the content's directory first.
 			if (auto relative_to_game = from_u8string((load_game_directory / temp_line).make_preferred().u8string());
-				std::filesystem::path(temp_line).is_relative() && !stat(relative_to_game.c_str(), &test))
+				std::filesystem::path(temp_line).is_relative() && !host_stat(relative_to_game.c_str(), &test))
 			{
 				temp_line = std::move(relative_to_game);
 				failed = false;
@@ -323,7 +323,7 @@ public:
 #if defined (WIN32) || defined(OS2)
 			/* Removing trailing backslash if not root dir so stat will succeed */
 			if(temp_line.size() > 3 && temp_line[temp_line.size()-1]=='\\') temp_line.erase(temp_line.size()-1,1);
-			if (stat(temp_line.c_str(),&test)) {
+			if (host_stat(temp_line.c_str(),&test)) {
 #endif
 #if defined(WIN32)
 // Nothing to do here.
@@ -347,11 +347,11 @@ public:
 			}
 			if (failed) {
 #else
-			if (stat(temp_line.c_str(),&test)) {
+			if (host_stat(temp_line.c_str(),&test)) {
 				failed = true;
 				Cross::ResolveHomedir(temp_line);
 				//Try again after resolving ~
-				if(!stat(temp_line.c_str(),&test)) failed = false;
+				if(!host_stat(temp_line.c_str(),&test)) failed = false;
 			}
 			if(failed) {
 #endif
@@ -1354,17 +1354,17 @@ public:
 #endif
 			// See if it exists in the content's directory first.
 			if (auto relative_to_game = from_u8string((load_game_directory / temp_line).make_preferred().u8string());
-				std::filesystem::path(temp_line).is_relative() && !stat(relative_to_game.c_str(), &test))
+				std::filesystem::path(temp_line).is_relative() && !host_stat(relative_to_game.c_str(), &test))
 			{
 				temp_line = std::move(relative_to_game);
 			}
 			else
 #endif
-			if (stat(temp_line.c_str(),&test)) {
+			if (host_stat(temp_line.c_str(),&test)) {
 				//See if it works if the ~ are written out
 				std::string homedir(temp_line);
 				Cross::ResolveHomedir(homedir);
-				if(!stat(homedir.c_str(),&test)) {
+				if(!host_stat(homedir.c_str(),&test)) {
 					temp_line = homedir;
 				} else {
 					// convert dosbox filename to system filename
@@ -1386,7 +1386,7 @@ public:
 					ldp->GetSystemFilename(tmp, fullname);
 					temp_line = tmp;
 
-					if (stat(temp_line.c_str(),&test)) {
+					if (host_stat(temp_line.c_str(),&test)) {
 						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_FILE_NOT_FOUND"));
 						return;
 					}

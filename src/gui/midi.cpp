@@ -128,6 +128,8 @@ DB_Midi midi;
 static Bit64u Midi_write_time;
 #endif
 
+#include "midi_sc55.h"
+
 void MIDI_RawOutByte(Bit8u data) {
 
 #ifdef __LIBRETRO__

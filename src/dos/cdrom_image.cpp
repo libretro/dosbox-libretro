@@ -31,6 +31,7 @@
 #include "cdrom.h"
 #include "drives.h"
 #include "support.h"
+#include "cross.h"
 #include "setup.h"
 
 #if !defined(WIN32)
@@ -44,8 +45,22 @@ using namespace std;
 #define MAX_LINE_LENGTH 512
 #define MAX_FILENAME_LENGTH 256
 
+// drive_dbp.cpp: files on the emulated drives, for images inside a ZIP
+bool DBP_IsDosPath(const char* path);
+DOS_File* DBP_OpenDosPath(const char* path, bool write);
+Bit64u DBP_DosFileRead(DOS_File* file, void* buf, Bit64u size);
+bool DBP_DosFileSeek(DOS_File* file, Bit64u* pos, int whence);
+void DBP_DosFileClose(DOS_File* file);
+
 CDROM_Interface_Image::BinaryFile::BinaryFile(const char *filename, bool &error)
 {
+	file = NULL;
+	dos_file = NULL;
+	if (DBP_IsDosPath(filename)) {
+		dos_file = DBP_OpenDosPath(filename, false);
+		error = (dos_file == NULL);
+		return;
+	}
 	file = filestream_open(filename, RETRO_VFS_FILE_ACCESS_READ,
 	                       RETRO_VFS_FILE_ACCESS_HINT_NONE);
 	error = (file == NULL);
@@ -55,10 +70,17 @@ CDROM_Interface_Image::BinaryFile::~BinaryFile()
 {
 	if (file) filestream_close(file);
 	file = NULL;
+	if (dos_file) DBP_DosFileClose(dos_file);
+	dos_file = NULL;
 }
 
 bool CDROM_Interface_Image::BinaryFile::read(Bit8u *buffer, int seek, int count)
 {
+	if (dos_file) {
+		Bit64u pos = (Bit64u)seek;
+		if (!DBP_DosFileSeek(dos_file, &pos, SEEK_SET)) return false;
+		return DBP_DosFileRead(dos_file, buffer, (Bit64u)count) == (Bit64u)count;
+	}
 	if (!file) return false;
 	if (filestream_seek(file, seek, RETRO_VFS_SEEK_POSITION_START) < 0)
 		return false;
@@ -68,6 +90,11 @@ bool CDROM_Interface_Image::BinaryFile::read(Bit8u *buffer, int seek, int count)
 int CDROM_Interface_Image::BinaryFile::getLength()
 {
 	int64_t length;
+	if (dos_file) {
+		Bit64u end = 0;
+		if (!DBP_DosFileSeek(dos_file, &end, SEEK_END)) return -1;
+		return (int)end;
+	}
 	if (!file) return -1;
 	length = filestream_get_size(file);
 	if (length < 0) return -1;
@@ -461,10 +488,28 @@ bool CDROM_Interface_Image::LoadCueSheet(char *cuefile)
 	bool canAddTrack = false;
 	char tmp[MAX_FILENAME_LENGTH];	// dirname can change its argument
 	safe_strncpy(tmp, cuefile, MAX_FILENAME_LENGTH);
-	string pathname(dirname(tmp));
-	ifstream in;
-	in.open(cuefile, ios::in);
-	if (in.fail()) return false;
+	string pathname;
+	ifstream in_file;
+	istringstream in_dos;
+	if (DBP_IsDosPath(cuefile)) {
+		// A cue sheet on an emulated drive (inside a ZIP): its directory is
+		// what comes before the last separator, and its text is read whole.
+		const char *sep = strrchr(cuefile, '\\'), *sep2 = strrchr(cuefile, '/');
+		if (sep2 > sep) sep = sep2;
+		pathname.assign(cuefile, (sep ? sep : cuefile + 2) - cuefile);
+		DOS_File *df = DBP_OpenDosPath(cuefile, false);
+		if (!df) return false;
+		string text;
+		char chunk[4096];
+		for (Bit64u got; (got = DBP_DosFileRead(df, chunk, sizeof(chunk))) != 0;) text.append(chunk, (size_t)got);
+		DBP_DosFileClose(df);
+		in_dos.str(text);
+	} else {
+		pathname = dirname(tmp);
+		in_file.open(cuefile, ios::in);
+		if (in_file.fail()) return false;
+	}
+	istream &in = DBP_IsDosPath(cuefile) ? static_cast<istream&>(in_dos) : static_cast<istream&>(in_file);
 	
 	while(!in.eof()) {
 		// get next line
@@ -655,11 +700,11 @@ bool CDROM_Interface_Image::GetRealFileName(string &filename, string &pathname)
 {
 	// check if file exists
 	struct stat test;
-	if (stat(filename.c_str(), &test) == 0) return true;
+	if (host_stat(filename.c_str(), &test) == 0) return true;
 	
 	// check if file with path relative to cue file exists
-	string tmpstr(pathname + "/" + filename);
-	if (stat(tmpstr.c_str(), &test) == 0) {
+	string tmpstr(pathname + (DBP_IsDosPath(pathname.c_str()) ? "\\" : "/") + filename);
+	if (host_stat(tmpstr.c_str(), &test) == 0) {
 		filename = tmpstr;
 		return true;
 	}
@@ -673,7 +718,7 @@ bool CDROM_Interface_Image::GetRealFileName(string &filename, string &pathname)
 	localDrive *ldp = dynamic_cast<localDrive*>(Drives[drive]);
 	if (ldp) {
 		ldp->GetSystemFilename(tmp, fullname);
-		if (stat(tmp, &test) == 0) {
+		if (host_stat(tmp, &test) == 0) {
 			filename = tmp;
 			return true;
 		}
@@ -690,13 +735,13 @@ bool CDROM_Interface_Image::GetRealFileName(string &filename, string &pathname)
 		if(copy[i] == '\\') copy[i] = '/';
 	}
 
-	if (stat(copy.c_str(), &test) == 0) {
+	if (host_stat(copy.c_str(), &test) == 0) {
 		filename = copy;
 		return true;
 	}
 
 	tmpstr = pathname + "/" + copy;
-	if (stat(tmpstr.c_str(), &test) == 0) {
+	if (host_stat(tmpstr.c_str(), &test) == 0) {
 		filename = tmpstr;
 		return true;
 	}

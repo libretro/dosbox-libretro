@@ -96,6 +96,8 @@ typedef struct dir_struct {
 typedef struct dir_struct { 
 	DIR*  dir;
 	char base_path[CROSS_LEN];
+	void* vfs_dir;   // frontend VFS directory handle, instead of dir, for host_is_vfs_path paths
+	int   vfs_dots;  // how many of the "." and ".." entries have been handed out
 } dir_information;
 
 #endif
@@ -106,4 +108,16 @@ bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_direc
 void close_directory(dir_information* dirp);
 
 FILE *fopen_wrap(const char *path, const char *mode);
+
+// A path the libretro frontend hands over can be one only it can open, such as
+// the saf:// paths RetroArch uses for Android's Storage Access Framework. Those
+// go through the frontend's VFS; every other path goes to the C library as before.
+bool host_is_vfs_path(const char* path);
+int host_stat(const char* path, struct stat* st);
+int host_access(const char* path);
+int host_mkdir(const char* path);
+int host_rmdir(const char* path);
+int host_unlink(const char* path);
+int host_rename(const char* oldpath, const char* newpath);
+int host_ftruncate(FILE* f, long length);
 #endif

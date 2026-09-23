@@ -10,7 +10,7 @@
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
     JNI_PATH: libretro
-    CORENAME: dosbox_core
+    CORENAME: dosbox
     MAKEFILE_PATH: libretro
     MAKEFILE: Makefile.libretro
 

@@ -36,6 +36,8 @@ SOURCES_CXX += \
 	$(CORE_DIR)/libretro/src/libretro_core_options.cpp \
 	$(CORE_DIR)/libretro/src/libretro_gfx.cpp \
 	$(CORE_DIR)/libretro/src/libretro_input.cpp \
+	$(CORE_DIR)/libretro/src/automap.cpp \
+	$(CORE_DIR)/libretro/src/keyb2joypad.cpp \
 	$(CORE_DIR)/libretro/src/libretro_message.cpp \
 	$(CORE_DIR)/libretro/src/log.cpp \
 	$(CORE_DIR)/libretro/src/util.cpp \
@@ -73,6 +75,10 @@ SOURCES_CXX += \
 	$(CORE_DIR)/src/dos/drive_iso.cpp \
 	$(CORE_DIR)/src/dos/drive_local.cpp \
 	$(CORE_DIR)/src/dos/drive_overlay.cpp \
+	$(CORE_DIR)/src/dos/drive_dbp.cpp \
+	$(CORE_DIR)/src/dos/drive_memory.cpp \
+	$(CORE_DIR)/src/dos/drive_union.cpp \
+	$(CORE_DIR)/src/dos/drive_zip.cpp \
 	$(CORE_DIR)/src/dos/drive_virtual.cpp \
 	$(CORE_DIR)/src/dos/drives.cpp \
 	$(CORE_DIR)/src/dosbox.cpp \
@@ -99,6 +105,7 @@ SOURCES_CXX += \
 	$(CORE_DIR)/src/hardware/memory.cpp \
 	$(CORE_DIR)/src/hardware/mixer.cpp \
 	$(CORE_DIR)/src/hardware/mpu401.cpp \
+	$(CORE_DIR)/src/hardware/nukedsc55.cpp \
 	$(CORE_DIR)/src/hardware/pci_bus.cpp \
 	$(CORE_DIR)/src/hardware/pcspeaker.cpp \
 	$(CORE_DIR)/src/hardware/pic.cpp \

@@ -4,6 +4,7 @@
 #include "control.h"
 #include "dos/cdrom.h"
 #include "dos/drives.h"
+#include "cross.h"
 #include "dos_inc.h"
 #include "dosbox.h"
 #include "libretro_dosbox.h"
@@ -132,14 +133,14 @@ static auto mount_floppy_image(const char drive_letter, const std::filesystem::p
 {
     constexpr Bit8u media_id = 0xF0;
 
-    try {
-        if (std::filesystem::file_size(path) > 2880 * 1024) {
-            retro::logError("Mounting HDD images is currently not supported.");
-            return false;
-        }
+    // host_stat and not std::filesystem, which cannot see a path only the frontend VFS can open
+    struct stat st;
+    if (host_stat(path.string().c_str(), &st) != 0) {
+        retro::logError("Failed to detect image file size: {}.", path);
+        return false;
     }
-    catch (const std::exception& e) {
-        retro::logError("Failed to detect image file size: {}.", e.what());
+    if (st.st_size > 2880 * 1024) {
+        retro::logError("Mounting HDD images is currently not supported.");
         return false;
     }
 
@@ -219,7 +220,7 @@ auto disk_control::mount(std::filesystem::path image) -> bool
     bool mounted_ok = false;
     char drive_letter;
 
-    if (extension == ".img") {
+    if (extension == ".img" || extension == ".ima") {
         retro::logDebug("Mounting disk as floppy {}.", image);
         drive_letter = 'A';
         mounted_ok = mount_floppy_image(drive_letter, image);
@@ -250,6 +251,13 @@ auto disk_control::mount(std::filesystem::path image) -> bool
     return mounted_ok;
 }
 
+void disk_control::set_images(std::vector<std::filesystem::path> images, const unsigned int index)
+{
+    state::images = std::move(images);
+    state::current_index = index < state::images.size() ? index : 0;
+    state::is_ejected = false;
+}
+
 static auto unmount(const std::filesystem::path& path) -> bool
 {
     char drive_letter;
@@ -259,7 +267,8 @@ static auto unmount(const std::filesystem::path& path) -> bool
         return false;
     }
 
-    if (const auto extension = lower_case(path.extension().string()); extension == ".img") {
+    if (const auto extension = lower_case(path.extension().string());
+        extension == ".img" || extension == ".ima") {
         retro::logDebug("Unmounting floppy {}.", path);
         drive_letter = 'A';
     } else if (extension == ".iso" || extension == ".cue") {

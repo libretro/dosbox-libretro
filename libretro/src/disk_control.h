@@ -3,11 +3,15 @@
 #include "libretro.h"
 #include <array>
 #include <filesystem>
+#include <vector>
 
 namespace disk_control {
 
 void init(const retro_environment_t cb);
 auto mount(std::filesystem::path image) -> bool;
+// Hands the frontend's disc control a list of images, with the one at index
+// being the current one; they are mounted by the caller.
+void set_images(std::vector<std::filesystem::path> images, unsigned int index);
 
 } // namespace disk_control
 

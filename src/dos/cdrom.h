@@ -153,6 +153,9 @@ private:
 		   handed over, which is how content behind Android's SAF (content://
 		   URIs, which no C library can open) reaches us. Falls back to stdio. */
 		struct RFILE *file;
+		/* Or a file on an emulated drive, for a "$C:\\..." path: an image
+		   inside a ZIP (drive_dbp.cpp). */
+		class DOS_File *dos_file;
 	};
 	
 	#if defined(C_SDL_SOUND)

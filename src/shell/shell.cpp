@@ -26,6 +26,7 @@
 #include "shell.h"
 #include "callback.h"
 #include "support.h"
+#include "cross.h"
 #ifdef __LIBRETRO__
 	#include "CoreOptions.h"
 	#include "deps/char8_t-remediation/char8_t-remediation.h"
@@ -439,12 +440,12 @@ public:
 			struct stat test;
 			if (line.length() > CROSS_LEN) continue;
 			strcpy(buffer,line.c_str());
-			if (stat(buffer,&test)) {
+			if (host_stat(buffer,&test)) {
 				if (getcwd(buffer,CROSS_LEN) == NULL) continue;
 				if (strlen(buffer) + line.length() + 1 > CROSS_LEN) continue;
 				strcat(buffer,cross_filesplit);
 				strcat(buffer,line.c_str());
-				if (stat(buffer,&test)) continue;
+				if (host_stat(buffer,&test)) continue;
 			}
 			if (test.st_mode & S_IFDIR) {
 #ifdef __LIBRETRO__
@@ -465,12 +466,12 @@ public:
 					if (strlen(buffer) + line.length() + 1 > CROSS_LEN) continue;
 					strcat(buffer,cross_filesplit);
 					strcat(buffer,line.c_str());
-					if(stat(buffer,&test)) continue;
+					if(host_stat(buffer,&test)) continue;
 					name = strrchr(buffer,CROSS_FILESPLIT);
 					if(!name) continue;
 				}
 				*name++ = 0;
-				if (access(buffer,F_OK)) continue;
+				if (host_access(buffer)) continue;
 #ifdef __LIBRETRO__
 				if (retro::core_options[CORE_OPT_MOUNT_C_AS].toString() == "parent") {
 					std::filesystem::path fs_dir = buffer;
@@ -629,7 +630,7 @@ void SHELL_Init() {
 		"\033[44;1m\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n"
-		"\xBA \033[32mWelcome to DOSBox-core\033[37m                                             \xBA\n"
+		"\xBA \033[32mWelcome to DOSBox\033[37m                                                  \xBA\n"
 		"\xBA                                                                    \xBA\n"
 //		"\xBA DOSBox runs real and protected mode games.                         \xBA\n"
 		"\xBA For a short introduction for new users type: \033[33mINTRO\033[37m                 \xBA\n"

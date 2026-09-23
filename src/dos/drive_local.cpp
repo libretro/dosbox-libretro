@@ -140,10 +140,10 @@ bool localDrive::FileUnlink(char * name) {
 	strcat(newname,name);
 	CROSS_FILENAME(newname);
 	char *fullname = dirCache.GetExpandName(newname);
-	if (unlink(fullname)) {
+	if (host_unlink(fullname)) {
 		//Unlink failed for some reason try finding it.
 		struct stat buffer;
-		if(stat(fullname,&buffer)) {
+		if(host_stat(fullname,&buffer)) {
 			//file not found
 			DOS_SetError(DOSERR_FILE_NOT_FOUND);
 			return false;
@@ -175,7 +175,7 @@ bool localDrive::FileUnlink(char * name) {
 			DOS_SetError(DOSERR_ACCESS_DENIED);
 			return false;
 		}
-		if (!unlink(fullname)) {
+		if (!host_unlink(fullname)) {
 			dirCache.DeleteEntry(newname);
 			return true;
 		}
@@ -267,7 +267,7 @@ again:
 	//and due to its design dir_ent might be lost.)
 	//Copying dir_ent first
 	strcpy(dir_entcopy,dir_ent);
-	if (stat(dirCache.GetExpandName(full_name),&stat_block)!=0) { 
+	if (host_stat(dirCache.GetExpandName(full_name),&stat_block)!=0) { 
 		goto again;//No symlinks and such
 	}	
 
@@ -304,7 +304,7 @@ bool localDrive::GetFileAttr(char * name,Bit16u * attr) {
 	dirCache.ExpandName(newname);
 
 	struct stat status;
-	if (stat(newname,&status)==0) {
+	if (host_stat(newname,&status)==0) {
 		*attr=DOS_ATTR_ARCHIVE;
 		if(status.st_mode & S_IFDIR) *attr|=DOS_ATTR_DIRECTORY;
 		return true;
@@ -318,11 +318,7 @@ bool localDrive::MakeDir(char * dir) {
 	strcpy(newdir,basedir);
 	strcat(newdir,dir);
 	CROSS_FILENAME(newdir);
-#if defined (WIN32)						/* MS Visual C++ */
-	int temp=mkdir(dirCache.GetExpandName(newdir));
-#else
-	int temp=mkdir(dirCache.GetExpandName(newdir),0700);
-#endif
+	int temp=host_mkdir(dirCache.GetExpandName(newdir));
 	if (temp==0) dirCache.CacheOut(newdir,true);
 
 	return (temp==0);// || ((temp!=0) && (errno==EEXIST));
@@ -333,7 +329,7 @@ bool localDrive::RemoveDir(char * dir) {
 	strcpy(newdir,basedir);
 	strcat(newdir,dir);
 	CROSS_FILENAME(newdir);
-	int temp=rmdir(dirCache.GetExpandName(newdir));
+	int temp=host_rmdir(dirCache.GetExpandName(newdir));
 	if (temp==0) dirCache.DeleteEntry(newdir,true);
 	return (temp==0);
 }
@@ -349,10 +345,10 @@ bool localDrive::TestDir(char * dir) {
 	if (len && (newdir[len-1]!='\\')) {
 		// It has to be a directory !
 		struct stat test;
-		if (stat(newdir,&test))			return false;
+		if (host_stat(newdir,&test))			return false;
 		if ((test.st_mode & S_IFDIR)==0)	return false;
 	};
-	int temp=access(newdir,F_OK);
+	int temp=host_access(newdir);
 	return (temp==0);
 }
 
@@ -367,7 +363,7 @@ bool localDrive::Rename(char * oldname,char * newname) {
 	strcpy(newnew,basedir);
 	strcat(newnew,newname);
 	CROSS_FILENAME(newnew);
-	int temp=rename(newold,dirCache.GetExpandName(newnew));
+	int temp=host_rename(newold,dirCache.GetExpandName(newnew));
 	if (temp==0) dirCache.CacheOut(newnew);
 	return (temp==0);
 
@@ -388,7 +384,7 @@ bool localDrive::FileExists(const char* name) {
 	CROSS_FILENAME(newname);
 	dirCache.ExpandName(newname);
 	struct stat temp_stat;
-	if(stat(newname,&temp_stat)!=0) return false;
+	if(host_stat(newname,&temp_stat)!=0) return false;
 	if(temp_stat.st_mode & S_IFDIR) return false;
 	return true;
 }
@@ -400,7 +396,7 @@ bool localDrive::FileStat(const char* name, FileStat_Block * const stat_block) {
 	CROSS_FILENAME(newname);
 	dirCache.ExpandName(newname);
 	struct stat temp_stat;
-	if(stat(newname,&temp_stat)!=0) return false;
+	if(host_stat(newname,&temp_stat)!=0) return false;
 	/* Convert the stat to a FileStat */
 	struct tm *time;
 	if((time=localtime(&temp_stat.st_mtime))!=0) {
@@ -470,7 +466,7 @@ bool localFile::Write(Bit8u * data,Bit16u * size) {
 	if (last_action==READ) fseek(fhandle,ftell(fhandle),SEEK_SET);
 	last_action=WRITE;
 	if(*size==0){  
-        return (!ftruncate(fileno(fhandle),ftell(fhandle)));
+        return (!host_ftruncate(fhandle,ftell(fhandle)));
     }
     else 
     {
@@ -541,7 +537,7 @@ void localFile::FlagReadOnlyMedium(void) {
 bool localFile::UpdateDateTimeFromHost(void) {
 	if(!open) return false;
 	struct stat temp_stat;
-	fstat(fileno(fhandle),&temp_stat);
+	if (fstat(fileno(fhandle),&temp_stat)) temp_stat.st_mtime = ::time(NULL); // a file from the frontend VFS has no descriptor, and no timestamp
 	struct tm * ltime;
 	if((ltime=localtime(&temp_stat.st_mtime))!=0) {
 		time=DOS_PackTime((Bit16u)ltime->tm_hour,(Bit16u)ltime->tm_min,(Bit16u)ltime->tm_sec);

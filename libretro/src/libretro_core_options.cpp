@@ -430,12 +430,12 @@ CoreOptions core_options {
         },
         CoreOptionDefinition {
             CORE_OPT_LOAD_DEFAULT_CONF,
-            "Always load DOSBox-core.conf",
-            "Always load the DOSBox-core.conf file if it exists in the libretro saves directory. "
+            "Always load DOSBox.conf",
+            "Always load the DOSBox.conf file if it exists in the libretro saves directory. "
                 "Normally, this is not done when loading a custom conf file as content. This is the "
                 "equivalent to using the \"-userconf\" option with stand-alone dosbox.\n"
                 "\n"
-                "A DOSBox-core.conf file based on the current dosbox settings can be generated with "
+                "A DOSBox.conf file based on the current dosbox settings can be generated with "
                 "the \"config -wcd\" command.",
             {
                 true,
@@ -589,6 +589,18 @@ CoreOptions core_options {
                 { 1792, "1.75GB" },
             },
             1024
+        },
+        CoreOptionDefinition {
+            CORE_OPT_ZIP_START_MENU,
+            "Start menu for ZIP content",
+            "When a ZIP holds several programs, or its programs are on a disk image inside it, "
+                "show a menu to pick the one to start. Disabled, the core stops at the C:\\> "
+                "prompt instead. A game that is the only program in the ZIP starts either way.",
+            {
+                true,
+                false,
+            },
+            true
         },
         CoreOptionDefinition {
             CORE_OPT_SAVE_OVERLAY,
@@ -808,6 +820,19 @@ CoreOptions core_options {
             "auto"
         },
         CoreOptionDefinition {
+            CORE_OPT_CPU_CYCLES_BY_YEAR,
+            "CPU speed from the game's year",
+            "When the game's year is known - from its name, as in \"Game (1993).zip\", or from "
+                "the automatic gamepad mapping database - emulate a CPU of that time in real mode "
+                "(capped at 1996's) and run protected mode games at full speed, as DOSBox Pure "
+                "does. This takes the place of the cycle options below for such games.",
+            {
+                true,
+                false,
+            },
+            true
+        },
+        CoreOptionDefinition {
             CORE_OPT_CPU_CYCLES_MODE,
             "CPU cycles mode",
             "Method to determine the amount of emulated CPU cycles per millisecond. \"Fixed\" mode "
@@ -973,6 +998,18 @@ CoreOptions core_options {
         "Input",
         "Emulated joystick and mouse.",
 
+        CoreOptionDefinition {
+            CORE_OPT_AUTO_MAPPING,
+            "Automatic gamepad mapping",
+            "For games in the Keyb2Joypad database (from DOSBox Pure), map the first gamepad to "
+                "the game's keys instead of the emulated joystick. Takes effect when content is "
+                "loaded.",
+            {
+                true,
+                false,
+            },
+            true
+        },
         CoreOptionDefinition {
             CORE_OPT_JOYSTICK_FORCE_2AXIS,
             "Force 2-axis/2-button",
@@ -1635,6 +1672,9 @@ CoreOptions core_options {
             "MIDI driver",
             "The MT-32 emulation driver uses Munt and needs the correct ROMs in the frontend's "
                 "system directory.\n"
+                "The SC-55 driver uses Nuked-SC55 (from DOSBox Pure) and needs the ROMs of a "
+                "Roland SC-55 family module - ROM1.BIN, ROM2.BIN and the WAVEROM files - in an "
+                "SC-55 directory in the system directory, or a ZIP of them named SC-55.zip.\n"
             #ifdef WITH_BASSMIDI
                 "For BASSMIDI, you need to download the BASS and BASSMIDI libraries for your OS "
                 "from https://www.un4seen.com and place them in the frontend's system directory.\n"
@@ -1655,6 +1695,7 @@ CoreOptions core_options {
                 { "fluidsynth", "FluidSynth" },
             #endif
                 { "mt32", "MT-32 emulator" },
+                { "sc55", "Roland SC-55 (Nuked-SC55)" },
                 "libretro",
                 "none",
             },

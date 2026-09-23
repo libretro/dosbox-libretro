@@ -6,6 +6,11 @@
 #include "deps/char8_t-remediation/char8_t-remediation.h"
 #include "disk_control.h"
 #include "dos/drives.h"
+#include "dos_inc.h"
+#include "callback.h"
+#include "automap.h"
+#include "cross.h"
+#include <stdexcept>
 #include "dosbox.h"
 #include "emu_thread.h"
 #include "fake_timing.h"
@@ -90,7 +95,7 @@ std::filesystem::path retro_save_directory;
 std::filesystem::path retro_system_directory;
 std::filesystem::path load_game_directory;
 static std::filesystem::path retro_content_directory;
-static const std::string retro_library_name = "DOSBox-core";
+static const std::string retro_library_name = "DOSBox";
 
 /* libretro variables */
 static retro_video_refresh_t video_cb;
@@ -131,6 +136,14 @@ void retro_set_input_state(retro_input_state_t cb)
 
 // Pending overlay mount.
 static bool mount_overlay = true;
+
+// Whether directory content has been looked up for automatic gamepad mapping.
+static bool automap_checked = false;
+
+// ZIP content, mounted as C: by MOUNTZIP.COM once DOS is up. Nothing is
+// extracted: the archive is a read-only zipDrive, and a unionDrive over it
+// keeps everything the game writes in a save file of its own.
+static std::filesystem::path zip_content_path;
 
 // Thread we run dosbox in.
 static std::thread emu_thread;
@@ -173,7 +186,21 @@ static void mount_overlay_filesystem(const char drive, std::filesystem::path pat
 
     retro::logDebug("Creating save directory {}.", path_str);
     try {
-        std::filesystem::create_directories(path);
+        if (host_is_vfs_path(path_str.c_str())) {
+            // std::filesystem cannot see a frontend-only path - it would create a local directory
+            // named after the scheme - so make each level through the VFS instead.
+            const auto after_scheme = path_str.find("://") + 3;
+            for (auto sep = path_str.find('/', after_scheme); sep != std::string::npos;
+                 sep = path_str.find('/', sep + 1)) {
+                host_mkdir(path_str.substr(0, sep).c_str());
+            }
+            struct stat st;
+            if (host_stat(path_str.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
+                throw std::runtime_error("cannot create it through the frontend VFS");
+            }
+        } else {
+            std::filesystem::create_directories(path);
+        }
     }
     catch (const std::exception& e) {
         retro::showOsdError(
@@ -556,9 +583,49 @@ void core_autoexec()
     check_gus_variables(true);
 }
 
+// The year of the game, when its name says it ("Game (1993).zip", or a
+// /1993/ directory) or the automatic mapping database knows it; 0 otherwise.
+static int content_year = 0;
+
+static auto year_from_path(const std::string& path) -> int
+{
+    // As DOSBox Pure reads it: a year in parentheses or as a directory name,
+    // looking from the end, with 199x or 19xx meaning the decade or century.
+    const char* const start = path.c_str();
+    for (const char *p = start + path.size(), *p_min = start + 5; p >= p_min; p--) {
+        while (p >= p_min && *p != ')' && *p != '/' && *p != '\\') {
+            p--;
+        }
+        if (p < p_min || (p[-5] != '(' && p[-5] != '/' && p[-5] != '\\')) {
+            continue;
+        }
+        const int year = atoi(p - 4) * ((p[-2] | 0x20) == 'x' ? 100 : ((p[-1] | 0x20) == 'x' ? 10 : 1));
+        if (year > 1970 && year < 2100) {
+            return year;
+        }
+    }
+    return 0;
+}
+
+// Cycles for a CPU of that year, DOSBox Pure's table.
+static auto cycles_for_year(const int year) -> int
+{
+    static const int cycles_1982_to_1996[] = {900, 1500, 2100, 2750, 3800, 4800, 6300, 7800,
+        14000, 23800, 27000, 44000, 55000, 66800, 93000};
+    if (year < 1982) {
+        return 315;
+    }
+    return cycles_1982_to_1996[std::min(year, 1996) - 1982];
+}
+
 static auto make_cpu_cycles_string() -> std::string
 {
     using namespace retro;
+
+    if (content_year > 1970 && core_options[CORE_OPT_CPU_CYCLES_BY_YEAR].toBool()) {
+        // Real mode at the speed of the game's time, protected mode at full.
+        return "auto " + std::to_string(cycles_for_year(content_year));
+    }
 
     const auto& mode = core_options[CORE_OPT_CPU_CYCLES_MODE].toString();
     const int realmode_cycles = core_options[CORE_OPT_CPU_CYCLES_REALMODE].toInt()
@@ -833,6 +900,17 @@ static void check_variables()
             update_bassmidi_variables();
             update_fsynth_variables();
             update_mt32_variables();
+            if (midi_driver == "sc55") {
+                // Where the SC-55 ROMs are: an SC-55.zip, or else the system
+                // directory, which the handler looks through for them.
+                const auto zip = retro_system_directory / "SC-55.zip";
+                struct stat st;
+                const auto zip_str = from_u8string(zip.u8string());
+                update_dosbox_variable(false, "midi", "midiconfig",
+                    host_stat(zip_str.c_str(), &st) == 0
+                        ? zip_str
+                        : from_u8string(retro_system_directory.u8string()));
+            }
 
             if (use_retro_midi && !have_retro_midi) {
                 have_retro_midi =
@@ -886,10 +964,484 @@ static void check_variables()
     }
 }
 
+// What the autoexec runs after mounting the ZIP: the game, when there is
+// nothing to choose (see find_program_to_run), and nothing otherwise, which
+// leaves the C:\> prompt. Kept here because the virtual file points into it.
+static std::string ziprun_bat;
+void VFILE_Remove(const char* name); // drive_virtual.cpp
+
+// Lists a directory of the drive: the programs in it (.EXE, .COM, .BAT) and
+// its subdirectories.
+static void list_directory(DOS_Drive* const drive, const std::string& dir,
+    std::vector<std::string>& programs, std::vector<std::string>& dirs)
+{
+    const RealPt save_dta = dos.dta();
+    dos.dta(dos.tables.tempdta);
+    DOS_DTA dta(dos.dta());
+    char pattern[] = "*.*";
+    dta.SetupSearch('C' - 'A', 0xff & ~DOS_ATTR_VOLUME, pattern);
+    std::string dir_buf = dir;
+    for (bool more = drive->FindFirst(&dir_buf[0], dta); more; more = drive->FindNext(dta)) {
+        char name[DOS_NAMELENGTH_ASCII];
+        Bit32u size;
+        Bit16u date;
+        Bit16u time;
+        Bit8u attr;
+        dta.GetResult(name, size, date, time, attr);
+        if (attr & DOS_ATTR_DIRECTORY) {
+            if (strcmp(name, ".") && strcmp(name, "..")) {
+                dirs.emplace_back(name);
+            }
+            continue;
+        }
+        const char* const dot = strrchr(name, '.');
+        if (dot && (!strcasecmp(dot, ".EXE") || !strcasecmp(dot, ".COM") || !strcasecmp(dot, ".BAT"))) {
+            programs.emplace_back(name);
+        }
+    }
+    dos.dta(save_dta);
+}
+
+// The game to start from a ZIP, the way DOSBox Pure picks one when there is
+// nothing to choose: look in the root, or in the one directory that is all
+// the root has, and take the program there if there is a single one once
+// setup and install programs are left aside. Empty when there is a choice.
+static auto find_program_to_run(DOS_Drive* const drive, std::string& dir) -> std::string
+{
+    std::vector<std::string> programs;
+    std::vector<std::string> dirs;
+    dir.clear();
+    list_directory(drive, dir, programs, dirs);
+    if (programs.empty() && dirs.size() == 1) {
+        dir = dirs[0];
+        dirs.clear();
+        list_directory(drive, dir, programs, dirs);
+    }
+    std::vector<std::string> games;
+    for (const auto& program : programs) {
+        std::string upper = program;
+        for (auto& c : upper) {
+            c = static_cast<char>(toupper(static_cast<unsigned char>(c)));
+        }
+        if (upper.find("SETUP") != std::string::npos || upper.find("INSTALL") != std::string::npos
+            || upper.find("CONFIG") != std::string::npos || upper.find("UNINST") != std::string::npos
+            || upper.find("SETSOUND") != std::string::npos) {
+            continue;
+        }
+        games.push_back(program);
+    }
+    return games.size() == 1 ? games[0] : std::string();
+}
+
+// The disk images inside a ZIP: CD images (cue sheets, or ISOs when there is
+// no cue sheet) and floppy images. They are read straight out of the ZIP
+// through "$C:\\..." paths (drive_dbp.cpp). The first CD is mounted as D:
+// and the first floppy as A:, and all of them go to the frontend's disc
+// control, so RetroArch can swap between them. Hard disk images (images
+// larger than a floppy) come back as IMGMOUNT lines for the autoexec, as E:
+// and on; IMGMOUNT works out the geometry of the usual 16-head, 63-sector
+// layout by itself.
+static auto mount_images(DOS_Drive* const drive) -> std::string
+{
+    struct Found {
+        std::vector<std::string> cue, iso, floppy, hdd;
+    } found;
+    DriveFileIterator(drive,
+        [](const char* path, bool is_dir, Bit32u size, Bit16u, Bit16u, Bit8u, Bitu data) {
+            if (is_dir) {
+                return;
+            }
+            const char* const dot = strrchr(path, '.');
+            if (!dot) {
+                return;
+            }
+            auto& f = *reinterpret_cast<Found*>(data);
+            if (!strcasecmp(dot, ".CUE")) {
+                f.cue.emplace_back(path);
+            } else if (!strcasecmp(dot, ".ISO")) {
+                f.iso.emplace_back(path);
+            } else if (!strcasecmp(dot, ".IMG") || !strcasecmp(dot, ".IMA")) {
+                (size <= 2949120 ? f.floppy : f.hdd).emplace_back(path);
+            }
+        },
+        reinterpret_cast<Bitu>(&found));
+
+    std::string hdd_mounts;
+    std::sort(found.hdd.begin(), found.hdd.end());
+    char letter = 'E';
+    for (const auto& hdd : found.hdd) {
+        if (letter > 'Y') {
+            break;
+        }
+        hdd_mounts += std::string("IMGMOUNT ") + letter++ + " $C:\\" + hdd + " -t hdd\r\n";
+    }
+
+    auto& cds = found.cue.empty() ? found.iso : found.cue;
+    std::sort(cds.begin(), cds.end());
+    std::sort(found.floppy.begin(), found.floppy.end());
+    std::vector<std::filesystem::path> images;
+    for (const auto& cd : cds) {
+        images.emplace_back("$C:\\" + cd);
+    }
+    for (const auto& floppy : found.floppy) {
+        // disk_control tells floppies from CDs by the .img extension.
+        auto path = "$C:\\" + floppy;
+        images.emplace_back(path);
+    }
+    if (images.empty()) {
+        return hdd_mounts;
+    }
+    if (!found.floppy.empty()) {
+        disk_control::mount("$C:\\" + found.floppy[0]);
+    }
+    if (!cds.empty()) {
+        disk_control::mount("$C:\\" + cds[0]);
+    }
+    // The CD is the one to swap, when there is one.
+    disk_control::set_images(std::move(images), 0);
+    retro::logInfo("Mounted the disk images in the ZIP: {} CD, {} floppy, {} hard disk.",
+        cds.size(), found.floppy.size(), found.hdd.size());
+    return hdd_mounts;
+}
+
+// The start menu, after DOSBox Pure's: when a ZIP leaves a choice of
+// programs, this lists every program on C: and on the images mounted from
+// it, and starts the one picked. It runs inside DOS, drawn with the console's
+// ANSI support, so it needs nothing from the frontend. The pick can be made
+// the one that starts on its own next time; it is kept in C:\DOSBOX.RUN,
+// which lands in the save file like any other change, and a key pressed
+// while it is about to start brings the menu back instead. After the program
+// exits, the menu comes back; leaving it goes to the command line.
+//
+// ZIPGO.BAT runs the loop: ZIPMENU.COM writes what to run to ZIPSEL.BAT, or
+// registers ZIPQUIT to leave, as an internal program cannot set ERRORLEVEL.
+static std::string zipsel_bat;
+static std::string zipquit_file;
+static const char zipgo_bat[] =
+    "@ECHO OFF\r\n"
+    ":MENU\r\n"
+    "Z:\\ZIPMENU.COM\r\n"
+    "IF EXIST Z:\\ZIPQUIT GOTO END\r\n"
+    "CALL Z:\\ZIPSEL.BAT\r\n"
+    "GOTO MENU\r\n"
+    ":END\r\n";
+static constexpr const char* auto_run_file = "C:\\DOSBOX.RUN";
+extern bool zipmenu_active;          // libretro_input.cpp
+unsigned libretro_joypad_state();    // libretro_input.cpp
+
+class ZIPMENU final : public Program {
+public:
+    void Run() override
+    {
+        struct Active {
+            Active() { zipmenu_active = true; }
+            ~Active() { zipmenu_active = false; }
+        } active;
+        std::vector<std::string> programs;
+        for (const char letter : {'C', 'D', 'E', 'A'}) {
+            if (!Drives[letter - 'A']) {
+                continue;
+            }
+            std::vector<std::string> found;
+            DriveFileIterator(Drives[letter - 'A'],
+                [](const char* path, bool is_dir, Bit32u, Bit16u, Bit16u, Bit8u, Bitu data) {
+                    const char* const dot = strrchr(path, '.');
+                    if (!is_dir && dot
+                        && (!strcasecmp(dot, ".EXE") || !strcasecmp(dot, ".COM")
+                            || !strcasecmp(dot, ".BAT"))) {
+                        reinterpret_cast<std::vector<std::string>*>(data)->emplace_back(path);
+                    }
+                },
+                reinterpret_cast<Bitu>(&found));
+            std::sort(found.begin(), found.end());
+            for (auto& path : found) {
+                programs.push_back(std::string(1, letter) + ":\\" + path);
+            }
+        }
+        set_quit(false);
+        if (programs.empty()) {
+            set_quit(true);
+            return;
+        }
+
+        std::string auto_run = read_auto_run();
+        int selected = 0;
+        for (size_t i = 0; i < programs.size(); ++i) {
+            if (!strcasecmp(programs[i].c_str(), auto_run.c_str())) {
+                selected = static_cast<int>(i);
+            }
+        }
+        if (!auto_run.empty() && strcasecmp(programs[selected].c_str(), auto_run.c_str())) {
+            auto_run.clear(); // the program it named is gone
+        }
+        if (!auto_run.empty() && !first_run_done) {
+            first_run_done = true;
+            WriteOut("\033[2J\033[1;1HStarting %s - press any key for the menu\n", auto_run.c_str());
+            const double until = PIC_FullIndex() + 1500.0;
+            bool key = false;
+            const unsigned pad_before = libretro_joypad_state();
+            while (PIC_FullIndex() < until) {
+                if (DOS_GetSTDINStatus()) {
+                    key = true;
+                    read_key();
+                    break;
+                }
+                if (libretro_joypad_state() & ~pad_before) {
+                    key = true;
+                    break;
+                }
+                CALLBACK_Idle();
+            }
+            if (!key) {
+                select(auto_run);
+                return;
+            }
+        }
+        first_run_done = true;
+
+        const int rows = 18;
+        int top = 0;
+        for (;;) {
+            if (selected < top) {
+                top = selected;
+            } else if (selected >= top + rows) {
+                top = selected - rows + 1;
+            }
+            WriteOut("\033[0m\033[2J\033[1;1H\033[1;36m Start menu\033[0m - choose the program to run\n\n");
+            const int count = static_cast<int>(programs.size());
+            for (int i = top; i < count && i < top + rows; ++i) {
+                const bool is_auto = !strcasecmp(programs[i].c_str(), auto_run.c_str());
+                WriteOut("%s  %-60s%s\033[0m\n", i == selected ? "\033[7m" : "", programs[i].c_str(),
+                    is_auto ? " [auto]" : "       ");
+            }
+            WriteOut("\033[23;1H\033[1;33m Enter\033[0m start  \033[1;33mA\033[0m always start this "
+                     "(again: stop)  \033[1;33mEsc\033[0m command line\n"
+                     "\033[1;33m Gamepad\033[0m: A/Start start, Y always start this, Select command line");
+            const int key = read_key();
+            if (key == 13) {
+                select(programs[selected]);
+                return;
+            }
+            if (key == 27) {
+                WriteOut("\033[0m\033[2J\033[1;1H");
+                set_quit(true);
+                return;
+            }
+            if (key == 'a' || key == 'A') {
+                if (!strcasecmp(programs[selected].c_str(), auto_run.c_str())) {
+                    auto_run.clear();
+                    DOS_UnlinkFile(auto_run_file);
+                    continue;
+                }
+                auto_run = programs[selected];
+                write_auto_run(auto_run);
+                select(auto_run);
+                return;
+            }
+            if (key == 0x148) {
+                selected = std::max(0, selected - 1);
+            } else if (key == 0x150) {
+                selected = std::min(count - 1, selected + 1);
+            } else if (key == 0x149) {
+                selected = std::max(0, selected - rows);
+            } else if (key == 0x151) {
+                selected = std::min(count - 1, selected + rows);
+            } else if (key == 0x147) {
+                selected = 0;
+            } else if (key == 0x14F) {
+                selected = count - 1;
+            }
+        }
+    }
+
+    static bool first_run_done;
+
+private:
+    // A key from the keyboard: its character, or 0x100 + its scan code for
+    // the keys that have none (arrows, page keys). A gamepad button pressed
+    // meanwhile answers as the key it stands for here.
+    static int read_key()
+    {
+        unsigned pad_prev = libretro_joypad_state();
+        for (;;) {
+            if (DOS_GetSTDINStatus()) {
+                Bit8u c = 0;
+                Bit16u n = 1;
+                DOS_ReadFile(STDIN, &c, &n);
+                if (c != 0) {
+                    return c;
+                }
+                n = 1;
+                DOS_ReadFile(STDIN, &c, &n);
+                return 0x100 + c;
+            }
+            const unsigned pad = libretro_joypad_state();
+            const unsigned pressed = pad & ~pad_prev;
+            pad_prev = pad;
+            auto is = [pressed](unsigned id) { return (pressed & (1u << id)) != 0; };
+            if (is(RETRO_DEVICE_ID_JOYPAD_UP)) return 0x148;
+            if (is(RETRO_DEVICE_ID_JOYPAD_DOWN)) return 0x150;
+            if (is(RETRO_DEVICE_ID_JOYPAD_LEFT) || is(RETRO_DEVICE_ID_JOYPAD_L)) return 0x149;
+            if (is(RETRO_DEVICE_ID_JOYPAD_RIGHT) || is(RETRO_DEVICE_ID_JOYPAD_R)) return 0x151;
+            if (is(RETRO_DEVICE_ID_JOYPAD_A) || is(RETRO_DEVICE_ID_JOYPAD_START)) return 13;
+            if (is(RETRO_DEVICE_ID_JOYPAD_Y)) return 'a';
+            if (is(RETRO_DEVICE_ID_JOYPAD_SELECT)) return 27;
+            CALLBACK_Idle();
+        }
+    }
+
+    // What ZIPSEL.BAT runs for a path like D:\GAME\GAME.EXE: change to its
+    // drive and directory, run it, and come back to C:\.
+    static void select(const std::string& path)
+    {
+        const auto sep = path.rfind('\\');
+        const std::string dir = path.substr(2, sep - 2);
+        zipsel_bat = "@ECHO OFF\r\n" + path.substr(0, 2) + "\r\nCD " + (dir.empty() ? "\\" : dir)
+            + "\r\n" + path.substr(sep + 1) + "\r\nC:\r\nCD \\\r\n";
+        VFILE_Remove("ZIPSEL.BAT");
+        VFILE_Register("ZIPSEL.BAT", reinterpret_cast<Bit8u*>(&zipsel_bat[0]),
+            static_cast<Bit32u>(zipsel_bat.size()));
+    }
+
+    static void set_quit(const bool quit)
+    {
+        VFILE_Remove("ZIPQUIT");
+        if (quit) {
+            zipquit_file = "\r\n";
+            VFILE_Register("ZIPQUIT", reinterpret_cast<Bit8u*>(&zipquit_file[0]), 2);
+        }
+    }
+
+    static std::string read_auto_run()
+    {
+        Bit16u handle;
+        if (!DOS_OpenFile(auto_run_file, OPEN_READ, &handle)) {
+            return std::string();
+        }
+        char buf[128];
+        Bit16u n = sizeof(buf) - 1;
+        DOS_ReadFile(handle, reinterpret_cast<Bit8u*>(buf), &n);
+        DOS_CloseFile(handle);
+        buf[n] = '\0';
+        std::string path(buf);
+        while (!path.empty() && (path.back() == '\r' || path.back() == '\n' || path.back() == ' ')) {
+            path.pop_back();
+        }
+        return path;
+    }
+
+    static void write_auto_run(const std::string& path)
+    {
+        Bit16u handle;
+        if (!DOS_CreateFile(auto_run_file, DOS_ATTR_ARCHIVE, &handle)) {
+            return;
+        }
+        std::string line = path + "\r\n";
+        Bit16u n = static_cast<Bit16u>(line.size());
+        DOS_WriteFile(handle, reinterpret_cast<Bit8u*>(&line[0]), &n);
+        DOS_CloseFile(handle);
+    }
+};
+
+bool ZIPMENU::first_run_done = false;
+
+// Looks the content up in the automatic gamepad mapping database, once the
+// ZIP and the images in it are mounted; retro_run applies what it finds.
+class AUTOMAP final : public Program {
+public:
+    void Run() override
+    {
+        if (retro::core_options[CORE_OPT_AUTO_MAPPING].toBool()) {
+            automap_detect(from_u8string(zip_content_path.stem().u8string()));
+        }
+    }
+};
+
+static void AUTOMAP_ProgramStart(Program** make)
+{
+    *make = new AUTOMAP;
+}
+
+static void ZIPMENU_ProgramStart(Program** make)
+{
+    *make = new ZIPMENU;
+}
+
+// Mounts the ZIP the core was started with as C:. Run from the autoexec, so
+// it happens after DOS is set up and before anything on C: is looked at.
+class MOUNTZIP final : public Program {
+public:
+    void Run() override
+    {
+        if (zip_content_path.empty()) {
+            return;
+        }
+        const auto zip_path = from_u8string(zip_content_path.u8string());
+        FILE* const zip_file = fopen_wrap(zip_path.c_str(), "rb");
+        if (!zip_file) {
+            WriteOut("Cannot open %s\n", zip_path.c_str());
+            return;
+        }
+        auto* const zip_drive = new zipDrive(new rawFile(zip_file, false));
+
+        // The game's changes go to <name>.save.zip in the saves directory.
+        const auto& save_dir = retro_save_directory;
+        const auto save_dir_str = from_u8string(save_dir.u8string());
+        if (host_is_vfs_path(save_dir_str.c_str())) {
+            host_mkdir(save_dir_str.c_str());
+        } else {
+            std::error_code ec;
+            std::filesystem::create_directories(save_dir, ec);
+        }
+        auto save_file = from_u8string(
+            (save_dir / zip_content_path.stem()).u8string()) + ".save.zip";
+
+        auto* const drive = new unionDrive(*zip_drive, &save_file[0], true);
+        if (Drives['C' - 'A']) {
+            delete Drives['C' - 'A'];
+        }
+        Drives['C' - 'A'] = drive;
+        mem_writeb(Real2Phys(dos.tables.mediaid) + ('C' - 'A') * 9, drive->GetMediaByte());
+        retro::logInfo("Mounted {} as C:, saving changes to {}.", zip_path, save_file);
+
+        std::string dir;
+        const auto program = find_program_to_run(drive, dir);
+        ziprun_bat = "@ECHO OFF\r\n";
+        ziprun_bat += mount_images(drive);
+        ziprun_bat += "Z:\\AUTOMAP.COM\r\n";
+        if (!dir.empty()) {
+            ziprun_bat += "CD " + dir + "\r\n";
+        }
+        if (program.empty()) {
+            // A choice to make, or programs only on the images: the menu,
+            // unless it is switched off.
+            if (retro::core_options[CORE_OPT_ZIP_START_MENU].toBool()) {
+                ziprun_bat += "Z:\\ZIPGO.BAT\r\n";
+            }
+        } else {
+            ziprun_bat += program + "\r\n";
+            retro::logInfo("Running {}{}{}, the only game program in the ZIP.", dir,
+                dir.empty() ? "" : "\\", program);
+        }
+        VFILE_Remove("ZIPRUN.BAT");
+        VFILE_Register("ZIPRUN.BAT", reinterpret_cast<Bit8u*>(&ziprun_bat[0]),
+            static_cast<Bit32u>(ziprun_bat.size()));
+    }
+};
+
+static void MOUNTZIP_ProgramStart(Program** make)
+{
+    *make = new MOUNTZIP;
+}
+
 static void start_dosbox(const std::string cmd_line)
 {
+    // ZIP content is not a path the shell can run: mount it and change to it.
+    const char* const zip_argv[] = {"dosbox", "-c", "MOUNTZIP", "-c", "C:", "-c", "Z:\\ZIPRUN.BAT"};
     const char* const argv[2] = {"dosbox", cmd_line.c_str()};
-    CommandLine com_line(cmd_line.empty() ? 1 : 2, argv);
+    CommandLine com_line = zip_content_path.empty()
+        ? CommandLine(cmd_line.empty() ? 1 : 2, argv)
+        : CommandLine(7, zip_argv);
     Config myconf(&com_line);
     control = &myconf;
     dosbox_initialiazed = false;
@@ -898,7 +1450,7 @@ static void start_dosbox(const std::string cmd_line)
     DOSBOX_Init();
 
     // Forcibly load default config if user says so.
-    if (const auto default_conf = retro_save_directory / "DOSBox-core.conf";
+    if (const auto default_conf = retro_save_directory / (retro_library_name + ".conf");
         retro::core_options[CORE_OPT_LOAD_DEFAULT_CONF].toBool() && config_path != default_conf)
     {
         control->ParseConfigFile(from_u8string(default_conf.u8string()).c_str());
@@ -911,6 +1463,14 @@ static void start_dosbox(const std::string cmd_line)
 
     check_variables();
     control->Init();
+    PROGRAMS_MakeFile("MOUNTZIP.COM", MOUNTZIP_ProgramStart);
+    PROGRAMS_MakeFile("ZIPMENU.COM", ZIPMENU_ProgramStart);
+    PROGRAMS_MakeFile("AUTOMAP.COM", AUTOMAP_ProgramStart);
+    automap_reset();
+    automap_checked = false;
+    VFILE_Register("ZIPGO.BAT", reinterpret_cast<Bit8u*>(const_cast<char*>(zipgo_bat)),
+        static_cast<Bit32u>(sizeof(zipgo_bat) - 1));
+    ZIPMENU::first_run_done = false;
 
     /* Init done, go back to the main thread */
     switchThread();
@@ -946,17 +1506,31 @@ auto retro_api_version() -> unsigned
     return RETRO_API_VERSION;
 }
 
+/* cross.cpp: the frontend VFS that host paths with a scheme go through */
+extern struct retro_vfs_interface* host_vfs;
+extern unsigned host_vfs_version;
+
 void retro_set_environment(const retro_environment_t cb)
 {
     /* Take the frontend's VFS when it offers one: CD images are opened through
-       it (see BinaryFile), so content only the frontend can open - Android SAF
-       content:// URIs - becomes loadable. */
+       it (see BinaryFile), and from version 3 on - which adds stat, mkdir and
+       directory listing - so are the files and directories of mounted drives
+       (see host_is_vfs_path in cross.cpp), so content only the frontend can
+       open, like Android SAF paths, becomes loadable. */
     {
         retro_vfs_interface_info vfs_iface_info;
-        vfs_iface_info.required_interface_version = 1;
+        vfs_iface_info.required_interface_version = 3;
         vfs_iface_info.iface = nullptr;
-        if (cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info)) {
+        if (cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info) && vfs_iface_info.iface) {
+            host_vfs = vfs_iface_info.iface;
+            host_vfs_version = vfs_iface_info.required_interface_version;
             filestream_vfs_init(&vfs_iface_info);
+        } else {
+            vfs_iface_info.required_interface_version = 1;
+            vfs_iface_info.iface = nullptr;
+            if (cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info)) {
+                filestream_vfs_init(&vfs_iface_info);
+            }
         }
     }
 
@@ -1017,9 +1591,9 @@ void retro_get_system_info(retro_system_info* const info)
 {
     info->library_name = retro_library_name.c_str();
     info->library_version = CORE_VERSION;
-    info->valid_extensions = "exe|com|bat|conf|cue|iso|img";
+    info->valid_extensions = "exe|com|bat|conf|cue|iso|img|zip";
     info->need_fullpath = true;
-    info->block_extract = false;
+    info->block_extract = true; // ZIP content is mounted as a drive, not extracted
 }
 
 void retro_get_system_av_info(retro_system_av_info* const info)
@@ -1209,12 +1783,16 @@ auto retro_load_game(const retro_game_info* const game) -> bool
         if (extension == ".iso" || extension == ".cue") {
             disk_load_image = std::move(load_path);
             load_path.clear();
+        } else if (extension == ".zip") {
+            zip_content_path = std::move(load_path);
+            load_path.clear();
         }
     }
 
     if (game_path.has_parent_path()) {
         load_game_directory = game_path.parent_path();
     }
+    content_year = year_from_path(from_u8string(game_path.u8string()));
 
     emu_thread = std::thread(start_dosbox, from_u8string(load_path.u8string()));
     // Run dosbox until it sets its initial video mode.
@@ -1272,11 +1850,32 @@ void retro_run()
     }
 
     /* Once C is mounted, mount the overlay */
-    if (Drives['C' - 'A'] && mount_overlay) {
+    if (Drives['C' - 'A'] && mount_overlay && zip_content_path.empty()) {
         auto overlay_directory =
             retro_save_directory / retro_library_name / game_path.parent_path().filename();
         mount_overlay_filesystem('C', std::move(overlay_directory));
         mount_overlay = false;
+    }
+
+    // Content from a directory - a program, or a .conf that mounts C: - gets
+    // the automatic gamepad mapping too, once C: is there. A directory on the
+    // host can be large, so the look stops after 500 directories, as in
+    // DOSBox Pure. ZIP content is looked up by AUTOMAP.COM instead, once its
+    // images are mounted.
+    if (!automap_checked && Drives['C' - 'A'] && zip_content_path.empty() && !mount_overlay) {
+        automap_checked = true;
+        if (retro::core_options[CORE_OPT_AUTO_MAPPING].toBool()) {
+            automap_detect(from_u8string(game_path.stem().u8string()), 500);
+        }
+    }
+
+    if (automap_take_pending()) {
+        if (!content_year && automap_year() > 1970) {
+            content_year = automap_year();
+            check_cpu_cycle_variables();
+        }
+        libretro_input_init();
+        retro::showOsdInfo(fmt::format("Gamepad mapped for {}", automap_title()), RETRO_MESSAGE_TYPE_NOTIFICATION);
     }
 
     handle_libretro_input(enable_mouse_speed_clamp);

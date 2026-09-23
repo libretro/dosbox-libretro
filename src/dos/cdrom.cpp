@@ -28,6 +28,7 @@
 #include "dosbox.h"
 #include "SDL.h"
 #include "support.h"
+#include "cross.h"
 #include "cdrom.h"
 
 #ifndef WITH_FAKE_SDL
@@ -174,7 +175,7 @@ int CDROM_GetMountType(char* path, int forceCD) {
 	
 	// Detect ISO
 	struct stat file_stat;
-	if ((stat(path, &file_stat) == 0) && (file_stat.st_mode & S_IFREG)) return 1; 
+	if ((host_stat(path, &file_stat) == 0) && (file_stat.st_mode & S_IFREG)) return 1; 
 	return 2;
 }
 
