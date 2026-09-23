@@ -1,0 +1,333 @@
+DEBUG := 0
+# Use C++20 for building. This is useful during development. For example it allows for compile-time
+# checks of fmtlib format arguments.
+WITH_CPP20 ?= 0
+# Build with 3dfx Voodoo emulation support
+WITH_VOODOO ?= 1
+# Link statically against libgcc_s and libstdc++.
+STATIC_LIBCXX ?= 0
+# Build and link our own bundled ogg, flac, etc. statically.
+BUNDLED_AUDIO_CODECS ?= 1
+# Build and link our own libsndfile statically.
+BUNDLED_LIBSNDFILE ?= 1
+# Build and link our own sdl and sdl_net statically.
+BUNDLED_SDL ?= 0
+# Build with BASSMIDI support
+WITH_BASSMIDI ?= 1
+# Build with fluidsynth support
+WITH_FLUIDSYNTH ?= 1
+# Build with pinhack patch
+WITH_PINHACK ?= 1
+# Extra command-line flags to pass to pkg-config.
+PKG_CONFIG_FLAGS ?=
+# Link statically against some system-installed libraries (audio codecs and libsndfile.)
+STATIC_PACKAGES ?= 0
+# CMake generator.
+CMAKE_GENERATOR ?= Ninja
+# CMake 4 removed compatibility with cmake_minimum_required() values below 3.5, which several
+# bundled dependencies still declare. This is passed through the environment rather than as a -D
+# flag so that nested configure runs (fluidsynth spawns one for its gentables ExternalProject)
+# inherit it as well. CMake releases older than 3.31.6 ignore it.
+CMAKE_POLICY_VERSION_MINIMUM ?= 3.5
+# Meson executable.
+MESON ?= meson
+# Ninja executable.
+NINJA ?= ninja
+
+GIT_VERSION := "$(shell git rev-parse --short HEAD)"
+SVN_VERSION := "$(shell cat svn)"
+
+UNAME=$(shell uname -s)
+UNAMEM=$(shell uname -m)
+NUMPROC?=$(shell nproc)
+ifeq ($(NUMPROC),)
+	NUMPROC=2
+endif
+
+ifeq ($(WITH_CPP20), 1)
+	CXXFLAGS += -std=gnu++20
+	EXTRA_CMAKE_FLAGS := -DCMAKE_CXX_STANDARD=20
+else
+	CXXFLAGS += -std=gnu++17
+	EXTRA_CMAKE_FLAGS := -DCMAKE_CXX_STANDARD=17
+endif
+CXXFLAGS += -Wno-register -DFMT_HEADER_ONLY
+COMMONFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\" -DSVN_VERSION=\"$(SVN_VERSION)\"
+
+# Target triplet for cross compilation. When cross compiling from Linux to
+# Windows 32-bit using MXE for example, you'd set this to something like:
+#
+#     $ make TARGET_TRIPLET=i686-w64-mingw32.static [...]
+#
+# Or whatever your wanted target is.
+ifdef TARGET_TRIPLET
+	cross_prefix = $(TARGET_TRIPLET)-
+endif
+AR:=$(cross_prefix)$(AR)
+AS:=$(cross_prefix)$(AS)
+CC:=$(cross_prefix)$(CC)
+CXX:=$(cross_prefix)$(CXX)
+LD:=$(cross_prefix)$(LD)
+CMAKE=cmake
+PKGCONFIG=pkg-config
+
+platform ?= unix
+ifneq ($(findstring MINGW,$(UNAME)),)
+	platform = win
+else ifneq ($(findstring Darwin,$(UNAME)),)
+	platform = osx
+else ifneq ($(findstring win,$(UNAME)),)
+	platform = win
+endif
+
+LIBRETRO_DIR := libretro
+TARGET_NAME := dosbox_core
+WITH_DYNAREC ?=
+
+# try to guess the dynarec based on the host system, unreliable
+ifeq ($(platform),win)
+	ifneq ($(findstring MINGW32,$(UNAME)),)
+		WITH_DYNAREC := x86
+	else ifneq ($(findstring MINGW64,$(UNAME)),)
+		WITH_DYNAREC := x86_64
+	endif
+else ifeq ($(platform),unix)
+	ifneq ($(findstring x86_64,$(UNAMEM)),)
+		WITH_DYNAREC := x86_64
+	else ifneq ($(findstring amd64,$(UNAMEM)),)
+		WITH_DYNAREC := x86_64
+	else ifneq ($(findstring 86,$(UNAMEM)),)
+		WITH_DYNAREC := x86
+	else ifneq ($(findstring aarch64,$(UNAMEM)),)
+		WITH_DYNAREC := arm64
+		COMMONFLAGS += -DPAGESIZE=$(shell getconf PAGESIZE)
+	else ifneq ($(findstring arm64,$(UNAMEM)),)
+		WITH_DYNAREC := arm64
+	else ifneq ($(findstring arm,$(UNAMEM)),)
+		WITH_DYNAREC := arm
+	endif
+else ifeq ($(platform),osx)
+	ifeq ($(target), x86)
+		WITH_DYNAREC := x86
+	else ifeq ($(target),x86_64)
+		WITH_DYNAREC := x86_64
+	endif
+endif
+
+# enable IPX
+ifeq ($(platform),win)
+	WITH_IPX := 1
+else ifeq ($(platform),unix)
+	WITH_IPX := 1
+else ifeq ($(platform),osx)
+	WITH_IPX := 1
+endif
+
+# arm
+ifeq ($(CORTEX_A7), 1)
+	COMMONFLAGS += -marm -mcpu=cortex-a7
+	WITH_DYNAREC = arm
+	ifeq ($(ARM_NEON), 1)
+		COMMONFLAGS += -mfpu=neon-vfpv4
+	endif
+endif
+ifeq ($(ARM_HARDFLOAT), 1)
+	COMMONFLAGS += -mfloat-abi=hard
+endif
+
+# flags
+ifeq ($(platform), osx)
+	COMMONFLAGS += -DC_HAVE_MPROTECT
+	TARGET := $(TARGET_NAME)_libretro.dylib
+	LDFLAGS += -dynamiclib `$(PKGCONFIG) $(PKG_CONFIG_FLAGS) --libs SDL_net`
+	fpic = -fPIC
+	ifeq ($(arch),ppc)
+		COMMONFLAGS += -D__ppc__
+	endif
+	ifndef ($(UNIVERSAL))
+		CFLAGS += $(ARCHFLAGS)
+		CXXFLAGS += $(ARCHFLAGS)
+		LDFLAGS += $(ARCHFLAGS)
+	endif
+	COMMONFLAGS += -D__MACOSX__
+else ifeq ($(platform), win)
+	COMMONFLAGS += -mno-ms-bitfields
+	TARGET := $(TARGET_NAME)_libretro.dll
+	LDFLAGS += -shared -Wl,--version-script=link.T -lwinmm
+	ifeq ($(WITH_FAKE_SDL), 1)
+		LDFLAGS += -Wl,-Bstatic
+	else
+		LDFLAGS += -Wl,-Bstatic `$(PKGCONFIG) --libs sdl` -lSDL_net
+		LDFLAGS += -Wl,-Bdynamic -liphlpapi -lws2_32 -lopengl32
+	endif
+	COMMONFLAGS += -DWIN32 -D__USE_W32_SOCKETS -Werror=return-type
+else
+	ifeq ($(UNAME),Linux)
+		# $(UNAME) is the machine doing the building, so a cross build lands
+		# here as well and then asks pkg-config for an alsa that is not in the
+		# dependency prefix - a link full of undefined snd_seq_*. Let the
+		# caller say no.
+		WITH_ALSA_MIDI ?= 1
+		ifeq ($(WITH_ALSA_MIDI),1)
+			COMMONFLAGS += -DHAVE_ALSA
+			LDFLAGS += `$(PKGCONFIG) --libs alsa`
+		endif
+	endif
+	COMMONFLAGS += -DC_HAVE_MPROTECT
+	TARGET := $(TARGET_NAME)_libretro.so
+	LDFLAGS += -shared -Wl,--version-script=link.T
+	ifeq ($(WITH_FAKE_SDL), 1)
+		LDFLAGS += -Wl,-Bstatic
+	else
+		LDFLAGS += `$(PKGCONFIG) --libs SDL_net`
+	endif
+	LDFLAGS += -Wl,-Bdynamic
+	fpic = -fPIC
+endif
+ifeq ($(DEBUG), 1)
+	COMMONFLAGS += -O0 -g
+	CMAKE_BUILD_TYPE = Debug
+	MESON_BUILD_TYPE = debug
+	AUTOCONF_DEBUG_FLAG = yes
+else
+	COMMONFLAGS += -O3 -DNDEBUG
+	CMAKE_BUILD_TYPE = Release
+	MESON_BUILD_TYPE = release
+	AUTOCONF_DEBUG_FLAG = no
+endif
+
+ifeq ($(WITH_FAKE_SDL), 1)
+	COMMONFLAGS += -DWITH_FAKE_SDL -Isrc/fakesdl/SDL
+else
+	WITH_SDL_SOUND_WRAPPER ?= 1
+	COMMONFLAGS += `$(PKGCONFIG) --cflags sdl`
+	ifeq ($(WITH_IPX), 1)
+		COMMONFLAGS += -DC_IPX
+	endif
+endif
+
+ifeq ($(WITH_VOODOO), 1)
+	COMMONFLAGS += -DWITH_VOODOO
+endif
+
+CORE_DIR := ..
+INCFLAGS :=
+SOURCES_C :=
+SOURCES_CXX :=
+
+DEPS_BIN_DIR = $(CURDIR)/deps_bin
+ifeq ($(BUNDLED_SDL), 1)
+	include deps/sdl.makefile
+	include deps/sdl_net.makefile
+endif
+ifeq ($(WITH_FLUIDSYNTH), 1)
+	ifeq ($(BUNDLED_AUDIO_CODECS), 1)
+		include deps/ogg.makefile
+		include deps/vorbis.makefile
+		include deps/opus.makefile
+		include deps/flac.makefile
+	endif
+	ifeq ($(BUNDLED_LIBSNDFILE), 1)
+		include deps/libsndfile.makefile
+	endif
+	include deps/fluidsynth.makefile
+endif
+include deps/munt.makefile
+ifeq ($(WITH_SDL_SOUND_WRAPPER), 1)
+	ifeq ($(BUNDLED_AUDIO_CODECS), 1)
+		include deps/mpg123.makefile
+		include deps/ogg.makefile
+		include deps/opus.makefile
+		include deps/opusfile.makefile
+		include deps/vorbis.makefile
+	else
+		EXTRA_PACKAGES += libmpg123 opusfile vorbisfile
+	endif
+	COMMONFLAGS += \
+		-DC_SDL_SOUND \
+		`$(PKGCONFIG) --cflags libmpg123 opusfile vorbisfile`
+endif
+export PKG_CONFIG_PATH := $(DEPS_BIN_DIR)/lib/pkgconfig:$(PKG_CONFIG_PATH)
+export PATH := $(DEPS_BIN_DIR)/bin:$(PATH)
+# When cross compiling with MXE, we need PKG_CONFIG_PATH_<TARGET_TRIPLET> but with all dashes and
+# dots converted to underscores.
+ifdef TARGET_TRIPLET
+	export PKG_CONFIG_PATH_$(subst .,_,$(subst -,_,$(TARGET_TRIPLET))) = $(PKG_CONFIG_PATH)
+endif
+
+include Makefile.common
+
+OBJECTS = $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o)
+OBJECT_DEPS = $(OBJECTS:.o=.d)
+INCFLAGS += -Ideps/fmt/include
+ifeq ($(WITH_BASSMIDI), 1)
+	COMMONFLAGS += -DWITH_BASSMIDI
+	LDFLAGS += -ldl
+endif
+ifeq ($(WITH_PINHACK), 1)
+	COMMONFLAGS += -DWITH_PINHACK
+endif
+CXXFLAGS += -D__LIBRETRO__ -MMD $(fpic) $(INCFLAGS) $(COMMONFLAGS)
+CFLAGS += -D__LIBRETRO__ -MMD $(fpic) $(INCFLAGS) $(COMMONFLAGS)
+LDFLAGS += -lm $(fpic)
+ifeq ($(STATIC_PACKAGES), 1)
+	LDFLAGS += -Wl,-Bstatic
+	PKG_CONFIG_FLAGS += --static
+endif
+ifeq ($(BUNDLED_AUDIO_CODECS), 1)
+	LDFLAGS += \
+		$(DEPS_BIN_DIR)/lib/libFLAC.a \
+		$(DEPS_BIN_DIR)/lib/libmpg123.a \
+		$(DEPS_BIN_DIR)/lib/libopusfile.a \
+		$(DEPS_BIN_DIR)/lib/libopus.a \
+		$(DEPS_BIN_DIR)/lib/libvorbisfile.a \
+		$(DEPS_BIN_DIR)/lib/libvorbis.a \
+		$(DEPS_BIN_DIR)/lib/libogg.a
+
+		ifeq ($(platform), win)
+			LDFLAGS += -lshlwapi
+		endif
+endif
+
+ifdef EXTRA_PACKAGES
+	LDFLAGS += `$(PKGCONFIG) $(PKG_CONFIG_FLAGS) --libs $(EXTRA_PACKAGES)`
+	INCFLAGS += `$(PKGCONFIG) $(PKG_CONFIG_FLAGS) --cflags-only-I $(EXTRA_PACKAGES)`
+endif
+export CMAKE_GENERATOR
+export CMAKE_POLICY_VERSION_MINIMUM
+
+# We append these flags here so they appear after all other flags, otherwise they might not work
+# correctly.
+ifeq ($(STATIC_LIBCXX), 1)
+	LDFLAGS += -static-libgcc -static-libstdc++
+endif
+
+.PHONY: all
+all: $(TARGET)
+
+.PHONY: deps
+deps:
+
+$(OBJECTS): $(FLUIDSYNTH) $(MUNT) $(SDLNET)
+
+$(TARGET): $(OBJECTS)
+ifeq ($(STATIC_LINKING), 1)
+	$(AR) rcs $@ $(OBJECTS)
+else
+	$(CXX) -o $@ $(OBJECTS) $(LDFLAGS)
+endif
+
+-include $(OBJECT_DEPS)
+
+.PHONY: targetclean
+targetclean:
+	rm -f $(OBJECTS) $(OBJECT_DEPS) $(TARGET)
+
+.PHONY: depsclean
+depsclean:
+	rm -rf "$(DEPS_BIN_DIR)"
+
+.PHONY: clean
+clean: depsclean targetclean
+
+.DEFAULT_GOAL := all

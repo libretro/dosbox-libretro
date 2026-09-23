@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -27,12 +27,13 @@
 #include <sstream>
 #include <vector>
 #include <sys/stat.h>
+#include <streams/file_stream.h>
 #include "cdrom.h"
 #include "drives.h"
 #include "support.h"
 #include "setup.h"
 
-#if !defined(WIN32) && !defined(__PS3__)
+#if !defined(WIN32)
 #include <libgen.h>
 #else
 #include <string.h>
@@ -45,28 +46,32 @@ using namespace std;
 
 CDROM_Interface_Image::BinaryFile::BinaryFile(const char *filename, bool &error)
 {
-	file = new ifstream(filename, ios::in | ios::binary);
-	error = (file == NULL) || (file->fail());
+	file = filestream_open(filename, RETRO_VFS_FILE_ACCESS_READ,
+	                       RETRO_VFS_FILE_ACCESS_HINT_NONE);
+	error = (file == NULL);
 }
 
 CDROM_Interface_Image::BinaryFile::~BinaryFile()
 {
-	delete file;
+	if (file) filestream_close(file);
+	file = NULL;
 }
 
 bool CDROM_Interface_Image::BinaryFile::read(Bit8u *buffer, int seek, int count)
 {
-	file->seekg(seek, ios::beg);
-	file->read((char*)buffer, count);
-	return !(file->fail());
+	if (!file) return false;
+	if (filestream_seek(file, seek, RETRO_VFS_SEEK_POSITION_START) < 0)
+		return false;
+	return filestream_read(file, buffer, count) == (int64_t)count;
 }
 
 int CDROM_Interface_Image::BinaryFile::getLength()
 {
-	file->seekg(0, ios::end);
-	int length = (int)file->tellg();
-	if (file->fail()) return -1;
-	return length;
+	int64_t length;
+	if (!file) return -1;
+	length = filestream_get_size(file);
+	if (length < 0) return -1;
+	return (int)length;
 }
 
 #if defined(C_SDL_SOUND)
@@ -108,6 +113,9 @@ bool CDROM_Interface_Image::AudioFile::read(Bit8u *buffer, int seek, int count)
 
 int CDROM_Interface_Image::AudioFile::getLength()
 {
+#ifdef __LIBRETRO__
+	return lround(Sound_Duration(sample) * 176.4f);
+#else
 	int time = 1;
 	int shift = 0;
 	if (!(sample->flags & SOUND_SAMPLEFLAG_CANSEEK)) return -1;
@@ -123,17 +131,19 @@ int CDROM_Interface_Image::AudioFile::getLength()
 			time = time << 1;
 		}
 	}
+#endif
 }
 #endif
 
 // initialize static members
 int CDROM_Interface_Image::refCount = 0;
-CDROM_Interface_Image* CDROM_Interface_Image::images[26];
+CDROM_Interface_Image* CDROM_Interface_Image::images[26] = {};
 CDROM_Interface_Image::imagePlayer CDROM_Interface_Image::player = {
-	NULL, NULL, NULL, {0}, 0, 0, 0, false, false, false, {0} };
+	NULL, NULL, NULL, {0}, 0, 0, 0, false, false, false, { {0,0,0,0},{0,0,0,0} } };
 
 	
 CDROM_Interface_Image::CDROM_Interface_Image(Bit8u subUnit)
+                      :subUnit(subUnit)
 {
 	images[subUnit] = this;
 	if (refCount == 0) {
@@ -161,14 +171,14 @@ void CDROM_Interface_Image::InitNewMedia()
 {
 }
 
-bool CDROM_Interface_Image::SetDevice(char* path, int forceCD)
+bool CDROM_Interface_Image::SetDevice(char* path, int /*forceCD*/)
 {
 	if (LoadCueSheet(path)) return true;
 	if (LoadIsoFile(path)) return true;
 	
 	// print error message on dosbox console
 	char buf[MAX_LINE_LENGTH];
-	snprintf(buf, MAX_LINE_LENGTH, "Could not load image file: %s\n", path);
+	snprintf(buf, MAX_LINE_LENGTH, "Could not load image file: %s\r\n", path);
 	Bit16u size = (Bit16u)strlen(buf);
 	DOS_WriteFile(STDOUT, (Bit8u*)buf, &size);
 	return false;
@@ -205,7 +215,7 @@ bool CDROM_Interface_Image::GetAudioSub(unsigned char& attr, unsigned char& trac
 	attr = tracks[track - 1].attr;
 	index = 1;
 	FRAMES_TO_MSF(player.currFrame + 150, &absPos.min, &absPos.sec, &absPos.fr);
-	FRAMES_TO_MSF(player.currFrame - tracks[track - 1].start + 150, &relPos.min, &relPos.sec, &relPos.fr);
+	FRAMES_TO_MSF(player.currFrame - tracks[track - 1].start, &relPos.min, &relPos.sec, &relPos.fr);
 	return true;
 }
 
@@ -229,6 +239,7 @@ bool CDROM_Interface_Image::PlayAudioSector(unsigned long start,unsigned long le
 	// We might want to do some more checks. E.g valid start and length
 	SDL_mutexP(player.mutex);
 	player.cd = this;
+	player.bufLen = 0;
 	player.currFrame = start;
 	player.targetFrame = start + len;
 	int track = GetTrack(start) - 1;
@@ -281,7 +292,7 @@ bool CDROM_Interface_Image::ReadSectors(PhysPt buffer, bool raw, unsigned long s
 	return success;
 }
 
-bool CDROM_Interface_Image::LoadUnloadMedia(bool unload)
+bool CDROM_Interface_Image::LoadUnloadMedia(bool /*unload*/)
 {
 	return true;
 }
@@ -339,7 +350,6 @@ void CDROM_Interface_Image::CDAudioCallBack(Bitu len)
 			player.isPlaying = false;
 		}
 	}
-	SDL_mutexV(player.mutex);
 	if (player.ctrlUsed) {
 		Bit16s sample0,sample1;
 		Bit16s * samples=(Bit16s *)&player.buffer;
@@ -363,6 +373,7 @@ void CDROM_Interface_Image::CDAudioCallBack(Bitu len)
 #endif
 	memmove(player.buffer, &player.buffer[len], player.bufLen - len);
 	player.bufLen -= len;
+	SDL_mutexV(player.mutex);
 }
 
 bool CDROM_Interface_Image::LoadIsoFile(char* filename)
@@ -375,6 +386,7 @@ bool CDROM_Interface_Image::LoadIsoFile(char* filename)
 	track.file = new BinaryFile(filename, error);
 	if (error) {
 		delete track.file;
+		track.file = NULL;
 		return false;
 	}
 	track.number = 1;
@@ -421,8 +433,8 @@ bool CDROM_Interface_Image::CanReadPVD(TrackFile *file, int sectorSize, bool mod
 			(pvd[8] == 1 && !strncmp((char*)(&pvd[9]), "CDROM", 5) && pvd[14] == 1));
 }
 
-#if defined(WIN32) || (defined(__LIBRETRO__) && (defined(GEKKO) || defined(VITA) || defined(_3DS) || defined(__SWITCH__) || defined(__PS3__))) // __LIBRETRO__: No dirname on wii
-static string FAKEdirname(char * file) {
+#if defined(WIN32)
+static string dirname(char * file) {
 	char * sep = strrchr(file, '\\');
 	if (sep == NULL)
 		sep = strrchr(file, '/');
@@ -435,7 +447,6 @@ static string FAKEdirname(char * file) {
 		return tmp;
 	}
 }
-#define dirname FAKEdirname
 #endif
 
 bool CDROM_Interface_Image::LoadCueSheet(char *cuefile)
@@ -529,6 +540,11 @@ bool CDROM_Interface_Image::LoadCueSheet(char *cuefile)
 				track.file = new BinaryFile(filename.c_str(), error);
 			}
 #if defined(C_SDL_SOUND)
+	#ifdef __LIBRETRO__
+			else {
+				track.file = new AudioFile(filename.c_str(), error);
+			}
+	#else
 			//The next if has been surpassed by the else, but leaving it in as not 
 			//to break existing cue sheets that depend on this.(mine with OGG tracks specifying MP3 as type)
 			else if (type == "WAVE" || type == "AIFF" || type == "MP3") {
@@ -542,9 +558,11 @@ bool CDROM_Interface_Image::LoadCueSheet(char *cuefile)
 					}
 				}
 			}
+	#endif
 #endif
 			if (error) {
 				delete track.file;
+				track.file = NULL;
 				success = false;
 			}
 		}

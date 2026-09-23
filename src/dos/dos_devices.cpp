@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -36,33 +36,33 @@ DOS_Device * Devices[DOS_DEVICES];
 class device_NUL : public DOS_Device {
 public:
 	device_NUL() { SetName("NUL"); };
-	virtual bool Read(Bit8u * data,Bit16u * size) {
-      *size = 0; //Return success and no data read.
+	virtual bool Read(Bit8u * /*data*/,Bit16u * size) {
+		*size = 0; //Return success and no data read. 
 		LOG(LOG_IOCTL,LOG_NORMAL)("%s:READ",GetName());
 		return true;
 	}
-	virtual bool Write(Bit8u * data,Bit16u * size) {
+	virtual bool Write(Bit8u * /*data*/,Bit16u * /*size*/) {
 		LOG(LOG_IOCTL,LOG_NORMAL)("%s:WRITE",GetName());
 		return true;
 	}
-	virtual bool Seek(Bit32u * pos,Bit32u type) {
+	virtual bool Seek(Bit32u * /*pos*/,Bit32u /*type*/) {
 		LOG(LOG_IOCTL,LOG_NORMAL)("%s:SEEK",GetName());
 		return true;
 	}
 	virtual bool Close() { return true; }
 	virtual Bit16u GetInformation(void) { return 0x8084; }
-	virtual bool ReadFromControlChannel(PhysPt bufptr,Bit16u size,Bit16u * retcode){return false;}
-	virtual bool WriteToControlChannel(PhysPt bufptr,Bit16u size,Bit16u * retcode){return false;}
+	virtual bool ReadFromControlChannel(PhysPt /*bufptr*/,Bit16u /*size*/,Bit16u * /*retcode*/){return false;}
+	virtual bool WriteToControlChannel(PhysPt /*bufptr*/,Bit16u /*size*/,Bit16u * /*retcode*/){return false;}
 };
 
 class device_LPT1 : public device_NUL {
 public:
    	device_LPT1() { SetName("LPT1");}
 	Bit16u GetInformation(void) { return 0x80A0; }
-   bool Read(Bit8u* data,Bit16u * size){
-      DOS_SetError(DOSERR_ACCESS_DENIED);
-      return false;
-   }
+	bool Read(Bit8u* /*data*/,Bit16u * /*size*/){
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}	
 };
 
 bool DOS_Device::Read(Bit8u * data,Bit16u * size) {
@@ -134,7 +134,7 @@ Bit8u DOS_FindDevice(char const * name) {
 	if(name_part) {
 		*name_part++ = 0;
 		//Check validity of leading directory.
-		if(!Drives[drive]->TestDir(fullname)) return DOS_DEVICES;
+//		if(!Drives[drive]->TestDir(fullname)) return DOS_DEVICES; //can be invalid
 	} else name_part = fullname;
    
 	char* dot = strrchr(name_part,'.');

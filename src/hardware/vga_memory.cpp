@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -264,7 +264,6 @@ public:
 
 class VGA_UnchainedEGA_Handler : public VGA_UnchainedRead_Handler {
 public:
-	template< bool wrapping>
 	void writeHandler(PhysPt start, Bit8u val) {
 		Bit32u data=ModeOperation(val);
 		/* Update video memory and the pixel buffer */
@@ -300,25 +299,25 @@ public:
 		addr += vga.svga.bank_write_full;
 		addr = CHECKED2(addr);
 		MEM_CHANGED( addr << 3);
-		writeHandler<true>(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
 	}
 	void writew(PhysPt addr,Bitu val) {
 		addr = PAGING_GetPhysicalAddress(addr) & vgapages.mask;
 		addr += vga.svga.bank_write_full;
 		addr = CHECKED2(addr);
 		MEM_CHANGED( addr << 3);
-		writeHandler<true>(addr+0,(Bit8u)(val >> 0));
-		writeHandler<true>(addr+1,(Bit8u)(val >> 8));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+1,(Bit8u)(val >> 8));
 	}
 	void writed(PhysPt addr,Bitu val) {
 		addr = PAGING_GetPhysicalAddress(addr) & vgapages.mask;
 		addr += vga.svga.bank_write_full;
 		addr = CHECKED2(addr);
 		MEM_CHANGED( addr << 3);
-		writeHandler<true>(addr+0,(Bit8u)(val >> 0));
-		writeHandler<true>(addr+1,(Bit8u)(val >> 8));
-		writeHandler<true>(addr+2,(Bit8u)(val >> 16));
-		writeHandler<true>(addr+3,(Bit8u)(val >> 24));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+1,(Bit8u)(val >> 8));
+		writeHandler(addr+2,(Bit8u)(val >> 16));
+		writeHandler(addr+3,(Bit8u)(val >> 24));
 	}
 };
 
@@ -562,23 +561,23 @@ public:
 		addr = vga.svga.bank_write_full + (PAGING_GetPhysicalAddress(addr) & 0xffff);
 		addr = CHECKED4(addr);
 		MEM_CHANGED( addr << 3 );
-		writeHandler<false>(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
 	}
 	void writew(PhysPt addr,Bitu val) {
 		addr = vga.svga.bank_write_full + (PAGING_GetPhysicalAddress(addr) & 0xffff);
 		addr = CHECKED4(addr);
 		MEM_CHANGED( addr << 3 );
-		writeHandler<false>(addr+0,(Bit8u)(val >> 0));
-		writeHandler<false>(addr+1,(Bit8u)(val >> 8));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+1,(Bit8u)(val >> 8));
 	}
 	void writed(PhysPt addr,Bitu val) {
 		addr = vga.svga.bank_write_full + (PAGING_GetPhysicalAddress(addr) & 0xffff);
 		addr = CHECKED4(addr);
 		MEM_CHANGED( addr << 3 );
-		writeHandler<false>(addr+0,(Bit8u)(val >> 0));
-		writeHandler<false>(addr+1,(Bit8u)(val >> 8));
-		writeHandler<false>(addr+2,(Bit8u)(val >> 16));
-		writeHandler<false>(addr+3,(Bit8u)(val >> 24));
+		writeHandler(addr+0,(Bit8u)(val >> 0));
+		writeHandler(addr+1,(Bit8u)(val >> 8));
+		writeHandler(addr+2,(Bit8u)(val >> 16));
+		writeHandler(addr+3,(Bit8u)(val >> 24));
 	}
 	Bitu readb(PhysPt addr) {
 		addr = vga.svga.bank_read_full + (PAGING_GetPhysicalAddress(addr) & 0xffff);
@@ -735,7 +734,7 @@ public:
 	VGA_HERC_Handler() {
 		flags=PFLAG_READABLE|PFLAG_WRITEABLE;
 	}
-	HostPt GetHostReadPt(Bitu phys_page) {
+	HostPt GetHostReadPt(Bitu /*phys_page*/) {
 		// The 4kB map area is repeated in the 32kB range
 		return &vga.mem.linear[0];
 	}

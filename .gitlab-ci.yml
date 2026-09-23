@@ -1,3 +1,4 @@
+  
 # DESCRIPTION: GitLab CI/CD for libRetro (NOT FOR GitLab-proper)
 
 ##############################################################################
@@ -7,36 +8,41 @@
 # Core definitions
 .core-defs:
   variables:
-    # Not JNI_PATH: the android-jni template appends /jni to it itself, so
-    # naming the directory here made it look for jni/jni and stop before it
-    # compiled anything. The default, ".", is what this repository wants.
+    GIT_SUBMODULE_STRATEGY: recursive
+    JNI_PATH: libretro
+    CORENAME: dosbox_core
+    MAKEFILE_PATH: libretro
     MAKEFILE: Makefile.libretro
-    CORENAME: dosbox
 
 # Inclusion templates, required for the build to work
 include:
   ################################## DESKTOPS ################################
+  # Windows 64-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/windows-x64-mingw.yml'
+    
+  # Windows 32-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/windows-i686-mingw.yml'
+
   # Linux 64-bit
   - project: 'libretro-infrastructure/ci-templates'
     file: '/linux-x64.yml'
-
-  # Linux 32-bit
-  - project: 'libretro-infrastructure/ci-templates'
-    file: '/linux-i686.yml'
 
   # Linux ARM 64-bit
   - project: 'libretro-infrastructure/ci-templates'
     file: '/linux-aarch64.yml'
 
-  # Windows 64-bit
+  # Linux 32-bit
   - project: 'libretro-infrastructure/ci-templates'
-    file: '/windows-x64-mingw.yml'
+    file: '/linux-i686.yml'
 
-  # MacOS ARM 64-bit
+  # MacOS 64-bit
   - project: 'libretro-infrastructure/ci-templates'
-    file: '/osx-arm64.yml'
+    file: '/osx-x64.yml'
 
-  # webOS
+  #################################### MISC ##################################
+  # webOS 32-bit (LGTV)
   - project: 'libretro-infrastructure/ci-templates'
     file: '/webos-make.yml'
 
@@ -49,84 +55,347 @@ include:
 stages:
   - build-prepare
   - build-shared
-  - build-static
 
 ##############################################################################
 #################################### STAGES ##################################
 ##############################################################################
 #
 ################################### DESKTOPS #################################
+# Windows 64-bit
+libretro-build-windows-x64:
+  extends:
+    - .libretro-windows-x64-mingw-make-default
+    - .core-defs
+  variables:
+    STRIP_CORE_LIB: 0
+    AR: ar
+    AS: as
+    CC: gcc
+    CXX: g++
+    CMAKE_GENERATOR: Ninja
+    platform: win
+    TARGET_TRIPLET: x86_64-w64-mingw32.static
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    STATIC_LIBCXX: 0
+    WITH_BASSMIDI: 1
+    WITH_DYNAREC: x86_64
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+  script:
+    - touch libretro/deps/sdl_net/aclocal.m4
+    - touch libretro/deps/mpg123/aclocal.m4
+    - sleep 1
+    - find libretro/deps/sdl_net/ -name "*.in" -exec touch '{}' \;
+    - find libretro/deps/mpg123/ -name "*.in" -exec touch '{}' \;
+    - sleep 1
+    - touch libretro/deps/sdl_net/configure
+    - touch libretro/deps/mpg123/configure
+    - make PKGCONFIG="${TARGET_TRIPLET}-pkg-config" CMAKE="${TARGET_TRIPLET}-cmake" -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - make PKGCONFIG="${TARGET_TRIPLET}-pkg-config" CMAKE="${TARGET_TRIPLET}-cmake" -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps
+    - LDFLAGS="-Wl,--no-undefined" make PKGCONFIG="${TARGET_TRIPLET}-pkg-config" CMAKE="${TARGET_TRIPLET}-cmake" -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC}
+    - x86_64-w64-mingw32.static-strip ${MAKEFILE_PATH}/${CORENAME}_libretro.dll
+
+# Windows 32-bit
+libretro-build-windows-i686:
+  extends:
+    - .libretro-windows-i686-mingw-make-default
+    - .core-defs
+  variables:
+    STRIP_CORE_LIB: 0
+    AR: ar
+    AS: as
+    CC: gcc
+    CXX: g++
+    CMAKE_GENERATOR: Ninja
+    platform: win
+    TARGET_TRIPLET: i686-w64-mingw32.static
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    STATIC_LIBCXX: 0
+    WITH_BASSMIDI: 1
+    WITH_DYNAREC: x86
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+  script:
+    - touch libretro/deps/sdl_net/aclocal.m4
+    - touch libretro/deps/mpg123/aclocal.m4
+    - sleep 1
+    - find libretro/deps/sdl_net/ -name "*.in" -exec touch '{}' \;
+    - find libretro/deps/mpg123/ -name "*.in" -exec touch '{}' \;
+    - sleep 1
+    - touch libretro/deps/sdl_net/configure
+    - touch libretro/deps/mpg123/configure
+    - make PKGCONFIG="${TARGET_TRIPLET}-pkg-config" CMAKE="${TARGET_TRIPLET}-cmake" -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - make PKGCONFIG="${TARGET_TRIPLET}-pkg-config" CMAKE="${TARGET_TRIPLET}-cmake" -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps
+    - LDFLAGS="-Wl,--no-undefined" make PKGCONFIG="${TARGET_TRIPLET}-pkg-config" CMAKE="${TARGET_TRIPLET}-cmake" -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC}
+    - i686-w64-mingw32.static-strip ${MAKEFILE_PATH}/${CORENAME}_libretro.dll
+
 # Linux 64-bit
 libretro-build-linux-x64:
   extends:
     - .libretro-linux-x64-make-default
     - .core-defs
+  variables:
+    CC: gcc-9
+    CXX: g++-9
+    platform: unix
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    CMAKE_GENERATOR: Ninja
+    STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
+    WITH_DYNAREC: x86_64
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+  image: $CI_SERVER_HOST:5050/libretro-infrastructure/libretro-build-amd64-ubuntu:xenial-gcc9
+  script:
+    - python3 -m pip install --no-cache-dir meson==0.55.3 ninja
+    - touch libretro/deps/mpg123/aclocal.m4
+    - sleep 1
+    - find libretro/deps/mpg123/ -name "*.in" -exec touch '{}' \;
+    - sleep 1
+    - touch libretro/deps/mpg123/configure
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps
+    - LDFLAGS="-Wl,--no-undefined" make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC}
+    - strip ${MAKEFILE_PATH}/${CORENAME}_libretro.so
+
+# Linux ARM 64-bit
+libretro-build-linux-aarch64:
+  extends:
+    - .libretro-linux-aarch64-make-default
+    - .core-defs
+  variables:
+    platform: unix
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    CMAKE_GENERATOR: Ninja
+    STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
+    WITH_DYNAREC: arm64
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+  script:
+    # flac and opusfile bootstrap themselves with autogen.sh, and the aarch64
+    # image has no autotools - the dependency build stops on "Missing program
+    # 'libtool'" before flac is configured. The x64 and i686 jobs pin
+    # xenial-gcc9 images that carry them already.
+    #
+    # libtool-bin is the one that matters for that message: flac's autogen.sh
+    # tests `command -v libtool`, and on Debian the libtool package ships only
+    # libtoolize and the m4 macros - /usr/bin/libtool lives in libtool-bin.
+    - apt-get update -qq && apt-get install -y --no-install-recommends autoconf automake libtool libtool-bin
+    - python3 -m pip install --no-cache-dir meson==0.55.3 ninja
+    - touch libretro/deps/mpg123/aclocal.m4
+    - sleep 1
+    - find libretro/deps/mpg123/ -name "*.in" -exec touch '{}' \;
+    - sleep 1
+    - touch libretro/deps/mpg123/configure
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps
+    - LDFLAGS="-Wl,--no-undefined" make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC}
+    - strip ${MAKEFILE_PATH}/${CORENAME}_libretro.so
 
 # Linux 32-bit
 libretro-build-linux-i686:
   extends:
     - .libretro-linux-i686-make-default
     - .core-defs
+  variables:
+    CC: gcc-9
+    CXX: g++-9
+    platform: unix
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    CMAKE_GENERATOR: Ninja
+    STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
+    WITH_DYNAREC: x86
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+  image: $CI_SERVER_HOST:5050/libretro-infrastructure/libretro-build-i386-ubuntu:xenial-gcc9
+  script:
+    - linux32 python3 -m pip install --no-cache-dir meson==0.55.3 ninja
+    - touch libretro/deps/mpg123/aclocal.m4
+    - sleep 1
+    - find libretro/deps/mpg123/ -name "*.in" -exec touch '{}' \;
+    - sleep 1
+    - touch libretro/deps/mpg123/configure
+    - linux32 make -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - linux32 make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps
+    - LDFLAGS="-Wl,--no-undefined" linux32 make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC}
+    - strip ${MAKEFILE_PATH}/${CORENAME}_libretro.so
 
-# Linux ARM 64-bit
-# No dynarec: this fork only carries the armv4le, x86, x86_64 and mipsel
-# backends, so aarch64 runs the interpreter.
-libretro-build-linux-aarch64:
+# MacOS 64-bit
+libretro-build-osx-x64:
   extends:
-    - .libretro-linux-aarch64-make-default
-    - .core-defs
-
-# Windows 64-bit
-# The makefile knows platform=win, not win64, and cannot guess the dynarec
-# when it is cross compiled from Linux.
-libretro-build-windows-x64:
-  extends:
-    - .libretro-windows-x64-mingw-make-default
+    - .libretro-osx-x64-make-default
     - .core-defs
   variables:
-    platform: win
+    CC: gcc-11
+    CXX: g++-11
+    platform: osx
     WITH_DYNAREC: x86_64
+    STATIC_LIBCXX: 1
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    PKG_CONFIG_FLAGS: --static
+    MACOSX_DEPLOYMENT_TARGET: '10.9'
+    HOMEBREW_PREFIX: /Users/Shared/homebrew-dosbox-core
+    HOMEBREW_CELLAR: /Users/Shared/homebrew-dosbox-core/Cellar
+    HOMEBREW_SHELLENV_PREFIX: /Users/Shared/homebrew-dosbox-core
+  script:
+    - export PATH="${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:$PATH"
+    - rm -rf "${HOMEBREW_PREFIX}"
+    - mkdir "${HOMEBREW_PREFIX}"
+    - pushd .
+    - cd "${HOMEBREW_PREFIX}"/..
+    - curl -s -S -L 'https://github.com/realnc/stuff/releases/download/stuff/zstd-macos.tar.xz' | tar x
+    - curl -s -S -L 'https://github.com/realnc/stuff/releases/download/stuff/homebrew-dosbox-core.tar.zst' | ./zstd -d | tar x
+    - cd "${HOMEBREW_PREFIX}"
+    - mkdir static_libs
+    - ln -s "${HOMEBREW_PREFIX}"/lib/*.a static_libs/
+    - popd
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps
+    - export LDFLAGS="-L \"$PWD/libretro/deps_bin/lib\" -L ${HOMEBREW_PREFIX}/static_libs -undefined error"
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC}
+    - strip -u -r -S ${MAKEFILE_PATH}/${CORENAME}_libretro.dylib
+    - rm -rf "${HOMEBREW_PREFIX}"
 
-# MacOS ARM 64-bit
-libretro-build-osx-arm64:
-  extends:
-    - .libretro-osx-arm64-make-default
-    - .core-defs
-
-# webOS ARMv7a
-# The makefile guesses the dynarec from `uname -m` on platform=unix, which is
-# the build host here, so the target's own has to be named.
+#################################### MISC ####################################
+# webOS 32-bit (LGTV)
 libretro-build-webos-armv7a:
   extends:
     - .libretro-webos-armv7a-make-default
     - .core-defs
   variables:
+    platform: unix
+    TARGET_TRIPLET: arm-webos-linux-gnueabi
+    # The CMake dependencies need the buildroot toolchain file. Repeat the
+    # C++ standard flag the Makefile would otherwise have set here.
+    EXTRA_CMAKE_FLAGS: -DCMAKE_CXX_STANDARD=17 -DPKG_CONFIG_EXECUTABLE=/usr/bin/pkg-config -DCMAKE_TOOLCHAIN_FILE=/developer/arm-webos-linux-gnueabi_sdk-buildroot/share/buildroot/toolchainfile.cmake
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    CMAKE_GENERATOR: Ninja
+    STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
     WITH_DYNAREC: arm
+    # ALSA sequencer MIDI is a host-side feature and there is no alsa in the
+    # dependency prefix; MIDI here goes through FluidSynth and BASSMIDI.
+    WITH_ALSA_MIDI: 0
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+  script:
+    # FLAC's dependency recipe runs its autogen.sh unconditionally, and the
+    # webOS image carries no autotools at all - the SDK is a cross toolchain,
+    # not a build environment. gettext is part of it: autogen.sh looks for
+    # autopoint before anything else.
+    - apt-get update -qy
+    - apt-get install -qy autoconf automake libtool libtool-bin gettext
+    # The SDK's environment-setup, which the template sources, points CC and
+    # friends at the prefixed cross tools. Hand the Makefile the bare names
+    # instead and let it build the prefixed ones itself from TARGET_TRIPLET,
+    # the same way the MXE jobs do - otherwise every one of them ends up
+    # doubled, as in arm-webos-linux-gnueabi-arm-webos-linux-gnueabi-ld.
+    - export AR=ar AS=as CC=gcc CXX=g++ LD=ld
+    # The SDK ships pkg-config as a wrapper that rewrites every path it
+    # reports to sit under the sysroot, and it sets that up itself, so the
+    # environment cannot talk it out of it. That is right for the SDK's own
+    # libraries and wrong for the ones we build next to the source tree,
+    # which is all of them here - SDL_net was handed a sysroot-prefixed SDL
+    # include path that does not exist. Use the plain pkg-config and point
+    # it at nothing but our own .pc files.
+    - export PKG_CONFIG=/usr/bin/pkg-config
+    - export PKG_CONFIG_LIBDIR="$PWD/${MAKEFILE_PATH}/deps_bin/lib/pkgconfig"
+    # Same autotools timestamp dance as the other cross jobs: the checkout
+    # gives configure and its inputs the same mtime, and the deps then try
+    # to re-run autoconf, which is not in this image.
+    - touch libretro/deps/sdl_net/aclocal.m4
+    - touch libretro/deps/mpg123/aclocal.m4
+    - sleep 1
+    - find libretro/deps/sdl_net/ -name "*.in" -exec touch '{}' \;
+    - find libretro/deps/mpg123/ -name "*.in" -exec touch '{}' \;
+    - sleep 1
+    - touch libretro/deps/sdl_net/configure
+    - touch libretro/deps/mpg123/configure
+    # CMAKE and PKGCONFIG go on the command line rather than in the
+    # environment: the Makefile assigns both with = and that beats an
+    # environment variable. The SDK carries a cmake of its own, and its
+    # pkg-config is the wrapper described above.
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} CMAKE=/usr/bin/cmake PKGCONFIG=/usr/bin/pkg-config clean
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} CMAKE=/usr/bin/cmake PKGCONFIG=/usr/bin/pkg-config deps
+    - LDFLAGS="-Wl,--no-undefined" make -C ${MAKEFILE_PATH} -f ${MAKEFILE} CMAKE=/usr/bin/cmake PKGCONFIG=/usr/bin/pkg-config -j${NUMPROC}
 
 ################################### CELLULAR #################################
-# All four ABIs. The 32-bit two run the interpreter rather than a dynarec --
-# jni/Android.mk says why -- which is still a core where there was none.
-#
 # Android ARMv7a
 android-armeabi-v7a:
   extends:
     - .libretro-android-jni-armeabi-v7a
     - .core-defs
+  variables:
+    CMAKE: cmake
+    CMAKE_BUILD_TYPE: Release
+  script:
+    - DEPS_BIN_DIR="$PWD/$MAKEFILE_PATH/deps_bin/$ANDROID_ABI"
+      EXTRA_CMAKE_FLAGS="-DANDROID_PLATFORM=android-16 -DCMAKE_TOOLCHAIN_FILE=${NDK_ROOT}/build/cmake/android.toolchain.cmake -DANDROID_STL=c++_static -DANDROID_ABI=${ANDROID_ABI}"
+      make -C ${MAKEFILE_PATH} -f deps/munt.makefile
+    - $NDK_ROOT/ndk-build --no-print-directory -j$NUMPROC -C $JNI_PATH/jni $PLATFORM_ARGS
+    - mv $JNI_PATH/libs/$ANDROID_ABI/libretro.so $LIBNAME
+    - if [ $STRIP_CORE_LIB -eq 1 ]; then $NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip $LIBNAME; fi
 
 # Android ARMv8a
 android-arm64-v8a:
   extends:
     - .libretro-android-jni-arm64-v8a
     - .core-defs
-
-# Android 32-bit x86
-android-x86:
-  extends:
-    - .libretro-android-jni-x86
-    - .core-defs
+  variables:
+    CMAKE: cmake
+    CMAKE_BUILD_TYPE: Release
+  script:
+    - DEPS_BIN_DIR="$PWD/$MAKEFILE_PATH/deps_bin/$ANDROID_ABI"
+      EXTRA_CMAKE_FLAGS="-DANDROID_PLATFORM=android-16 -DCMAKE_TOOLCHAIN_FILE=${NDK_ROOT}/build/cmake/android.toolchain.cmake -DANDROID_STL=c++_static -DANDROID_ABI=${ANDROID_ABI}"
+      make -C ${MAKEFILE_PATH} -f deps/munt.makefile
+    - $NDK_ROOT/ndk-build --no-print-directory -j$NUMPROC -C $JNI_PATH/jni $PLATFORM_ARGS
+    - mv $JNI_PATH/libs/$ANDROID_ABI/libretro.so $LIBNAME
+    - if [ $STRIP_CORE_LIB -eq 1 ]; then $NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip $LIBNAME; fi
 
 # Android 64-bit x86
 android-x86_64:
   extends:
     - .libretro-android-jni-x86_64
     - .core-defs
+  variables:
+    CMAKE: cmake
+    CMAKE_BUILD_TYPE: Release
+  script:
+    - DEPS_BIN_DIR="$PWD/$MAKEFILE_PATH/deps_bin/$ANDROID_ABI"
+      EXTRA_CMAKE_FLAGS="-DANDROID_PLATFORM=android-16 -DCMAKE_TOOLCHAIN_FILE=${NDK_ROOT}/build/cmake/android.toolchain.cmake -DANDROID_STL=c++_static -DANDROID_ABI=${ANDROID_ABI}"
+      make -C ${MAKEFILE_PATH} -f deps/munt.makefile
+    - $NDK_ROOT/ndk-build --no-print-directory -j$NUMPROC -C $JNI_PATH/jni $PLATFORM_ARGS
+    - mv $JNI_PATH/libs/$ANDROID_ABI/libretro.so $LIBNAME
+    - if [ $STRIP_CORE_LIB -eq 1 ]; then $NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip $LIBNAME; fi
+
+# Android 32-bit x86
+android-x86:
+  extends:
+    - .libretro-android-jni-x86
+    - .core-defs
+  variables:
+    CMAKE: cmake
+    CMAKE_BUILD_TYPE: Release
+  script:
+    - DEPS_BIN_DIR="$PWD/$MAKEFILE_PATH/deps_bin/$ANDROID_ABI"
+      EXTRA_CMAKE_FLAGS="-DANDROID_PLATFORM=android-16 -DCMAKE_TOOLCHAIN_FILE=${NDK_ROOT}/build/cmake/android.toolchain.cmake -DANDROID_STL=c++_static -DANDROID_ABI=${ANDROID_ABI}"
+      make -C ${MAKEFILE_PATH} -f deps/munt.makefile
+    - $NDK_ROOT/ndk-build --no-print-directory -j$NUMPROC -C $JNI_PATH/jni $PLATFORM_ARGS
+    - mv $JNI_PATH/libs/$ANDROID_ABI/libretro.so $LIBNAME
+    - if [ $STRIP_CORE_LIB -eq 1 ]; then $NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip $LIBNAME; fi

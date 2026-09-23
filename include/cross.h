@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -38,6 +36,7 @@
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #else										/* LINUX / GCC */
+#include <dirent.h>
 #include <unistd.h>
 #define LONGTYPE(a) a##LL
 #endif
@@ -77,16 +76,34 @@ public:
 	static bool IsPathAbsolute(std::string const& in);
 };
 
-#include <retro_dirent.h>
+
+#if defined (WIN32)
+
+#define WIN32_LEAN_AND_MEAN        // Exclude rarely-used stuff from 
+#include <windows.h>
+
+typedef struct dir_struct {
+	HANDLE          handle;
+	char            base_path[MAX_PATH+4];
+	WIN32_FIND_DATA search_data;
+} dir_information;
+
+#else
+
+//#include <sys/types.h> //Included above
+#include <dirent.h>
 
 typedef struct dir_struct { 
-	RDIR*  dir;
+	DIR*  dir;
 	char base_path[CROSS_LEN];
 } dir_information;
 
+#endif
+
 dir_information* open_directory(const char* dirname);
-bool read_directory_first(dir_information* dirp, char* entry_name, char* entry_sname, bool& is_directory);
-bool read_directory_next(dir_information* dirp, char* entry_name, char* entry_sname, bool& is_directory);
+bool read_directory_first(dir_information* dirp, char* entry_name, bool& is_directory);
+bool read_directory_next(dir_information* dirp, char* entry_name, bool& is_directory);
 void close_directory(dir_information* dirp);
 
+FILE *fopen_wrap(const char *path, const char *mode);
 #endif

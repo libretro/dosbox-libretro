@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -234,9 +234,9 @@ static INLINE bool InitPage_CheckUseraccess(Bitu u1,Bitu u2) {
 	case CPU_ARCHTYPE_386FAST:
 	default:
 		return ((u1)==0) && ((u2)==0);
-	case CPU_ARCHTYPE_486OLD:
-	case CPU_ARCHTYPE_486NEW:
-	case CPU_ARCHTYPE_PENTIUM:
+	case CPU_ARCHTYPE_486OLDSLOW:
+	case CPU_ARCHTYPE_486NEWSLOW:
+	case CPU_ARCHTYPE_PENTIUMSLOW:
 		return ((u1)==0) || ((u2)==0);
 	}
 }
@@ -339,9 +339,9 @@ public:
 //						priv_check=0;	// default
 						break;
 					case CPU_ARCHTYPE_386SLOW:
-					case CPU_ARCHTYPE_486OLD:
-					case CPU_ARCHTYPE_486NEW:
-					case CPU_ARCHTYPE_PENTIUM:
+					case CPU_ARCHTYPE_486OLDSLOW:
+					case CPU_ARCHTYPE_486NEWSLOW:
+					case CPU_ARCHTYPE_PENTIUMSLOW:
 						priv_check=1;
 						break;
 					}
@@ -357,9 +357,9 @@ public:
 //						priv_check=0;	// default
 						break;
 					case CPU_ARCHTYPE_386SLOW:
-					case CPU_ARCHTYPE_486OLD:
-					case CPU_ARCHTYPE_486NEW:
-					case CPU_ARCHTYPE_PENTIUM:
+					case CPU_ARCHTYPE_486OLDSLOW:
+					case CPU_ARCHTYPE_486NEWSLOW:
+					case CPU_ARCHTYPE_PENTIUMSLOW:
 						priv_check=2;
 						break;
 					}

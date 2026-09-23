@@ -1,0 +1,255 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - 'latest_build_linux_arm'
+    paths-ignore:
+      - '.gitlab-ci.yml'
+      - 'AUTHORS'
+      - 'COPYING'
+      - 'ChangeLog'
+      - 'INSTALL'
+      - 'NEWS'
+      - 'README'
+      - 'README.md'
+      - 'THANKS'
+      - 'docs/**'
+  pull_request:
+    paths-ignore:
+      - '.gitlab-ci.yml'
+      - 'AUTHORS'
+      - 'COPYING'
+      - 'ChangeLog'
+      - 'INSTALL'
+      - 'NEWS'
+      - 'README'
+      - 'README.md'
+      - 'THANKS'
+      - 'docs/**'
+
+jobs:
+  build_linux_intel:
+    strategy:
+      matrix:
+        config:
+          - {image_tag: 'linux-x64', dynarec: x86_64, zip_name: linux-x64.zip}
+          - {image_tag: 'linux-x86', dynarec: x86, zip_name: linux-x86.zip}
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Build
+      run: |
+        docker run \
+            -v "$PWD":/build \
+            -w /build \
+            -e CC=gcc-9 \
+            -e CXX=g++-9 \
+            -e platform=unix \
+            -e BUNDLED_AUDIO_CODECS=1 \
+            -e BUNDLED_LIBSNDFILE=1 \
+            -e BUNDLED_SDL=1 \
+            -e CMAKE_GENERATOR=Ninja \
+            -e STATIC_LIBCXX=1 \
+            -e WITH_BASSMIDI=1 \
+            -e WITH_DYNAREC=${{ matrix.config.dynarec }} \
+            -e WITH_FLUIDSYNTH=1 \
+            -e WITH_VOODOO=1 \
+            realnc/dosbox-core-build:${{ matrix.config.image_tag }} \
+            bash -c '(
+                set -ex
+                git config --global --add safe.directory '*' || true
+                touch libretro/deps/mpg123/aclocal.m4
+                sleep 1
+                find libretro/deps/mpg123/ -name "*.in" -exec touch '{}' \;
+                sleep 1
+                touch libretro/deps/mpg123/configure
+                make -C libretro -f Makefile.libretro clean
+                make -C libretro -f Makefile.libretro deps
+                export LDFLAGS="-Wl,--no-undefined"
+                make -C libretro -f Makefile.libretro -j`nproc`
+                strip libretro/dosbox_core_libretro.so
+                chmod -x libretro/dosbox_core_libretro.so
+            )'
+        cd libretro
+        zip -9 ${{ matrix.config.zip_name }} dosbox_core_libretro.so
+
+    - name: Upload artifact
+      if: github.event_name == 'push'
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.config.zip_name }}
+        path: libretro/${{ matrix.config.zip_name }}
+
+  trigger_circleci_arm:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Trigger CircleCI ARM builds
+      id: 'build_linux_arm'
+      uses: CircleCI-Public/trigger-circleci-pipeline-action@v1.0.5
+      env:
+        CCI_TOKEN: ${{ secrets.CCI_TOKEN }}
+
+#   build_macos:
+#     runs-on: macos-12
+#
+#     env:
+#       CC: gcc-11
+#       CXX: g++-11
+#       platform: osx
+#       WITH_DYNAREC: x86_64
+#       STATIC_LIBCXX: 1
+#       BUNDLED_AUDIO_CODECS: 1
+#       BUNDLED_LIBSNDFILE: 1
+#       BUNDLED_SDL: 1
+#       PKG_CONFIG_FLAGS: --static
+#       MACOSX_DEPLOYMENT_TARGET: '10.9'
+#       HOMEBREW_PREFIX: /Users/Shared/homebrew-dosbox-core
+#       HOMEBREW_CELLAR: /Users/Shared/homebrew-dosbox-core/Cellar
+#       HOMEBREW_SHELLENV_PREFIX: /Users/Shared/homebrew-dosbox-core
+#
+#     steps:
+#     - run: echo "${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:${PATH}" >> $GITHUB_PATH
+#
+#     - name: Install custom homebrew
+#       run: |
+#         git config --global --add safe.directory '*' || true
+#         rm -rf "${HOMEBREW_PREFIX}"
+#         mkdir "${HOMEBREW_PREFIX}"
+#         cd "${HOMEBREW_PREFIX}"/..
+#         curl -s -S -L 'https://github.com/realnc/stuff/releases/download/stuff/homebrew-dosbox-core.tar.zst' | zstd -d | tar x
+#
+#     # Since macOS is developed by monkeys, we have to do this shit to get static linking against
+#     # homebrew-installed libraries.
+#     - name: Symlink static homebrew libs
+#       run: |
+#         cd "${HOMEBREW_PREFIX}"
+#         mkdir static_libs
+#         ln -s "${HOMEBREW_PREFIX}"/lib/*.a static_libs/
+#
+#     - uses: actions/checkout@v3
+#       with:
+#         submodules: recursive
+#
+#     - name: Remove /usr/local homebrew
+#       working-directory: /usr/local
+#       run: |
+#         sudo mkdir /tmp/oldbrew
+#         sudo mv * /tmp/oldbrew/
+#
+#     - name: Build
+#       working-directory: ./libretro
+#       run: |
+#         cd deps/mpg123/
+#         autoreconf -iv
+#         cd ../../
+#         make deps
+#         export LDFLAGS="-L \"$PWD/deps_bin/lib\" -L ${HOMEBREW_PREFIX}/static_libs -undefined error"
+#         make -j`sysctl -n hw.ncpu`
+#         strip -u -r -S dosbox_core_libretro.dylib
+#         zip -9 macOS-x64.zip dosbox_core_libretro.dylib
+#
+#     - name: Restore /usr/local homebrew
+#       working-directory: /usr/local
+#       run: |
+#         sudo mv /tmp/oldbrew/* .
+#
+#     - name: Upload artifact
+#       if: github.event_name == 'push'
+#       uses: actions/upload-artifact@v3
+#       with:
+#         name: macOS-x64.zip
+#         path: libretro/macOS-x64.zip
+
+  build_mxe:
+    strategy:
+      matrix:
+        config:
+          - {image: 'realnc/dosbox-core-build:mxe-x86', triplet: i686-w64-mingw32.static, dynarec: x86, zip_name: windows-x86.zip}
+          - {image: 'realnc/dosbox-core-build:mxe-x64', triplet: x86_64-w64-mingw32.static, dynarec: x86_64, zip_name: windows-x64.zip}
+
+    runs-on: ubuntu-latest
+    container: ${{ matrix.config.image }}
+
+    env:
+      CC: gcc
+      platform: win
+      TARGET_TRIPLET: ${{ matrix.config.triplet }}
+      STATIC_LIBCXX: 0
+      BUNDLED_AUDIO_CODECS: 1
+      BUNDLED_LIBSNDFILE: 1
+      BUNDLED_SDL: 1
+      WITH_DYNAREC: ${{ matrix.config.dynarec }}
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Build
+      working-directory: ./libretro
+      run: |
+        git config --global --add safe.directory '*' || true
+        touch deps/sdl_net/aclocal.m4
+        touch deps/mpg123/aclocal.m4
+        sleep 1
+        find deps/sdl_net/ -name "*.in" -exec touch '{}' \;
+        find deps/mpg123/ -name "*.in" -exec touch '{}' \;
+        sleep 1
+        touch deps/sdl_net/configure
+        touch deps/mpg123/configure
+        make PKGCONFIG="${{ matrix.config.triplet }}-pkg-config" CMAKE="${{ matrix.config.triplet }}-cmake" deps
+        export LDFLAGS="-Wl,--no-undefined"
+        make PKGCONFIG="${{ matrix.config.triplet }}-pkg-config" CMAKE="${{ matrix.config.triplet }}-cmake" -j`nproc`
+        ${{ matrix.config.triplet }}-strip dosbox_core_libretro.dll
+        zip -9 ${{ matrix.config.zip_name }} dosbox_core_libretro.dll
+
+    - name: Upload artifact
+      if: github.event_name == 'push'
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.config.zip_name }}
+        path: libretro/${{ matrix.config.zip_name }}
+
+  upload_build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/libretro'
+    runs-on: ubuntu-latest
+    needs: [
+      build_linux_intel,
+      #build_macos,
+      build_mxe,
+    ]
+
+    steps:
+    - uses: actions/download-artifact@v3
+      with:
+        path: /tmp/build_artifacts
+
+    - uses: actions/setup-go@v3
+
+    - name: Upload release binaries
+      run: |
+        mkdir /tmp/build_artifacts/upload
+        mv /tmp/build_artifacts/*/* /tmp/build_artifacts/upload/
+        export PATH="$PATH:$(go env GOPATH)/bin"
+        go install github.com/tcnksm/ghr@latest
+        ghr \
+            -t "${{ secrets.GITHUB_TOKEN }}" \
+            -u "${GITHUB_ACTOR}" \
+            -r "${GITHUB_REPOSITORY#*/}" \
+            -c "${GITHUB_SHA}" \
+            -n "Latest Build" \
+            -b "Builds of current libretro branch." \
+            -delete \
+            -prerelease \
+            latest_build \
+            /tmp/build_artifacts/upload \
+        ;

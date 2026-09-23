@@ -1,0 +1,257 @@
+LIBRETRO_COMM_DIR := \
+	$(CORE_DIR)/libretro/deps/common
+
+LIBRETRO_SDL_DIR := \
+	$(CORE_DIR)/libretro/deps/embedded_sdl
+
+ifeq ($(WITH_FAKE_SDL), 1)
+INCFLAGS += \
+	-I$(CORE_DIR)/libretro/src/fakesdl
+SOURCES_CXX += \
+	$(CORE_DIR)/libretro/src/fakesdl/SDL/SDL_endian.cpp \
+	$(CORE_DIR)/libretro/src/fakesdl/SDL/SDL_thread.cpp \
+	$(CORE_DIR)/libretro/src/fakesdl/SDL/SDL_timer.cpp
+endif
+
+# include flags
+INCFLAGS += \
+	-I$(CORE_DIR)/include \
+	-I$(CORE_DIR)/libretro \
+	-I$(CORE_DIR)/libretro/src \
+	-I$(CORE_DIR)/libretro/src/virtual_keyboard \
+	-I$(CORE_DIR)/src \
+	-I$(LIBRETRO_COMM_DIR)/include
+
+# common files
+SOURCES_CXX += \
+	$(CORE_DIR)/libretro/src/CoreOptionCategory.cpp \
+	$(CORE_DIR)/libretro/src/CoreOptionDefinition.cpp \
+	$(CORE_DIR)/libretro/src/CoreOptionValue.cpp \
+	$(CORE_DIR)/libretro/src/CoreOptions.cpp \
+	$(CORE_DIR)/libretro/src/disk_control.cpp \
+	$(CORE_DIR)/libretro/src/emu_thread.cpp \
+	$(CORE_DIR)/libretro/src/fake_timing.cpp \
+	$(CORE_DIR)/libretro/src/libretro.cpp \
+	$(CORE_DIR)/libretro/src/libretro_audio.cpp \
+	$(CORE_DIR)/libretro/src/libretro_core_options.cpp \
+	$(CORE_DIR)/libretro/src/libretro_gfx.cpp \
+	$(CORE_DIR)/libretro/src/libretro_input.cpp \
+	$(CORE_DIR)/libretro/src/libretro_message.cpp \
+	$(CORE_DIR)/libretro/src/log.cpp \
+	$(CORE_DIR)/libretro/src/util.cpp \
+	$(CORE_DIR)/libretro/src/virtual_keyboard/libretro-graph.cpp \
+	$(CORE_DIR)/libretro/src/virtual_keyboard/libretro-vkbd.cpp \
+	$(CORE_DIR)/src/cpu/callback.cpp \
+	$(CORE_DIR)/src/cpu/core_dyn_x86.cpp \
+	$(CORE_DIR)/src/cpu/core_dynrec.cpp \
+	$(CORE_DIR)/src/cpu/core_full.cpp \
+	$(CORE_DIR)/src/cpu/core_normal.cpp \
+	$(CORE_DIR)/src/cpu/core_prefetch.cpp \
+	$(CORE_DIR)/src/cpu/core_simple.cpp \
+	$(CORE_DIR)/src/cpu/cpu.cpp \
+	$(CORE_DIR)/src/cpu/flags.cpp \
+	$(CORE_DIR)/src/cpu/modrm.cpp \
+	$(CORE_DIR)/src/cpu/paging.cpp \
+	$(CORE_DIR)/src/dos/cdrom.cpp \
+	$(CORE_DIR)/src/dos/cdrom_aspi_win32.cpp \
+	$(CORE_DIR)/src/dos/cdrom_image.cpp \
+	$(CORE_DIR)/src/dos/cdrom_ioctl_win32.cpp \
+	$(CORE_DIR)/src/dos/dos.cpp \
+	$(CORE_DIR)/src/dos/dos_classes.cpp \
+	$(CORE_DIR)/src/dos/dos_devices.cpp \
+	$(CORE_DIR)/src/dos/dos_execute.cpp \
+	$(CORE_DIR)/src/dos/dos_files.cpp \
+	$(CORE_DIR)/src/dos/dos_ioctl.cpp \
+	$(CORE_DIR)/src/dos/dos_keyboard_layout.cpp \
+	$(CORE_DIR)/src/dos/dos_memory.cpp \
+	$(CORE_DIR)/src/dos/dos_misc.cpp \
+	$(CORE_DIR)/src/dos/dos_mscdex.cpp \
+	$(CORE_DIR)/src/dos/dos_programs.cpp \
+	$(CORE_DIR)/src/dos/dos_tables.cpp \
+	$(CORE_DIR)/src/dos/drive_cache.cpp \
+	$(CORE_DIR)/src/dos/drive_fat.cpp \
+	$(CORE_DIR)/src/dos/drive_iso.cpp \
+	$(CORE_DIR)/src/dos/drive_local.cpp \
+	$(CORE_DIR)/src/dos/drive_overlay.cpp \
+	$(CORE_DIR)/src/dos/drive_virtual.cpp \
+	$(CORE_DIR)/src/dos/drives.cpp \
+	$(CORE_DIR)/src/dosbox.cpp \
+	$(CORE_DIR)/src/fpu/fpu.cpp \
+	$(CORE_DIR)/src/gui/midi.cpp \
+	$(CORE_DIR)/src/gui/midi_mt32.cpp \
+	$(CORE_DIR)/src/gui/render.cpp \
+	$(CORE_DIR)/src/gui/render_scalers.cpp \
+	$(CORE_DIR)/src/hardware/adlib.cpp \
+	$(CORE_DIR)/src/hardware/cmos.cpp \
+	$(CORE_DIR)/src/hardware/dbopl.cpp \
+	$(CORE_DIR)/src/hardware/disney.cpp \
+	$(CORE_DIR)/src/hardware/dma.cpp \
+	$(CORE_DIR)/src/hardware/gameblaster.cpp \
+	$(CORE_DIR)/src/hardware/gus.cpp \
+	$(CORE_DIR)/src/hardware/hardware.cpp \
+	$(CORE_DIR)/src/hardware/iohandler.cpp \
+	$(CORE_DIR)/src/hardware/joystick.cpp \
+	$(CORE_DIR)/src/hardware/keyboard.cpp \
+	$(CORE_DIR)/src/hardware/mame/fmopl.cpp \
+	$(CORE_DIR)/src/hardware/mame/saa1099.cpp \
+	$(CORE_DIR)/src/hardware/mame/sn76496.cpp \
+	$(CORE_DIR)/src/hardware/mame/ymf262.cpp \
+	$(CORE_DIR)/src/hardware/memory.cpp \
+	$(CORE_DIR)/src/hardware/mixer.cpp \
+	$(CORE_DIR)/src/hardware/mpu401.cpp \
+	$(CORE_DIR)/src/hardware/pci_bus.cpp \
+	$(CORE_DIR)/src/hardware/pcspeaker.cpp \
+	$(CORE_DIR)/src/hardware/pic.cpp \
+	$(CORE_DIR)/src/hardware/sblaster.cpp \
+	$(CORE_DIR)/src/hardware/serialport/directserial.cpp \
+	$(CORE_DIR)/src/hardware/serialport/libserial.cpp \
+	$(CORE_DIR)/src/hardware/serialport/misc_util.cpp \
+	$(CORE_DIR)/src/hardware/serialport/nullmodem.cpp \
+	$(CORE_DIR)/src/hardware/serialport/serialdummy.cpp \
+	$(CORE_DIR)/src/hardware/serialport/serialport.cpp \
+	$(CORE_DIR)/src/hardware/serialport/softmodem.cpp \
+	$(CORE_DIR)/src/hardware/tandy_sound.cpp \
+	$(CORE_DIR)/src/hardware/timer.cpp \
+	$(CORE_DIR)/src/hardware/vga.cpp \
+	$(CORE_DIR)/src/hardware/vga_attr.cpp \
+	$(CORE_DIR)/src/hardware/vga_crtc.cpp \
+	$(CORE_DIR)/src/hardware/vga_dac.cpp \
+	$(CORE_DIR)/src/hardware/vga_draw.cpp \
+	$(CORE_DIR)/src/hardware/vga_gfx.cpp \
+	$(CORE_DIR)/src/hardware/vga_memory.cpp \
+	$(CORE_DIR)/src/hardware/vga_misc.cpp \
+	$(CORE_DIR)/src/hardware/vga_other.cpp \
+	$(CORE_DIR)/src/hardware/vga_paradise.cpp \
+	$(CORE_DIR)/src/hardware/vga_s3.cpp \
+	$(CORE_DIR)/src/hardware/vga_seq.cpp \
+	$(CORE_DIR)/src/hardware/vga_tseng.cpp \
+	$(CORE_DIR)/src/hardware/vga_xga.cpp \
+	$(CORE_DIR)/src/ints/bios.cpp \
+	$(CORE_DIR)/src/ints/bios_disk.cpp \
+	$(CORE_DIR)/src/ints/bios_keyboard.cpp \
+	$(CORE_DIR)/src/ints/ems.cpp \
+	$(CORE_DIR)/src/ints/int10.cpp \
+	$(CORE_DIR)/src/ints/int10_char.cpp \
+	$(CORE_DIR)/src/ints/int10_memory.cpp \
+	$(CORE_DIR)/src/ints/int10_misc.cpp \
+	$(CORE_DIR)/src/ints/int10_modes.cpp \
+	$(CORE_DIR)/src/ints/int10_pal.cpp \
+	$(CORE_DIR)/src/ints/int10_put_pixel.cpp \
+	$(CORE_DIR)/src/ints/int10_vesa.cpp \
+	$(CORE_DIR)/src/ints/int10_video_state.cpp \
+	$(CORE_DIR)/src/ints/int10_vptable.cpp \
+	$(CORE_DIR)/src/ints/mouse.cpp \
+	$(CORE_DIR)/src/ints/xms.cpp \
+	$(CORE_DIR)/src/misc/cross.cpp \
+	$(CORE_DIR)/src/misc/messages.cpp \
+	$(CORE_DIR)/src/misc/programs.cpp \
+	$(CORE_DIR)/src/misc/setup.cpp \
+	$(CORE_DIR)/src/misc/support.cpp \
+	$(CORE_DIR)/src/shell/shell.cpp \
+	$(CORE_DIR)/src/shell/shell_batch.cpp \
+	$(CORE_DIR)/src/shell/shell_cmds.cpp \
+	$(CORE_DIR)/src/shell/shell_misc.cpp
+
+SOURCES_C += \
+	$(CORE_DIR)/src/hardware/nukedopl.c
+
+ifeq ($(WITH_VOODOO), 1)
+	SOURCES_CXX += \
+		$(CORE_DIR)/src/hardware/voodoo.cpp \
+		$(CORE_DIR)/src/hardware/voodoo_emu.cpp \
+		$(CORE_DIR)/src/hardware/voodoo_interface.cpp \
+		$(CORE_DIR)/src/hardware/voodoo_opengl.cpp \
+		$(CORE_DIR)/src/hardware/voodoo_vogl.cpp
+endif
+
+ifneq ($(WITH_FAKE_SDL), 1)
+	ifeq ($(WITH_IPX), 1)
+	SOURCES_CXX += \
+		$(CORE_DIR)/src/hardware/ipx.cpp \
+		$(CORE_DIR)/src/hardware/ipxserver.cpp
+	endif
+endif
+
+ifeq ($(WITH_ALSA_MIDI), 1)
+	SOURCES_CXX += \
+		$(CORE_DIR)/libretro/src/midi_alsa.cpp
+endif
+ifeq ($(platform), win)
+	SOURCES_CXX += \
+		$(CORE_DIR)/libretro/src/midi_win32.cpp
+endif
+
+ifeq ($(WITH_BASSMIDI), 1)
+	SOURCES_CXX += $(CORE_DIR)/libretro/src/midi_bassmidi.cpp
+endif
+
+ifeq ($(WITH_FLUIDSYNTH), 1)
+	SOURCES_CXX += $(CORE_DIR)/libretro/src/midi_fluidsynth.cpp
+endif
+
+ifeq ($(WITH_SDL_SOUND_WRAPPER), 1)
+	INCFLAGS += \
+		-I$(CORE_DIR)/libretro/deps/SDL_audiolib/3rdparty/dr_libs \
+		-I$(CORE_DIR)/libretro/deps/SDL_audiolib/3rdparty/speex_resampler \
+		-I$(CORE_DIR)/libretro/deps/SDL_audiolib/include \
+		-I$(CORE_DIR)/libretro/deps/SDL_audiolib/src \
+		-I$(CORE_DIR)/libretro/src/sdl_sound_wrapper
+
+	COMMONFLAGS += \
+		-DAULIB_STATIC_DEFINE \
+		-DOUTSIDE_SPEEX \
+		-DRANDOM_PREFIX=SDL_audiolib \
+		-DSPX_RESAMPLE_EXPORT=
+
+	SOURCES_C += \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/3rdparty/speex_resampler/resample.c \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/dr_flac.c \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/dr_wav.c \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/missing/sdl_load_file_rw.c \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/missing/sdl_rwsize.c
+
+	SOURCES_CXX += \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/Decoder.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/DecoderDrflac.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/DecoderDrwav.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/DecoderMpg123.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/DecoderOpus.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/DecoderVorbis.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/Resampler.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/ResamplerSpeex.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/Stream.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/aulib.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/sampleconv.cpp \
+		$(CORE_DIR)/libretro/deps/SDL_audiolib/src/stream_p.cpp \
+		$(CORE_DIR)/libretro/src/sdl_sound_wrapper/SDL_sound.cpp
+endif
+
+SOURCES_C += \
+	$(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+	$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+	$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
+	$(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+	$(LIBRETRO_COMM_DIR)/file/file_path.c \
+	$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
+	$(LIBRETRO_COMM_DIR)/string/stdstring.c \
+	$(LIBRETRO_COMM_DIR)/time/rtime.c \
+	$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c
+
+# dynarec flags
+ifeq ($(WITH_DYNAREC), arm)
+	COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="ARMV7LE"
+else ifeq ($(WITH_DYNAREC), arm64)
+	COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="ARMV8LE"
+else ifeq ($(WITH_DYNAREC), oldarm)
+	COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="ARMV4LE"
+else ifeq ($(WITH_DYNAREC), x86_64)
+	COMMONFLAGS += -DC_DYNAMIC_X86 -DC_TARGETCPU="X86_64"
+else ifeq ($(WITH_DYNAREC), x86)
+	COMMONFLAGS += -DC_DYNAMIC_X86 -DC_TARGETCPU="X86"
+else ifeq ($(WITH_DYNAREC), x86_generic)
+	COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="X86"
+else ifeq ($(WITH_DYNAREC), ppc)
+	COMMONFLAGS += -DC_DYNREC -DC_TARGETCPU="POWERPC"
+else ifeq ($(WITH_DYNAREC), mips)
+	COMMONFLAGS += -DC_DYNREC=0 -DC_TARGETCPU="MIPSEL"
+endif

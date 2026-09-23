@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -38,10 +36,9 @@
 
 #define DOS_NAMELENGTH 12
 #define DOS_NAMELENGTH_ASCII (DOS_NAMELENGTH+1)
-#define LFN_NAMELENGTH 255
 #define DOS_FCBNAME 15
 #define DOS_DIRDEPTH 8
-#define DOS_PATHLENGTH 255
+#define DOS_PATHLENGTH 80
 #define DOS_TEMPSIZE 1024
 
 enum {
@@ -65,7 +62,7 @@ class DOS_DTA;
 
 class DOS_File {
 public:
-	DOS_File():flags(0)		{ name=0; refCtr = 0; hdrive=0xff; };
+	DOS_File():flags(0),time(0),date(0),attr(0),refCtr(0),open(false),name(0),hdrive(0xff) { };
 	DOS_File(const DOS_File& orig);
 	DOS_File & operator= (const DOS_File & orig);
 	virtual	~DOS_File(){if(name) delete [] name;};
@@ -120,6 +117,23 @@ private:
 	Bitu devnum;
 };
 
+class localFile : public DOS_File {
+public:
+	localFile(const char* name, FILE * handle);
+	bool Read(Bit8u * data,Bit16u * size);
+	bool Write(Bit8u * data,Bit16u * size);
+	bool Seek(Bit32u * pos,Bit32u type);
+	bool Close();
+	Bit16u GetInformation(void);
+	bool UpdateDateTimeFromHost(void);   
+	void FlagReadOnlyMedium(void);
+	void Flush(void);
+	FILE * fhandle; //todo handle this properly
+private:
+	bool read_only_medium;
+	enum { NONE,READ,WRITE } last_action;
+};
+
 /* The following variable can be lowered to free up some memory.
  * The negative side effect: The stored searches will be turned over faster.
  * Should not have impact on systems with few directory entries. */
@@ -137,17 +151,19 @@ public:
 	void		SetBaseDir			(const char* path);
 	void		SetDirSort			(TDirSort sort) { sortDirType = sort; };
 	bool		OpenDir				(const char* path, Bit16u& id);
-	bool		ReadDir				(Bit16u id, char* &result, char * &lresult);
+	bool		ReadDir				(Bit16u id, char* &result);
 
 	void		ExpandName			(char* path);
 	char*		GetExpandName		(const char* path);
 	bool		GetShortName		(const char* fullname, char* shortname);
 
 	bool		FindFirst			(char* path, Bit16u& id);
-	bool		FindNext			(Bit16u id, char* &result, char* &lresult);
+	bool		FindNext			(Bit16u id, char* &result);
 
 	void		CacheOut			(const char* path, bool ignoreLastDir = false);
 	void		AddEntry			(const char* path, bool checkExist = false);
+	void		AddEntryDirOverlay			(const char* path, bool checkExist = false);
+
 	void		DeleteEntry			(const char* path, bool ignoreLastDir = false);
 
 	void		EmptyCache			(void);
@@ -158,7 +174,7 @@ public:
 	public:
 		CFileInfo(void) {
 			orgname[0] = shortname[0] = 0;
-			isDir = false;
+			isOverlayDir = isDir = false;
 			id = MAX_OPENDIRS;
 			nextEntry = shortNr = 0;
 		}
@@ -169,6 +185,7 @@ public:
 		};
 		char		orgname		[CROSS_LEN];
 		char		shortname	[DOS_NAMELENGTH_ASCII];
+		bool		isOverlayDir;
 		bool		isDir;
 		Bit16u		id;
 		Bitu		nextEntry;
@@ -187,12 +204,12 @@ private:
 	void		CreateShortName		(CFileInfo* dir, CFileInfo* info);
 	Bitu		CreateShortNameID	(CFileInfo* dir, const char* name);
 	int		CompareShortname	(const char* compareName, const char* shortName);
-	bool		SetResult		(CFileInfo* dir, char * &result, char * &lresult, Bitu entryNr);
+	bool		SetResult		(CFileInfo* dir, char * &result, Bitu entryNr);
 	bool		IsCachedIn		(CFileInfo* dir);
 	CFileInfo*	FindDirInfo		(const char* path, char* expandedPath);
 	bool		RemoveSpaces		(char* str);
 	bool		OpenDir			(CFileInfo* dir, const char* path, Bit16u& id);
-	void		CreateEntry		(CFileInfo* dir, const char* name, const char* sname, bool query_directory);
+	void		CreateEntry		(CFileInfo* dir, const char* name, bool is_directory);
 	void		CopyEntry		(CFileInfo* dir, CFileInfo* from);
 	Bit16u		GetFreeID		(CFileInfo* dir);
 	void		Clear			(void);
@@ -229,9 +246,6 @@ public:
 	virtual bool FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst=false)=0;
 	virtual bool FindNext(DOS_DTA & dta)=0;
 	virtual bool GetFileAttr(char * name,Bit16u * attr)=0;
-	virtual bool GetFileAttrEx(char* name, struct stat *status)=0;
-	virtual Bit32u GetCompressedSize(char* name)=0;
-	virtual void* CreateOpenFile(char const* const name)=0;
 	virtual bool Rename(char * oldname,char * newname)=0;
 	virtual bool AllocationInfo(Bit16u * _bytes_sector,Bit8u * _sectors_cluster,Bit16u * _total_clusters,Bit16u * _free_clusters)=0;
 	virtual bool FileExists(const char* name)=0;

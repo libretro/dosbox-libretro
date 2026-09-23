@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/xiph/vorbis.git
+	branch = v1.3.7
+	commit = 0657aee69dec8508a0011f47f3b69d7538e9d262
+	parent = 9aadc27a3d1525868070e418bfe87c877856d21e
+	method = merge
+	cmdver = 0.4.3
