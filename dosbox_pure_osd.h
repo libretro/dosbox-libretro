@@ -666,7 +666,7 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 		int hdr = lh*2, rows = (h - hdr - ftr) / lh, count = (int)list.size(), l = 30, r = w-30;
 		if (l < 0) { l = 0, r = w; }
 		buf.DrawBox(l + 60, hdr-6-lh, r-l-120, lh+4, buf.BGCOL_HEADER | blend, buf.COL_LINEBOX);
-		buf.PrintCenteredOutlined(lh, 0, w, hdr-lh-4, "DOSBox Pure Settings Menu", buf.COL_MENUTITLE);
+		buf.PrintCenteredOutlined(lh, 0, w, hdr-lh-4, "DOSBox Settings Menu", buf.COL_MENUTITLE);
 		
 		DrawMenuBase(buf, blend, lh, rows, m, mouseMoved, l, r, hdr);
 		for (int i = scroll, maxw = r-l-27; i != count && i != (scroll + rows); i++)
@@ -1373,7 +1373,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 		buf.DrawBox( w/10, 5, w-w/5, lh+3, buf.BGCOL_HEADER | blend, buf.COL_LINEBOX);
 		buf.DrawBox( 8, lh+7, w-16, lh+3, buf.BGCOL_HEADER | blend, buf.COL_LINEBOX);
 
-		buf.PrintCenteredOutlined(lh, 0, w, 7, "DOSBOX PURE START MENU", buf.COL_MENUTITLE);
+		buf.PrintCenteredOutlined(lh, 0, w, 7, "DOSBOX START MENU", buf.COL_MENUTITLE);
 		buf.PrintCenteredOutlined(lh, 0, w, 7+lh+2, (!dbp_content_name.empty() ? dbp_content_name.c_str() : "- No Content Loaded -"), buf.COL_CONTENT);
 
 		int inforow = (w > 319), hdr = lh*2+12, rows = (h - hdr - ftr) / lh - inforow, count = (int)list.size(), bot = hdr + rows * lh + 3 - (lh == 8 ? 1 : 0);
@@ -1455,7 +1455,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 			buf.PrintCenteredOutlined(lh, 0, w, h/2-lh*2, (w < 320 ? "Reset DOS to" : "Are you sure you want to reset DOS"), buf.COL_BTNTEXT);
 			#ifdef DBP_STANDALONE
 			if (list[sel].type == IT_EXITDBPS)
-				buf.PrintCenteredOutlined(lh, 0, w, h/2-lh+2, (w < 320 ? "exit DOSBox?" : "and shut down DOSBox Pure?"), buf.COL_BTNTEXT);
+				buf.PrintCenteredOutlined(lh, 0, w, h/2-lh+2, (w < 320 ? "exit DOSBox?" : "and shut down DOSBox?"), buf.COL_BTNTEXT);
 			else
 			#endif
 			buf.PrintCenteredOutlined(lh, 0, w, h/2-lh+2, (w < 320 ? "start this?" : "to start the selected application?"), buf.COL_BTNTEXT);
@@ -1575,7 +1575,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 
 			#ifdef DBP_STANDALONE
 			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_EXITDBPS, 0, "Exit DOSBox Pure");
+			list.emplace_back(IT_EXITDBPS, 0, "Exit DOSBox");
 			#endif
 		}
 		else if (mode == IT_BOOTIMG)

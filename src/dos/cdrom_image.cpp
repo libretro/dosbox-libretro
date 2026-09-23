@@ -119,7 +119,16 @@ int CDROM_Interface_Image::BinaryFile::getLength()
 
 #include "stb_vorbis.inl"
 
-CDROM_Interface_Image::AudioFile::AudioFile(const char *filename, bool &error, const char *relative_to) : TrackFile(filename, error, relative_to), last_seek(0), vorb(NULL)
+#define DR_FLAC_IMPLEMENTATION
+#define DR_FLAC_NO_STDIO
+#define DR_FLAC_NO_OGG
+#define DR_FLAC_NO_WCHAR
+#include "dr_flac.h"
+#define DR_MP3_IMPLEMENTATION
+#define DR_MP3_NO_STDIO
+#include "dr_mp3.h"
+
+CDROM_Interface_Image::AudioFile::AudioFile(const char *filename, bool &error, const char *relative_to) : TrackFile(filename, error, relative_to), last_seek(0), vorb(NULL), flac(NULL), mp3(NULL), channels(2)
 {
 	if (error) return;
 
@@ -176,6 +185,62 @@ CDROM_Interface_Image::AudioFile::AudioFile(const char *filename, bool &error, c
 		audio_factor = p.sample_rate / 44100.0f;
 		audio_length = stb_vorbis_stream_length_in_samples(vorb) * 4;
 	}
+	else if (sz >= 4 && (!memcmp(header, "fLaC", 4) || !memcmp(header, "ID3", 3) || (header[0] == 0xFF && (header[1] & 0xE0) == 0xE0)))
+	{
+		// FLAC and MP3 are read through the same DOS file as OGG. An ID3 tag can come before either, so both get a try.
+		dos_file->Seek(&(dos_ofs = 0), DOS_SEEK_SET);
+		struct DrFuncs
+		{
+			static size_t trkread(void* u, void* buffer, size_t count)
+			{
+				CDROM_Interface_Image::AudioFile* trk = (CDROM_Interface_Image::AudioFile*)u;
+				if (trk->dos_ofs >= trk->dos_end) return 0;
+				if (count > trk->dos_end - trk->dos_ofs) count = trk->dos_end - trk->dos_ofs;
+				Bit32u before = trk->dos_ofs;
+				trk->TrackFile::read((Bit8u*)buffer, (int)trk->dos_ofs, (int)count);
+				return (size_t)(trk->dos_ofs - before);
+			}
+			static Bit32u seekpos(CDROM_Interface_Image::AudioFile* trk, int offset, int origin) // origin: 0 = set, 1 = current, 2 = end
+			{
+				Bit64s pos = (origin == 0 ? 0 : origin == 1 ? (Bit64s)trk->dos_ofs : (Bit64s)trk->dos_end) + offset;
+				return (Bit32u)(pos < 0 ? 0 : pos > (Bit64s)trk->dos_end ? trk->dos_end : pos);
+			}
+			static drflac_bool32 flacseek(void* u, int offset, drflac_seek_origin origin)
+			{
+				CDROM_Interface_Image::AudioFile* trk = (CDROM_Interface_Image::AudioFile*)u;
+				return trk->dos_file->Seek(&(trk->dos_ofs = seekpos(trk, offset, (origin == DRFLAC_SEEK_SET ? 0 : origin == DRFLAC_SEEK_CUR ? 1 : 2))), DOS_SEEK_SET);
+			}
+			static drflac_bool32 flactell(void* u, drflac_int64* cursor) { *cursor = ((CDROM_Interface_Image::AudioFile*)u)->dos_ofs; return DRFLAC_TRUE; }
+			static drmp3_bool32 mp3seek(void* u, int offset, drmp3_seek_origin origin)
+			{
+				CDROM_Interface_Image::AudioFile* trk = (CDROM_Interface_Image::AudioFile*)u;
+				return trk->dos_file->Seek(&(trk->dos_ofs = seekpos(trk, offset, (origin == DRMP3_SEEK_SET ? 0 : origin == DRMP3_SEEK_CUR ? 1 : 2))), DOS_SEEK_SET);
+			}
+			static drmp3_bool32 mp3tell(void* u, drmp3_int64* cursor) { *cursor = ((CDROM_Interface_Image::AudioFile*)u)->dos_ofs; return DRMP3_TRUE; }
+		};
+		Bit32u rate = 0; Bit64u frames = 0;
+		if (drflac* f = drflac_open(DrFuncs::trkread, DrFuncs::flacseek, DrFuncs::flactell, this, NULL))
+		{
+			flac = f;
+			rate = f->sampleRate; channels = f->channels; frames = f->totalPCMFrameCount;
+		}
+		else
+		{
+			dos_file->Seek(&(dos_ofs = 0), DOS_SEEK_SET);
+			drmp3* m = new drmp3;
+			if (drmp3_init(m, DrFuncs::trkread, DrFuncs::mp3seek, DrFuncs::mp3tell, NULL, this, NULL))
+			{
+				mp3 = m;
+				rate = m->sampleRate; channels = m->channels; frames = drmp3_get_pcm_frame_count(m);
+			}
+			else delete m;
+		}
+		if (!flac && !mp3) { LOG_MSG("ERROR: CD audio file '%s' is not a valid FLAC or MP3 file", filename); error = true; return; }
+		if (channels < 1 || channels > 2 || !rate || !frames) { LOG_MSG("ERROR: CD audio file '%s' has %d channels, a rate of %d hz and %d samples, which is not supported", filename, (int)channels, (int)rate, (int)frames); error = true; return; }
+		if (rate != 44100) { LOG_MSG("WARNING: CD audio %s file '%s' has a rate of %d hz (playback quality might suffer if it's not a rate of 44100 hz)", (flac ? "FLAC" : "MP3"), filename, (int)rate); }
+		audio_factor = rate / 44100.0f;
+		audio_length = (Bit32u)frames * 4; // decoded to 16-bit stereo, like OGG
+	}
 	else { LOG_MSG("ERROR: CD audio file '%s' uses unsupported audio compression", filename); error = true; return; }
 
 	if (audio_factor != 1.0) buffer_temp.resize((size_t)(16 + RAW_SECTOR_SIZE * audio_factor)); // alloc temp buffer for resampling
@@ -187,6 +252,10 @@ CDROM_Interface_Image::AudioFile::~AudioFile()
 {
 	if (vorb)
 		stb_vorbis_close(vorb);
+	if (flac)
+		drflac_close((drflac*)flac);
+	if (mp3)
+		{ drmp3_uninit((drmp3*)mp3); delete (drmp3*)mp3; }
 }
 
 bool CDROM_Interface_Image::AudioFile::read(Bit8u *buffer, int seek, int count)
@@ -208,6 +277,21 @@ bool CDROM_Interface_Image::AudioFile::read(Bit8u *buffer, int seek, int count)
 	{
 		if (seek_jump && !stb_vorbis_seek(vorb, seek / 4)) got = 0;
 		else got = stb_vorbis_get_samples_short_interleaved(vorb, 2, (short*)buffer, count / 2) * 4;
+	}
+	else if (flac || mp3)
+	{
+		Bit32u frames = (Bit32u)count / 4;
+		if (seek_jump && !(flac ? drflac_seek_to_pcm_frame((drflac*)flac, seek / 4) : drmp3_seek_to_pcm_frame((drmp3*)mp3, seek / 4))) got = 0;
+		else if (channels == 2) got = (Bit32u)(flac ? drflac_read_pcm_frames_s16((drflac*)flac, frames, (drflac_int16*)buffer) : drmp3_read_pcm_frames_s16((drmp3*)mp3, frames, (drmp3_int16*)buffer)) * 4;
+		else
+		{
+			// Mono: decode into the upper half, then spread each sample over both channels front to back.
+			// Writing sample i to 2i and 2i+1 never reaches the mono samples after i, which sit at frames+i onwards.
+			short* out = (short*)buffer;
+			Bit32u n = (Bit32u)(flac ? drflac_read_pcm_frames_s16((drflac*)flac, frames, (drflac_int16*)(out + frames)) : drmp3_read_pcm_frames_s16((drmp3*)mp3, frames, (drmp3_int16*)(out + frames)));
+			for (Bit32u i = 0; i != n; i++) { short v = out[frames + i]; out[i * 2] = v; out[i * 2 + 1] = v; }
+			got = n * 4;
+		}
 	}
 	else
 	{

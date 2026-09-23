@@ -648,7 +648,7 @@ void SHELL_Init() {
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n"
 #ifdef C_DBP_LIBRETRO
-		"\xBA \033[32mWelcome to DOSBox Pure\033[37m                                             \xBA\n"
+		"\xBA \033[32mWelcome to DOSBox\033[37m (based on DOSBox Pure)                           \xBA\n"
 #else
 		"\xBA \033[32mWelcome to DOSBox %-8s\033[37m                                         \xBA\n"
 #endif

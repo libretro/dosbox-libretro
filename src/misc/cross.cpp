@@ -142,9 +142,19 @@ bool Cross::IsPathAbsolute(std::string const& in) {
 	return false;
 }
 #else //defined(C_DBP_ENABLE_CONFIG_PROGRAM) || defined(C_DBP_ENABLE_CAPTURE) || defined(C_OPENGL)
+// A frontend path like Android's content:// URI (RFC 3986: a letter, then letters, digits, + - or ., then ://) is
+// already absolute, and its // must not be collapsed - only the frontend's VFS can resolve it.
+static bool IsUriPath(const char* p)
+{
+	if (!((*p|0x20) >= 'a' && (*p|0x20) <= 'z')) return false;
+	for (p++; ((*p|0x20) >= 'a' && (*p|0x20) <= 'z') || (*p >= '0' && *p <= '9') || *p == '+' || *p == '-' || *p == '.'; p++) {}
+	return (p[0] == ':' && p[1] == '/' && p[2] == '/');
+}
+
 std::string& Cross::MakePathAbsolute(std::string& str)
 {
 	size_t strsz = str.size();
+	if (IsUriPath(str.c_str())) return str;
 	#ifdef WIN32
 	if (strsz > 2 && (str[1] == ':' || (str[0]=='\\' && str[1]=='\\'))) return str;
 	wchar_t buf[512]; UINT cp; int len;
@@ -166,7 +176,7 @@ std::string& Cross::MakePathAbsolute(std::string& str)
 }
 std::string& Cross::NormalizePath(std::string& str, char sep) // strip ., .., repeated / and trailing / (unless root), standardize path separator
 {
-	if (!*str.c_str()) return str; // c_str guarantees \0 terminator afterwards
+	if (!*str.c_str() || IsUriPath(str.c_str())) return str; // c_str guarantees \0 terminator afterwards
 	for (char *path = &str[0], *src = path, *dst = path, *root = src + (*src == '/' || *src == '\\'), c;;)
 	{
 		if ((c = *(src++)) != '.')

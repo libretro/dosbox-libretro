@@ -44,6 +44,7 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup>
+    <TargetName>dosbox_libretro</TargetName>
     <OutDir Condition="'$(Platform)'=='x64'">$(ProjectDir)\build\$(Configuration)_64bit\</OutDir>
     <OutDir Condition="'$(Platform)'=='Win32'">$(ProjectDir)\build\$(Configuration)_32bit\</OutDir>
     <IntDir Condition="'$(Platform)'=='x64'">$(ProjectDir)\build\$(Configuration)_64bit\</IntDir>

@@ -21,6 +21,7 @@
 #include "dosbox.h"
 #include "inout.h"
 #include "vga.h"
+#include "pinhack.h"
 #include "debug.h"
 #include "cpu.h"
 #include "video.h"
@@ -190,11 +191,13 @@ void vga_write_p3d5(Bitu /*port*/,Bitu val,Bitu iolen) {
 		*/
 		break;
 	case 0x0C:	/* Start Address High Register */
+		if (pinhack.trigger && pinhack.active) val=0; // pinball hack: keep the table unscrolled, it is all shown at once
 		crtc(start_address_high)=val;
 		vga.config.display_start=(vga.config.display_start & 0xFF00FF)| (val << 8);
 		/* 0-7  Upper 8 bits of the start address of the display buffer */
 		break;
 	case 0x0D:	/* Start Address Low Register */
+		if (pinhack.trigger && pinhack.active) val=0;
 		crtc(start_address_low)=val;
 		vga.config.display_start=(vga.config.display_start & 0xFFFF00)| val;
 		/*	0-7	Lower 8 bits of the start address of the display buffer */

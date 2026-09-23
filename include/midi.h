@@ -45,6 +45,20 @@ public:
 };
 
 
+#ifdef C_DBP_SUPPORT_MIDI_MT32
+// MT-32 emulation settings from the dosbox_pure_mt32_* core options. Partials and analog
+// mode are fixed when the synth opens; MIDI_MT32_ApplyConfig applies the rest to an open one.
+struct DBP_MT32Config {
+	Bit32u partials;
+	Bit8u analog, dac;   // MT32Emu::AnalogOutputMode and MT32Emu::DACInputMode
+	Bit8s reverb_mode;   // -1 leaves reverb to the control ROM and the game
+	Bit8u reverb_time, reverb_level;
+	bool reverse_stereo, nice_amp_ramp;
+};
+extern DBP_MT32Config dbp_mt32;
+void MIDI_MT32_ApplyConfig();
+#endif
+
 #define SYSEX_SIZE 8192
 struct DB_Midi {
 	Bitu status;

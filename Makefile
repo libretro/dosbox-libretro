@@ -35,7 +35,7 @@ SOURCES := \
 CPUFLAGS := $(MAKE_CPUFLAGS)
 STRIPCMD := $(or $(STRIP),strip) --strip-all
 ifneq ($(ISWIN),)
-  OUTNAME := dosbox_pure_libretro.dll
+  OUTNAME := dosbox_libretro.dll
   CXX     ?= g++
   LDFLAGS := -Wl,--gc-sections -fno-ident
   COMMONFLAGS += -pthread
@@ -43,7 +43,7 @@ else ifneq (,$(findstring ios,$(platform)))
   ifeq ($(IOSSDK),)
     IOSSDK := $(shell xcodebuild -version -sdk iphoneos Path)
   endif
-  OUTNAME := dosbox_pure_libretro_ios.dylib
+  OUTNAME := dosbox_libretro_ios.dylib
   MINVERSION :=
   COMMONFLAGS += -DDISABLE_DYNAREC=1 -DDBP_IOS
   ifeq ($(platform),ios-arm64)
@@ -64,14 +64,14 @@ else ifeq ($(platform),tvos-arm64)
   ifeq ($(IOSSDK),)
     IOSSDK := $(shell xcodebuild -version -sdk appletvos Path)
   endif
-  OUTNAME := dosbox_pure_libretro_tvos.dylib
+  OUTNAME := dosbox_libretro_tvos.dylib
   CXX     = c++ -arch arm64 -isysroot $(IOSSDK)
   MINVERSION = -mappletvos-version-min=11.0
   LDFLAGS := -Wl,-dead_strip $(MINVERSION)
   COMMONFLAGS += -DDISABLE_DYNAREC=1 -Wno-unknown-warning-option -Wno-deprecated-declarations $(MINVERSION)
   STRIPCMD := $(or $(STRIP),strip) -xS
 else ifneq ($(ISMAC),)
-  OUTNAME := dosbox_pure_libretro.dylib
+  OUTNAME := dosbox_libretro.dylib
   CXX     ?= c++
   LDFLAGS := -Wl,-dead_strip
   COMMONFLAGS += -pthread -Wno-unknown-warning-option -Wno-deprecated-declarations
@@ -85,11 +85,11 @@ else ifneq ($(ISMAC),)
   LDFLAGS      += $(ARCHFLAGS)
   STRIPCMD := $(or $(STRIP),strip) -xS
 else ifeq ($(platform),windows) # For MSYS2 only
-  OUTNAME := dosbox_pure_libretro.dll
+  OUTNAME := dosbox_libretro.dll
   CXX     ?= g++
   LDFLAGS := -Wl,--gc-sections -fno-ident
 else ifeq ($(platform),vita)
-  OUTNAME := dosbox_pure_libretro_vita.a
+  OUTNAME := dosbox_libretro_vita.a
   CXX     := arm-vita-eabi-g++
   AR      := arm-vita-eabi-ar
   COMMONFLAGS += -DVITA
@@ -98,7 +98,7 @@ else ifeq ($(platform),vita)
   COMMONFLAGS += -fno-optimize-sibling-calls
   STATIC_LINKING = 1
 else ifeq ($(platform),ctr)
-  OUTNAME := dosbox_pure_libretro_ctr.a
+  OUTNAME := dosbox_libretro_ctr.a
   CXX     := $(DEVKITARM)/bin/arm-none-eabi-g++
   AR      := $(DEVKITARM)/bin/arm-none-eabi-ar
   COMMONFLAGS += -DARM11 -D_3DS -Os -s -I$(CTRULIB)/include/ -DHAVE_MKDIR
@@ -107,27 +107,27 @@ else ifeq ($(platform),ctr)
   COMMONFLAGS += -I$(DEVKITPRO)/libctru/include
   STATIC_LINKING = 1
 else ifeq ($(platform),ngc)
-  OUTNAME := dosbox_pure_libretro_ngc.a
+  OUTNAME := dosbox_libretro_ngc.a
   CXX     := $(DEVKITPPC)/bin/powerpc-eabi-g++
   AR      := $(DEVKITPPC)/bin/powerpc-eabi-ar
-  COMMONFLAGS += -DGEKKO -DHW_DOL -mrvl -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DMSB_FIRST -DWORDS_BIGENDIAN=1
+  COMMONFLAGS += -I$(DEVKITPRO)/libogc/include -DGEKKO -DHW_DOL -mogc -mcpu=750 -meabi -mhard-float -D__POWERPC__ -D__ppc__ -DMSB_FIRST -DWORDS_BIGENDIAN=1
   STATIC_LINKING = 1
 else ifeq ($(platform),wii)
-  OUTNAME := dosbox_pure_libretro_wii.a
+  OUTNAME := dosbox_libretro_wii.a
   CXX     := $(DEVKITPPC)/bin/powerpc-eabi-g++
   AR      := $(DEVKITPPC)/bin/powerpc-eabi-ar
-  COMMONFLAGS += -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -fpermissive
+  COMMONFLAGS += -I$(DEVKITPRO)/libogc/include -DGEKKO -DHW_RVL -mrvl -mcpu=750 -meabi -mhard-float -fpermissive
   COMMONFLAGS += -U__INT32_TYPE__ -U__UINT32_TYPE__ -D__INT32_TYPE__=int -D__POWERPC__ -D__ppc__ -DMSB_FIRST -DWORDS_BIGENDIAN=1
   STATIC_LINKING = 1
 else ifeq ($(platform),wiiu)
-  OUTNAME := dosbox_pure_libretro_wiiu.a
+  OUTNAME := dosbox_libretro_wiiu.a
   CXX     := $(DEVKITPPC)/bin/powerpc-eabi-g++
   AR      := $(DEVKITPPC)/bin/powerpc-eabi-ar
   COMMONFLAGS += -DWIIU -DHW_RVL -mcpu=750 -meabi -mhard-float
   COMMONFLAGS += -U__INT32_TYPE__ -U__UINT32_TYPE__ -D__INT32_TYPE__=int -D__POWERPC__ -D__ppc__ -DMSB_FIRST -DWORDS_BIGENDIAN=1 -DGX_PTHREAD_LEGACY
   STATIC_LINKING = 1
 else ifeq ($(platform),libnx)
-  OUTNAME := dosbox_pure_libretro_libnx.a
+  OUTNAME := dosbox_libretro_libnx.a
   export DEPSDIR = $(CURDIR)
   include $(DEVKITPRO)/libnx/switch_rules
   COMMONFLAGS += -I$(LIBNX)/include/ -D__SWITCH__ -DHAVE_LIBNX
@@ -136,28 +136,28 @@ else ifeq ($(platform),libnx)
   SOURCES += libretro-common/features/features_cpu.c
 else ifeq ($(platform),gcw0)
   # You must used the toolchain built on or around 2014-08-20
-  OUTNAME := dosbox_pure_libretro.so
+  OUTNAME := dosbox_libretro.so
   CXX     := /opt/gcw0-toolchain/usr/bin/mipsel-linux-g++
   LDFLAGS := -Wl,--gc-sections -fno-ident
   CPUFLAGS := -ffast-math -march=mips32r2 -mtune=mips32r2 -mhard-float -fexpensive-optimizations -frename-registers -fPIC
   COMMONFLAGS += -pthread
   STRIPCMD := /opt/gcw0-toolchain/usr/mipsel-gcw0-linux-uclibc/bin/strip --strip-all
 else ifeq ($(platform),miyoo)
-  OUTNAME := dosbox_pure_libretro.so
+  OUTNAME := dosbox_libretro.so
   CXX     := /opt/miyoo/usr/bin/arm-linux-g++
   LDFLAGS := -Wl,--gc-sections -fno-ident
   CPUFLAGS := -ffast-math -march=armv5te -mtune=arm926ej-s -fPIC
   COMMONFLAGS += -pthread
   STRIPCMD := /opt/miyoo/usr/arm-miyoo-linux-uclibcgnueabi/bin/strip --strip-all
 else ifeq ($(platform),retrofw)
-  OUTNAME := dosbox_pure_libretro.so
+  OUTNAME := dosbox_libretro.so
   CXX     := /opt/retrofw-toolchain/usr/bin/mipsel-linux-g++
   LDFLAGS := -Wl,--gc-sections -fno-ident
   CPUFLAGS := -ffast-math -march=mips32 -mtune=mips32 -mhard-float -fexpensive-optimizations -frename-registers -fPIC
   COMMONFLAGS += -pthread
   STRIPCMD := /opt/retrofw-toolchain/usr/mipsel-RetroFW-linux-uclibc/bin/strip --strip-all
 else ifneq ($(findstring Haiku,$(shell uname -s)),)
-  OUTNAME := dosbox_pure_libretro.so
+  OUTNAME := dosbox_libretro.so
   LDFLAGS := -Wl,--gc-sections -fno-ident -lroot -lnetwork
   ifneq ($(findstring BePC,$(shell uname -m)),)
     CXX   ?= g++-x86
@@ -165,7 +165,7 @@ else ifneq ($(findstring Haiku,$(shell uname -s)),)
     CXX   ?= g++
   endif
 else
-  OUTNAME := dosbox_pure_libretro.so
+  OUTNAME := dosbox_libretro.so
   CXX     ?= g++
   LDFLAGS := -Wl,--gc-sections -fno-ident
   COMMONFLAGS += -pthread

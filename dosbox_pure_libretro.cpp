@@ -34,6 +34,9 @@
 #include "include/dbp_serialize.h"
 #include "include/dbp_threads.h"
 #include "include/dbp_opengl.h"
+#include "include/pinhack.h"
+#include "include/midi.h"
+#include "include/vga.h"
 #include "src/ints/int10.h"
 #include "src/dos/drives.h"
 #include "keyb2joypad.h"
@@ -232,6 +235,7 @@ extern retro_time_t dbp_cpu_features_get_time_usec(void);
 static retro_perf_get_time_usec_t time_cb = dbp_cpu_features_get_time_usec;
 static retro_log_printf_t         log_cb = retro_fallback_log;
 static retro_environment_t        environ_cb;
+static struct retro_vfs_interface* dbp_vfs_iface; // frontend VFS, for paths only it can open (Android SAF content:// URIs)
 static retro_video_refresh_t      video_cb;
 static retro_audio_sample_batch_t audio_batch_cb;
 static retro_input_poll_t         input_poll_cb;
@@ -842,7 +846,7 @@ static std::string DBP_GetSaveFile(DBP_SaveFileType type, const char** out_filen
 	if (type < _SFT_LAST_SAVE_DIRECTORY)
 	{
 		if (savenamelen) res.append(savename, savenamelen - 9);
-		else res.append(dbp_content_name.empty() ? "DOSBox-pure" : dbp_content_name.c_str());
+		else res.append(dbp_content_name.empty() ? "DOSBox" : dbp_content_name.c_str());
 		if (type == SFT_GAMESAVE && !dbp_strict_mode) // strict mode has no support for legacy saves
 		{
 			if (FILE* fSave = fopen_wrap(res.append(".pure.zip").c_str(), "rb")) { fclose(fSave); } // new save exists!
@@ -1837,6 +1841,7 @@ void GFX_Events()
 		{
 			case DBPET_KEYDOWN:
 				if (e.port == DBP_KEYBOARD_PORT) BIOS_SetKeyboardLEDOverwrite((KBD_KEYS)e.val, (KBD_LEDS)e.val2);
+				if (e.val == KBD_insert && pinhack.enabled) { pinhack.active = !pinhack.active; VGA_SetupDrawing(0); } // switch the pinball scroll hack, the key still goes to the game
 				KEYBOARD_AddKey((KBD_KEYS)e.val, true);
 				break;
 			case DBPET_KEYUP: KEYBOARD_AddKey((KBD_KEYS)e.val, false); break;
@@ -2109,7 +2114,7 @@ void retro_set_video_refresh     (retro_video_refresh_t cb)      { video_cb     
 void retro_get_system_info(struct retro_system_info *info) // #1
 {
 	memset(info, 0, sizeof(*info));
-	info->library_name     = "DOSBox-pure";
+	info->library_name     = "DOSBox";
 	info->library_version  = DOSBOX_PURE_VERSION_STR;
 	info->need_fullpath    = true;
 	info->block_extract    = true;
@@ -2121,6 +2126,14 @@ void retro_set_environment(retro_environment_t cb) //#2
 	environ_cb = cb;
 	bool allow_no_game = true;
 	cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
+
+	// Keep the frontend's VFS around for file access. Directory scanning already
+	// asks for it where needed; this is for opening files whose path only the
+	// frontend understands, which on Android is every content:// URI SAF hands
+	// out - and this core is need_fullpath, so it opens them itself.
+	struct retro_vfs_interface_info vfs = { 3, NULL };
+	if (cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs) && vfs.required_interface_version >= 3 && vfs.iface)
+		dbp_vfs_iface = vfs.iface;
 }
 
 static void set_variables(bool force_midi_scan = false)
@@ -2311,6 +2324,43 @@ static bool check_variables()
 	#endif
 
 	dbp_actionwheel_inputs = (Bit8u)atoi(DBP_Option::Get(DBP_Option::actionwheel_inputs));
+
+	{
+		static char pinhack_last;
+		const char* pinhack_opt = DBP_Option::Get(DBP_Option::pinhack);
+		pinhack.enabled = (pinhack_opt[0] != 'f');
+		if (pinhack_opt[0] != pinhack_last) { pinhack.active = (pinhack_opt[0] == 't'); pinhack_last = pinhack_opt[0]; } // in between, Insert switches it
+		struct Local { static void Range(const char* v, int& mn, int& mx, int any) { const char* dash = strchr(v, '-'); mn = atoi(v); mx = (dash ? atoi(dash + 1) : mn); if (!mn && !mx) mx = any; } };
+		Local::Range(DBP_Option::Get(DBP_Option::pinhack_trigger_width), pinhack.triggerwidth.min, pinhack.triggerwidth.max, 9999);
+		Local::Range(DBP_Option::Get(DBP_Option::pinhack_trigger_height), pinhack.triggerheight.min, pinhack.triggerheight.max, 9999);
+		int expand = atoi(DBP_Option::Get(DBP_Option::pinhack_expand_height));
+		pinhack.expand.height = (expand ? expand + atoi(DBP_Option::Get(DBP_Option::pinhack_expand_fine)) : 0);
+		pinhack.expand.width = 0;
+		DBP_Option::SetDisplay(DBP_Option::pinhack_trigger_width, pinhack.enabled);
+		DBP_Option::SetDisplay(DBP_Option::pinhack_trigger_height, pinhack.enabled);
+		DBP_Option::SetDisplay(DBP_Option::pinhack_expand_height, pinhack.enabled);
+		DBP_Option::SetDisplay(DBP_Option::pinhack_expand_fine, pinhack.enabled && expand);
+	}
+
+	#ifdef C_DBP_SUPPORT_MIDI_MT32
+	{
+		const char* midi_opt = DBP_Option::Get(DBP_Option::midi);
+		size_t midi_len = strlen(midi_opt);
+		const bool mt32_selected = (midi_len > 12 && !strcasecmp(midi_opt + midi_len - 12, "_CONTROL.ROM"));
+		dbp_mt32.partials = (Bit32u)atoi(DBP_Option::Get(DBP_Option::mt32_partials));
+		dbp_mt32.analog = (Bit8u)atoi(DBP_Option::Get(DBP_Option::mt32_analog));
+		dbp_mt32.dac = (Bit8u)atoi(DBP_Option::Get(DBP_Option::mt32_dac));
+		const char* reverb = DBP_Option::Get(DBP_Option::mt32_reverb);
+		dbp_mt32.reverb_mode = (Bit8s)(reverb[0] == 'a' ? -1 : atoi(reverb));
+		dbp_mt32.reverb_time = (Bit8u)atoi(DBP_Option::Get(DBP_Option::mt32_reverb_time));
+		dbp_mt32.reverb_level = (Bit8u)atoi(DBP_Option::Get(DBP_Option::mt32_reverb_level));
+		dbp_mt32.reverse_stereo = (DBP_Option::Get(DBP_Option::mt32_reverse_stereo)[0] == 't');
+		dbp_mt32.nice_amp_ramp = (DBP_Option::Get(DBP_Option::mt32_nice_amp_ramp)[0] == 't');
+		MIDI_MT32_ApplyConfig();
+		for (DBP_Option::Index i = DBP_Option::mt32_partials; i <= DBP_Option::mt32_nice_amp_ramp; i = (DBP_Option::Index)(i + 1))
+			DBP_Option::SetDisplay(i, mt32_selected && ((i != DBP_Option::mt32_reverb_time && i != DBP_Option::mt32_reverb_level) || dbp_mt32.reverb_mode >= 0));
+	}
+	#endif
 	dbp_auto_mapping_mode = DBP_Option::Get(DBP_Option::auto_mapping)[0];
 
 	bool old_strict_mode = dbp_strict_mode;
@@ -3867,8 +3917,102 @@ wchar_t* AllocUTF8ToUTF16(const char *str)
 #endif
 #endif
 
+
+// A path handed over by the frontend can be one only the frontend can open:
+// Android's Storage Access Framework uses content:// URIs, which no C library
+// resolves, and this core is need_fullpath so it opens content itself. The code
+// base passes FILE* around everywhere, so rather than converting every caller,
+// wrap the frontend's file handle in a FILE*.
+#if defined(__BIONIC__) || defined(__ANDROID__)
+#define DBP_HAVE_VFS_FILE 1
+// funopen64 only exists from API 24 on, and this core builds against android-16,
+// so below that fall back to funopen and whatever width its offsets have.
+#if defined(__ANDROID_API__) && __ANDROID_API__ >= 24
+typedef fpos64_t DBP_fpos_t;
+#define DBP_FUNOPEN funopen64
+#else
+typedef fpos_t DBP_fpos_t;
+#define DBP_FUNOPEN funopen
+#endif
+static int DBP_VfsRead(void* c, char* buf, int size)
+{
+	int64_t got = dbp_vfs_iface->read((struct retro_vfs_file_handle*)c, buf, (uint64_t)size);
+	return (got < 0 ? -1 : (int)got);
+}
+static int DBP_VfsWrite(void* c, const char* buf, int size)
+{
+	int64_t put = dbp_vfs_iface->write((struct retro_vfs_file_handle*)c, buf, (uint64_t)size);
+	return (put < 0 ? -1 : (int)put);
+}
+static DBP_fpos_t DBP_VfsSeek(void* c, DBP_fpos_t off, int whence)
+{
+	int pos = (whence == SEEK_SET ? RETRO_VFS_SEEK_POSITION_START : whence == SEEK_CUR ? RETRO_VFS_SEEK_POSITION_CURRENT : RETRO_VFS_SEEK_POSITION_END);
+	// The VFS seek return value is 0 on success in some frontends and the new offset in others,
+	// so ask tell() for the position instead of trusting it.
+	if (dbp_vfs_iface->seek((struct retro_vfs_file_handle*)c, (int64_t)off, pos) < 0) return (DBP_fpos_t)-1;
+	return (DBP_fpos_t)dbp_vfs_iface->tell((struct retro_vfs_file_handle*)c);
+}
+static int DBP_VfsClose(void* c) { return dbp_vfs_iface->close((struct retro_vfs_file_handle*)c); }
+static FILE* DBP_VfsWrapFile(struct retro_vfs_file_handle* h)
+{
+	FILE* f = DBP_FUNOPEN(h, DBP_VfsRead, DBP_VfsWrite, DBP_VfsSeek, DBP_VfsClose);
+	if (!f) dbp_vfs_iface->close(h);
+	return f;
+}
+#elif defined(__GLIBC__)
+#define DBP_HAVE_VFS_FILE 1
+static ssize_t DBP_VfsRead(void* c, char* buf, size_t size)
+{
+	int64_t got = dbp_vfs_iface->read((struct retro_vfs_file_handle*)c, buf, (uint64_t)size);
+	return (got < 0 ? -1 : (ssize_t)got);
+}
+static ssize_t DBP_VfsWrite(void* c, const char* buf, size_t size)
+{
+	int64_t put = dbp_vfs_iface->write((struct retro_vfs_file_handle*)c, buf, (uint64_t)size);
+	return (put < 0 ? -1 : (ssize_t)put);
+}
+static int DBP_VfsSeek(void* c, off64_t* off, int whence)
+{
+	int pos = (whence == SEEK_SET ? RETRO_VFS_SEEK_POSITION_START : whence == SEEK_CUR ? RETRO_VFS_SEEK_POSITION_CURRENT : RETRO_VFS_SEEK_POSITION_END);
+	// The VFS seek return value is 0 on success in some frontends and the new offset in others,
+	// so ask tell() for the position instead of trusting it.
+	int64_t res = dbp_vfs_iface->seek((struct retro_vfs_file_handle*)c, (int64_t)*off, pos);
+	int64_t at = (res < 0 ? -1 : dbp_vfs_iface->tell((struct retro_vfs_file_handle*)c));
+	if (at < 0) return -1;
+	*off = (off64_t)at;
+	return 0;
+}
+static int DBP_VfsClose(void* c) { return dbp_vfs_iface->close((struct retro_vfs_file_handle*)c); }
+static FILE* DBP_VfsWrapFile(struct retro_vfs_file_handle* h)
+{
+	cookie_io_functions_t fns = { DBP_VfsRead, DBP_VfsWrite, DBP_VfsSeek, DBP_VfsClose };
+	FILE* f = fopencookie(h, "r+", fns);
+	if (!f) dbp_vfs_iface->close(h);
+	return f;
+}
+#endif
+
+static FILE* DBP_VfsFOpen(const char* path, const char* mode)
+{
+	#ifdef DBP_HAVE_VFS_FILE
+	if (!dbp_vfs_iface || !strstr(path, "://")) return NULL;
+	// The VFS has no append mode, so 'a' opens the existing file for writing and seeks to its end.
+	bool append = !!strchr(mode, 'a');
+	unsigned access = (strchr(mode, 'w') ? RETRO_VFS_FILE_ACCESS_WRITE : (append || strchr(mode, '+')) ? (RETRO_VFS_FILE_ACCESS_READ_WRITE | RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING) : RETRO_VFS_FILE_ACCESS_READ);
+	struct retro_vfs_file_handle* h = dbp_vfs_iface->open(path, access, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+	if (!h && append) h = dbp_vfs_iface->open(path, RETRO_VFS_FILE_ACCESS_WRITE, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+	if (!h) return NULL;
+	if (append) dbp_vfs_iface->seek(h, 0, RETRO_VFS_SEEK_POSITION_END);
+	return DBP_VfsWrapFile(h);
+	#else
+	(void)path; (void)mode;
+	return NULL;
+	#endif
+}
+
 FILE* fopen_wrap(const char* path, const char* mode)
 {
+	if (FILE* vfs_file = DBP_VfsFOpen(path, mode)) return vfs_file;
 	#ifdef WIN32
 	for (const char* p = path; *p; p++) { if ((Bit8u)*p > 0x7F) goto needw; }
 	#endif
@@ -3887,6 +4031,16 @@ FILE* fopen_wrap(const char* path, const char* mode)
 
 static bool exists_utf8(const char* path, bool* out_is_dir)
 {
+	#ifdef DBP_HAVE_VFS_FILE
+	if (dbp_vfs_iface && strstr(path, "://"))
+	{
+		// stat cannot see frontend-only paths either. Open read-only: read-write without
+		// UPDATE_EXISTING truncates, and SAF content is often not writable at all.
+		if (struct retro_vfs_file_handle* h = dbp_vfs_iface->open(path, RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE)) { dbp_vfs_iface->close(h); if (out_is_dir) *out_is_dir = false; return true; }
+		if (struct retro_vfs_dir_handle* d = dbp_vfs_iface->opendir(path, false)) { dbp_vfs_iface->closedir(d); if (out_is_dir) *out_is_dir = true; return true; }
+		return false;
+	}
+	#endif
 	#ifdef WIN32
 	for (const char* p = path; *p; p++) { if ((Bit8u)*p > 0x7F) goto needw; }
 	#endif

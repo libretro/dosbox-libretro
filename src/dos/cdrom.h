@@ -202,6 +202,8 @@ private:
 		Bit32u wave_start, audio_length, last_seek;
 		double audio_factor;
 		struct stb_vorbis *vorb;
+		void *flac, *mp3; // drflac and drmp3, which are anonymous structs and cannot be declared ahead
+		Bit32u channels; // of flac or mp3, which decode 1 or 2 channels as they come
 		std::vector<Bit8u> buffer_temp;
 		#elif defined(C_SDL_SOUND)
 		Sound_Sample *sample;

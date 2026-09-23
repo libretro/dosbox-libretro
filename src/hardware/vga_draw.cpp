@@ -24,6 +24,7 @@
 #include "render.h"
 #include "../gui/render_scalers.h"
 #include "vga.h"
+#include "pinhack.h"
 #include "pic.h"
 
 //#undef C_DEBUG
@@ -720,7 +721,7 @@ static void VGA_DrawPart(Bitu lines) {
 			vga.draw.address+=vga.draw.address_add;
 		}
 		vga.draw.lines_done++;
-		if (vga.draw.split_line==vga.draw.lines_done) {
+		if (vga.draw.split_line==vga.draw.lines_done && (!pinhack.trigger || !pinhack.active)) { // the pinball hack shows the whole table, which has no split
 #ifdef VGA_KEEP_CHANGES
 			VGA_ChangesEnd( );
 #endif
@@ -1032,6 +1033,8 @@ void VGA_ActivateHardwareCursor(void) {
 		VGA_DrawLine=VGA_Draw_Linear_Line;
 	}
 }
+
+scrollhack pinhack;
 
 void VGA_SetupDrawing(Bitu /*val*/) {
 	if (vga.mode==M_ERROR) {
@@ -1556,6 +1559,17 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		aspect_ratio *= 2.0;
 	}
 #endif
+
+	// Pinball hack (Felipe Sanches, https://github.com/DeXteRrBDN/dosbox-pinhack, as carried by dosbox-core):
+	// in a mode the size of a pinball table view, draw the taller screen the whole table fits on instead of scrolling
+	pinhack.trigger = false;
+	if (pinhack.enabled && pinhack.active
+		&& (int)height >= pinhack.triggerheight.min && (int)height <= pinhack.triggerheight.max
+		&& (int)width >= pinhack.triggerwidth.min && (int)width <= pinhack.triggerwidth.max) {
+		pinhack.trigger = true;
+		if (pinhack.expand.height) height = pinhack.expand.height;
+		if (pinhack.expand.width) width = pinhack.expand.width;
+	}
 
 	vga.draw.lines_total=height;
 	vga.draw.parts_lines=vga.draw.lines_total/vga.draw.parts_total;

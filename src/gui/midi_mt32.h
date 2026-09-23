@@ -227,7 +227,7 @@ struct MidiHandler_mt32 : public MidiHandler
 
 		syn = new MT32Emu::Synth();
 		const MT32Emu::ROMImage *control = MT32Emu::ROMImage::makeROMImage(&control_rom_file), *pcm = MT32Emu::ROMImage::makeROMImage(&pcm_rom_file);
-		syn->open(*control, *pcm, MT32Emu::DEFAULT_MAX_PARTIALS, MT32Emu::AnalogOutputMode_ACCURATE);
+		syn->open(*control, *pcm, dbp_mt32.partials, (MT32Emu::AnalogOutputMode)dbp_mt32.analog);
 		MT32Emu::ROMImage::freeROMImage(control);
 		MT32Emu::ROMImage::freeROMImage(pcm);
 
@@ -239,7 +239,23 @@ struct MidiHandler_mt32 : public MidiHandler
 		}
 		chan->SetFreq(syn->getStereoOutputSampleRate());
 		chan->Enable(true);
+		ApplyConfig();
 		return true;
+	}
+
+	void ApplyConfig()
+	{
+		if (!syn) return;
+		syn->setDACInputMode((MT32Emu::DACInputMode)dbp_mt32.dac);
+		syn->setReversedStereoEnabled(dbp_mt32.reverse_stereo);
+		syn->setNiceAmpRampEnabled(dbp_mt32.nice_amp_ramp);
+		syn->setReverbOverridden(false); // an overridden reverb ignores sysex, this one included
+		if (dbp_mt32.reverb_mode >= 0)
+		{
+			const Bit8u reverb_sysex[] = { 0x10, 0x00, 0x01, (Bit8u)dbp_mt32.reverb_mode, dbp_mt32.reverb_time, dbp_mt32.reverb_level };
+			syn->writeSysex(16, reverb_sysex, (Bit32u)sizeof(reverb_sysex));
+			syn->setReverbOverridden(true); // keep it, whatever the game sends
+		}
 	}
 
 	void PlayMsg(Bit8u * msg)
@@ -257,6 +273,9 @@ struct MidiHandler_mt32 : public MidiHandler
 };
 
 static MidiHandler_mt32 Midi_mt32;
+
+DBP_MT32Config dbp_mt32 = { MT32Emu::DEFAULT_MAX_PARTIALS, MT32Emu::AnalogOutputMode_ACCURATE, MT32Emu::DACInputMode_NICE, -1, 5, 3, false, true };
+void MIDI_MT32_ApplyConfig() { Midi_mt32.ApplyConfig(); }
 
 static void MIDI_MT32_CallBack(Bitu len)
 {

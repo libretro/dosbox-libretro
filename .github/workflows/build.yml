@@ -32,7 +32,7 @@ jobs:
     - uses: actions/upload-artifact@main
       with:
         name: dosbox_pure_win64
-        path: build/Release_64bit/dosbox_pure_libretro.dll
+        path: build/Release_64bit/dosbox_libretro.dll
 
   build-win32-msvc:
     runs-on: windows-latest
@@ -53,7 +53,7 @@ jobs:
     - uses: actions/upload-artifact@main
       with:
         name: dosbox_pure_win32
-        path: build/Release_32bit/dosbox_pure_libretro.dll
+        path: build/Release_32bit/dosbox_libretro.dll
 
   build-win64-gcc:
     runs-on: windows-latest
@@ -73,7 +73,7 @@ jobs:
     - uses: actions/upload-artifact@main
       with:
         name: dosbox_pure_win64_gcc
-        path: dosbox_pure_libretro.dll
+        path: dosbox_libretro.dll
 
   build-linux_x64:
     runs-on: ubuntu-latest
@@ -104,7 +104,7 @@ jobs:
     - uses: actions/upload-artifact@main
       with:
         name: dosbox_pure_linux_x64
-        path: dosbox_pure_libretro.so
+        path: dosbox_libretro.so
 
   build-linux_arm64:
     runs-on: ubuntu-24.04-arm
@@ -135,7 +135,7 @@ jobs:
     - uses: actions/upload-artifact@main
       with:
         name: dosbox_pure_linux_arm64
-        path: dosbox_pure_libretro.so
+        path: dosbox_libretro.so
 
   build-macos-x64:
     runs-on: macos-15-intel
@@ -153,7 +153,7 @@ jobs:
     - uses: actions/upload-artifact@main
       with:
         name: dosbox_pure_macos_x64
-        path: dosbox_pure_libretro.dylib
+        path: dosbox_libretro.dylib
 
   build-macos-arm:
     runs-on: macos-14
@@ -171,7 +171,7 @@ jobs:
     - uses: actions/upload-artifact@main
       with:
         name: dosbox_pure_macos_arm
-        path: dosbox_pure_libretro.dylib
+        path: dosbox_libretro.dylib
 
   build-android:
     runs-on: ubuntu-latest

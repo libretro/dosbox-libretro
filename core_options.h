@@ -102,6 +102,11 @@ namespace DBP_Option
 		#endif
 		aspect_correction,
 		overscan,
+		pinhack,
+		pinhack_trigger_width,
+		pinhack_trigger_height,
+		pinhack_expand_height,
+		pinhack_expand_fine,
 		// System
 		memory_size,
 		modem,
@@ -118,6 +123,14 @@ namespace DBP_Option
 		#endif
 		sblaster_conf,
 		midi,
+		mt32_partials,
+		mt32_analog,
+		mt32_dac,
+		mt32_reverb,
+		mt32_reverb_time,
+		mt32_reverb_level,
+		mt32_reverse_stereo,
+		mt32_nice_amp_ramp,
 		volume_sb,
 		volume_midi,
 		volume_adlib,
@@ -296,7 +309,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 	{
 		"dosbox_pure_conf",
 		"Advanced > Loading of dosbox.conf", NULL,
-		"DOSBox Pure is meant to be configured via core options but optionally supports loading of legacy .conf files.", NULL,
+		"DOSBox is meant to be configured via core options but optionally supports loading of legacy .conf files.", NULL,
 		DBP_OptionCat::General,
 		{
 			{ "false", "Disabled conf support (default)" },
@@ -438,7 +451,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 	{
 		"dosbox_pure_auto_mapping",
 		"Advanced > Automatic Game Pad Mappings", NULL,
-		"DOSBox Pure can automatically apply a gamepad control mapping scheme when it detects a game." "\n"
+		"DOSBox can automatically apply a gamepad control mapping scheme when it detects a game." "\n"
 		"These button mappings are provided by the Keyb2Joypad Project (by Jemy Murphy and bigjim).", NULL,
 		DBP_OptionCat::Input,
 		{ { "true", "On (default)" }, { "notify", "Enable with notification on game detection" }, { "false", "Off" } },
@@ -851,10 +864,83 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 	{
 		"dosbox_pure_overscan",
 		"Overscan Border Size", NULL,
-		"When enabled, show a border around the display. Some games use the color of the border to convey information." "\n\n", NULL, //end of Video section
+		"When enabled, show a border around the display. Some games use the color of the border to convey information.", NULL,
 		DBP_OptionCat::Video,
 		{ { "0", "Off (default)" }, { "1", "Small" }, { "2", "Medium" }, { "3", "Large" } },
 		"0"
+	},
+	{
+		"dosbox_pure_pinhack",
+		"Pinball Scroll Hack", NULL,
+		"Lets some pinball games that scroll the table (like Pinball Fantasies, Pinball Dreams or Pinball Illusions) show the whole table at once." "\n"
+		"It stretches video modes that match the trigger ranges below to the expand height. Only enable it for a game that works with it, it breaks others." "\n"
+		"Press Insert on the keyboard to switch it on and off while playing. Based on the pinhack patch by Felipe Sanches.", NULL,
+		DBP_OptionCat::Video,
+		{
+			{ "false", "Off (default)" },
+			{ "true", "On" },
+			{ "inactive", "On, but start switched off (toggle with Insert)" },
+		},
+		"false"
+	},
+	{
+		"dosbox_pure_pinhack_trigger_width",
+		"Pinball Scroll Hack Horizontal Trigger", NULL,
+		"The horizontal resolution range the hack takes effect at. Usually not needed.", NULL,
+		DBP_OptionCat::Video,
+		{
+			{ "0", "Any width (default)" },
+			{ "300-310", "300-310" }, { "311-320", "311-320" }, { "321-330", "321-330" }, { "331-340", "331-340" }, { "341-350", "341-350" }, { "351-360", "351-360" },
+			{ "361-370", "361-370" }, { "371-380", "371-380" }, { "381-390", "381-390" }, { "391-400", "391-400" }, { "401-410", "401-410" }, { "411-420", "411-420" },
+			{ "421-430", "421-430" }, { "431-440", "431-440" }, { "441-450", "441-450" }, { "451-460", "451-460" }, { "461-470", "461-470" }, { "471-480", "471-480" },
+			{ "481-490", "481-490" }, { "491-500", "491-500" }, { "501-510", "501-510" }, { "511-520", "511-520" }, { "521-530", "521-530" }, { "531-540", "531-540" },
+			{ "541-550", "541-550" }, { "551-560", "551-560" }, { "561-570", "561-570" }, { "571-580", "571-580" }, { "581-590", "581-590" }, { "591-600", "591-600" },
+			{ "601-610", "601-610" }, { "611-620", "611-620" }, { "621-630", "621-630" }, { "631-640", "631-640" },
+		},
+		"0"
+	},
+	{
+		"dosbox_pure_pinhack_trigger_height",
+		"Pinball Scroll Hack Vertical Trigger", NULL,
+		"The vertical resolution range the hack takes effect at.", NULL,
+		DBP_OptionCat::Video,
+		{
+			{ "200-210", "200-210" }, { "211-220", "211-220" }, { "221-230", "221-230" }, { "231-240", "231-240" }, { "241-250", "241-250" }, { "251-260", "251-260" },
+			{ "261-270", "261-270" }, { "271-280", "271-280" }, { "281-290", "281-290" }, { "291-300", "291-300" }, { "301-310", "301-310" }, { "311-320", "311-320" },
+			{ "321-330", "321-330" }, { "331-340", "331-340" }, { "341-350", "341-350" }, { "351-360", "351-360" }, { "361-370", "361-370" }, { "371-380", "371-380" },
+			{ "381-390", "381-390" }, { "391-400", "391-400" }, { "401-410", "401-410" }, { "411-420", "411-420" }, { "421-430", "421-430" }, { "431-440", "431-440" },
+			{ "441-450", "441-450" }, { "451-460", "451-460" }, { "461-470", "461-470" }, { "471-480", "471-480" },
+		},
+		"231-240"
+	},
+	{
+		"dosbox_pure_pinhack_expand_height",
+		"Pinball Scroll Hack Expand Height", NULL,
+		"The height to expand the screen to, together with the fine adjustment below. Each game needs its own value, for example 609 for Pinball Fantasies.", NULL,
+		DBP_OptionCat::Video,
+		{
+			{ "0", "Don't expand" }, { "300", "300" }, { "400", "400" }, { "500", "500" }, { "600", "600 (default)" }, { "700", "700" }, { "800", "800" }, { "900", "900" },
+		},
+		"600"
+	},
+	{
+		"dosbox_pure_pinhack_expand_fine",
+		"Pinball Scroll Hack Expand Height Fine Adjustment", NULL,
+		"Added to the expand height above." "\n\n", NULL, //end of Video section
+		DBP_OptionCat::Video,
+		{
+			{ "0", "+0" }, { "1", "+1" }, { "2", "+2" }, { "3", "+3" }, { "4", "+4" }, { "5", "+5" }, { "6", "+6" }, { "7", "+7" }, { "8", "+8" }, { "9", "+9" },
+			{ "10", "+10" }, { "11", "+11" }, { "12", "+12" }, { "13", "+13" }, { "14", "+14" }, { "15", "+15" }, { "16", "+16" }, { "17", "+17" }, { "18", "+18" }, { "19", "+19" },
+			{ "20", "+20" }, { "21", "+21" }, { "22", "+22" }, { "23", "+23" }, { "24", "+24" }, { "25", "+25" }, { "26", "+26" }, { "27", "+27" }, { "28", "+28" }, { "29", "+29" },
+			{ "30", "+30" }, { "31", "+31" }, { "32", "+32" }, { "33", "+33" }, { "34", "+34" }, { "35", "+35" }, { "36", "+36" }, { "37", "+37" }, { "38", "+38" }, { "39", "+39" },
+			{ "40", "+40" }, { "41", "+41" }, { "42", "+42" }, { "43", "+43" }, { "44", "+44" }, { "45", "+45" }, { "46", "+46" }, { "47", "+47" }, { "48", "+48" }, { "49", "+49" },
+			{ "50", "+50" }, { "51", "+51" }, { "52", "+52" }, { "53", "+53" }, { "54", "+54" }, { "55", "+55" }, { "56", "+56" }, { "57", "+57" }, { "58", "+58" }, { "59", "+59" },
+			{ "60", "+60" }, { "61", "+61" }, { "62", "+62" }, { "63", "+63" }, { "64", "+64" }, { "65", "+65" }, { "66", "+66" }, { "67", "+67" }, { "68", "+68" }, { "69", "+69" },
+			{ "70", "+70" }, { "71", "+71" }, { "72", "+72" }, { "73", "+73" }, { "74", "+74" }, { "75", "+75" }, { "76", "+76" }, { "77", "+77" }, { "78", "+78" }, { "79", "+79" },
+			{ "80", "+80" }, { "81", "+81" }, { "82", "+82" }, { "83", "+83" }, { "84", "+84" }, { "85", "+85" }, { "86", "+86" }, { "87", "+87" }, { "88", "+88" }, { "89", "+89" },
+			{ "90", "+90" }, { "91", "+91" }, { "92", "+92" }, { "93", "+93" }, { "94", "+94" }, { "95", "+95" }, { "96", "+96" }, { "97", "+97" }, { "98", "+98" }, { "99", "+99" },
+		},
+		"9"
 	},
 
 	// System
@@ -1034,7 +1120,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 		"To add SoundFonts or ROM files, copy them into the 'system' directory of the frontend." "\n"
 		"To use the frontend MIDI driver, make sure it's set up correctly."
 		#else
-		"To add SoundFonts or ROM files, copy them into the 'system' directory of DOSBox Pure."
+		"To add SoundFonts or ROM files, copy them into the 'system' directory of DOSBox."
 		#endif
 		"\n\n", NULL, //end of Audio section
 		DBP_OptionCat::Audio,
@@ -1042,6 +1128,77 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 			// dynamically filled in retro_init
 		},
 		"disabled"
+	},
+	{
+		"dosbox_pure_mt32_partials",
+		"MT-32 Maximum Partials (restart required)", NULL,
+		"The number of partials the emulated MT-32 plays at the same time. Fewer is faster but cuts notes off sooner, more keeps notes audible longer than on real hardware.", NULL,
+		DBP_OptionCat::Audio,
+		{ { "8", "8" }, { "9", "9" }, { "10", "10" }, { "11", "11" }, { "12", "12" }, { "14", "14" }, { "16", "16" }, { "20", "20" }, { "24", "24" }, { "28", "28" }, { "32", "32 (default, like the real hardware)" }, { "40", "40" }, { "48", "48" }, { "56", "56" }, { "64", "64" }, { "72", "72" }, { "80", "80" }, { "96", "96" }, { "112", "112" }, { "128", "128" }, { "144", "144" }, { "160", "160" }, { "176", "176" }, { "192", "192" }, { "224", "224" }, { "256", "256" } },
+		"32"
+	},
+	{
+		"dosbox_pure_mt32_analog",
+		"MT-32 Analog Output (restart required)", NULL,
+		"How the analog output stage is emulated." "\n"
+		"Digital only: no low-pass filter, fastest." "\n"
+		"Coarse: a coarse low-pass filter." "\n"
+		"Accurate: a finer filter at 48 kHz, closest to real hardware." "\n"
+		"Oversampled: like accurate at 96 kHz, slowest.", NULL,
+		DBP_OptionCat::Audio,
+		{ { "0", "Digital only" }, { "1", "Coarse" }, { "2", "Accurate (default)" }, { "3", "Oversampled" } },
+		"2"
+	},
+	{
+		"dosbox_pure_mt32_dac",
+		"MT-32 DAC Input", NULL,
+		"How the samples of the emulated LA32 chip reach the DAC." "\n"
+		"High quality: at double volume, without the tricks of the real devices." "\n"
+		"Pure: exactly the bits the LA32 puts out, at half the volume, least likely to overdrive." "\n"
+		"Generation 1 and 2: the bit order of the early MT-32 and of later MT-32 and CM-32L units, with their overdrive.", NULL,
+		DBP_OptionCat::Audio,
+		{ { "0", "High quality (default)" }, { "1", "Pure" }, { "2", "Generation 1" }, { "3", "Generation 2" } },
+		"0"
+	},
+	{
+		"dosbox_pure_mt32_reverb",
+		"MT-32 Reverb", NULL,
+		"Automatic leaves the reverb to the ROM and the game. Choosing a mode sets it with the time and level below and keeps it, whatever the game asks for.", NULL,
+		DBP_OptionCat::Audio,
+		{ { "auto", "Automatic (default)" }, { "0", "Room" }, { "1", "Hall" }, { "2", "Plate" }, { "3", "Tap delay" } },
+		"auto"
+	},
+	{
+		"dosbox_pure_mt32_reverb_time",
+		"MT-32 Reverb Time", NULL,
+		"Decay time of the chosen reverb mode.", NULL,
+		DBP_OptionCat::Audio,
+		{ { "0", "0" }, { "1", "1" }, { "2", "2" }, { "3", "3" }, { "4", "4" }, { "5", "5" }, { "6", "6" }, { "7", "7" } },
+		"5"
+	},
+	{
+		"dosbox_pure_mt32_reverb_level",
+		"MT-32 Reverb Level", NULL,
+		"Level of the chosen reverb mode.", NULL,
+		DBP_OptionCat::Audio,
+		{ { "0", "0" }, { "1", "1" }, { "2", "2" }, { "3", "3" }, { "4", "4" }, { "5", "5" }, { "6", "6" }, { "7", "7" } },
+		"3"
+	},
+	{
+		"dosbox_pure_mt32_reverse_stereo",
+		"MT-32 Reverse Stereo", NULL,
+		"Swap the left and right channels of the MT-32. Some games were made for units that pan the other way.", NULL,
+		DBP_OptionCat::Audio,
+		{ { "false", "Off (default)" }, { "true", "On" } },
+		"false"
+	},
+	{
+		"dosbox_pure_mt32_nice_amp_ramp",
+		"MT-32 Nice Amp Ramp", NULL,
+		"Smooth out the jumps in volume that quick volume or expression changes cause on real hardware. Turn off for accuracy." "\n\n", NULL,
+		DBP_OptionCat::Audio,
+		{ { "true", "On (default)" }, { "false", "Off" } },
+		"true"
 	},
 	{
 		"dosbox_pure_volume_sb",
