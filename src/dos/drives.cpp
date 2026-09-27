@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,40 +11,37 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
 #include "dosbox.h"
 #include "dos_system.h"
 #include "drives.h"
+#include "bios_disk.h"
 #include "mapper.h"
 #include "support.h"
+
+#ifdef __LIBRETRO__
+#include "libretro_message.h"
+#endif
 
 bool WildFileCmp(const char * file, const char * wild) 
 {
 	char file_name[9];
 	char file_ext[4];
-	char wild_name[10];
-	char wild_ext[5];
+	char wild_name[9];
+	char wild_ext[4];
 	const char * find_ext;
 	Bitu r;
 
-	for (r=0;r<9;r++) {
-	  file_name[r]=0;
-	  wild_name[r]=0;
-	}
-	wild_name[9]=0;
-	for (r=0;r<4;r++) {
-	  file_ext[r]=0;
-	  wild_ext[r]=0;
-	}
-	wild_ext[4]=0;
-	
+	strcpy(file_name,"        ");
+	strcpy(file_ext,"   ");
+	strcpy(wild_name,"        ");
+	strcpy(wild_ext,"   ");
+
 	find_ext=strrchr(file,'.');
 	if (find_ext) {
 		Bitu size=(Bitu)(find_ext-file);
@@ -59,12 +56,12 @@ bool WildFileCmp(const char * file, const char * wild)
 	find_ext=strrchr(wild,'.');
 	if (find_ext) {
 		Bitu size=(Bitu)(find_ext-wild);
-		if (size>9) size=9;
+		if (size>8) size=8;
 		memcpy(wild_name,wild,size);
 		find_ext++;
-		memcpy(wild_ext,find_ext,(strlen(find_ext)>4) ? 4 : strlen(find_ext));
+		memcpy(wild_ext,find_ext,(strlen(find_ext)>3) ? 3 : strlen(find_ext));
 	} else {
-		memcpy(wild_name,wild,(strlen(wild) > 9) ? 9 : strlen(wild));
+		memcpy(wild_name,wild,(strlen(wild) > 8) ? 8 : strlen(wild));
 	}
 	upcase(wild_name);upcase(wild_ext);
 	/* Names are right do some checking */
@@ -74,7 +71,6 @@ bool WildFileCmp(const char * file, const char * wild)
 		if (wild_name[r]!='?' && wild_name[r]!=file_name[r]) return false;
 		r++;
 	}
-	if (wild_name[r]&&wild_name[r]!='*') return false;
 checkext:
     r=0;
 	while (r<3) {
@@ -82,74 +78,6 @@ checkext:
 		if (wild_ext[r]!='?' && wild_ext[r]!=file_ext[r]) return false;
 		r++;
 	}
-	if (wild_ext[r]&&wild_ext[r]!='*') return false;
-	return true;
-}
-
-bool LWildFileCmp(const char * file, const char * wild) 
-{
-	if (!uselfn) return false;
-	char file_name[256];
-	char file_ext[256];
-	char wild_name[256];
-	char wild_ext[256];
-	const char * find_ext;
-	Bitu r;
-
-	for (r=0;r<256;r++) {
-	  file_name[r]=0;
-	  wild_name[r]=0;
-	}
-	for (r=0;r<256;r++) {
-	  file_ext[r]=0;
-	  wild_ext[r]=0;
-	}
-
-	Bitu size,elen;
-	find_ext=strrchr(file,'.');
-	if (find_ext) {
-		size=(Bitu)(find_ext-file);
-		if (size>255) size=255;
-		memcpy(file_name,file,size);
-		find_ext++;
-		elen=strlen(find_ext);
-		memcpy(file_ext,find_ext,(strlen(find_ext)>255) ? 255 : strlen(find_ext)); 
-	} else {
-		size=strlen(file);
-		elen=0;
-		memcpy(file_name,file,(strlen(file) > 255) ? 255 : strlen(file));
-	}
-	upcase(file_name);upcase(file_ext);
-	char nwild[LFN_NAMELENGTH+2];
-	strcpy(nwild,wild);
-	if (strrchr(nwild,'*')&&strrchr(nwild,'.')==NULL) strcat(nwild,".*");
-	find_ext=strrchr(nwild,'.');
-	if (find_ext) {
-		Bitu size=(Bitu)(find_ext-nwild);
-		if (size>255) size=255;
-		memcpy(wild_name,nwild,size);
-		find_ext++;
-		memcpy(wild_ext,find_ext,(strlen(find_ext)>255) ? 255 : strlen(find_ext));
-	} else {
-		memcpy(wild_name,nwild,(strlen(nwild) > 255) ? 255 : strlen(nwild));
-	}
-	upcase(wild_name);upcase(wild_ext);
-	/* Names are right do some checking */
-	r=0;
-	while (r<size) {
-		if (wild_name[r]=='*') goto checkext;
-		if (wild_name[r]!='?' && wild_name[r]!=file_name[r]) return false;
-		r++;
-	}
-	if (wild_name[r]&&wild_name[r]!='*') return false;
-checkext:
-    r=0;
-	while (r<elen) {
-		if (wild_ext[r]=='*') return true;
-		if (wild_ext[r]!='?' && wild_ext[r]!=file_ext[r]) return false;
-		r++;
-	}
-	if (wild_ext[r]&&wild_ext[r]!='*') return false;
 	return true;
 }
 
@@ -209,7 +137,7 @@ void DriveManager::InitializeDrive(int drive) {
 		driveInfo.currentDisk = 0;
 		DOS_Drive* disk = driveInfo.disks[driveInfo.currentDisk];
 		Drives[currentDrive] = disk;
-		disk->Activate();
+		if (driveInfo.disks.size() > 1) disk->Activate();
 	}
 }
 
@@ -246,24 +174,42 @@ void DriveManager::CycleDisk(bool pressed) {
 }
 */
 
-void DriveManager::CycleAllDisks(void) {
-	for (int idrive=0; idrive<DOS_DRIVES; idrive++) {
-		int numDisks = (int)driveInfos[idrive].disks.size();
-		if (numDisks > 1) {
-			// cycle disk
-			int currentDisk = driveInfos[idrive].currentDisk;
-			DOS_Drive* oldDisk = driveInfos[idrive].disks[currentDisk];
-			currentDisk = (currentDisk + 1) % numDisks;		
-			DOS_Drive* newDisk = driveInfos[idrive].disks[currentDisk];
-			driveInfos[idrive].currentDisk = currentDisk;
-			
-			// copy working directory, acquire system resources and finally switch to next drive		
-			strcpy(newDisk->curdir, oldDisk->curdir);
-			newDisk->Activate();
-			Drives[idrive] = newDisk;
-			LOG_MSG("Drive %c: disk %d of %d now active", 'A'+idrive, currentDisk+1, numDisks);
+void DriveManager::CycleDisks(int drive, bool notify) {
+	int numDisks = (int)driveInfos[drive].disks.size();
+	if (numDisks > 1) {
+		// cycle disk
+		int currentDisk = driveInfos[drive].currentDisk;
+		DOS_Drive* oldDisk = driveInfos[drive].disks[currentDisk];
+		currentDisk = (currentDisk + 1) % numDisks;		
+		DOS_Drive* newDisk = driveInfos[drive].disks[currentDisk];
+		driveInfos[drive].currentDisk = currentDisk;
+		if (drive < MAX_DISK_IMAGES && imageDiskList[drive] != NULL) {
+			if (strncmp(newDisk->GetInfo(),"fatDrive",8) == 0)
+				imageDiskList[drive] = ((fatDrive *)newDisk)->loadedDisk;
+			else
+				imageDiskList[drive] = (imageDisk *)newDisk;
+			if ((drive == 2 || drive == 3) && imageDiskList[drive]->hardDrive) updateDPT();
 		}
+
+		// copy working directory, acquire system resources and finally switch to next drive		
+		strcpy(newDisk->curdir, oldDisk->curdir);
+		newDisk->Activate();
+		Drives[drive] = newDisk;
+#ifdef __LIBRETRO__
+		if (notify)
+			retro::showOsdInfo(
+				fmt::format(
+					"Drive {}: disk {} of {} now active", static_cast<char>('A' + drive),
+					currentDisk + 1, numDisks),
+				RETRO_MESSAGE_TYPE_STATUS);
+#else
+		if (notify) LOG_MSG("Drive %c: disk %d of %d now active", 'A'+drive, currentDisk+1, numDisks);
+#endif
 	}
+}
+
+void DriveManager::CycleAllDisks(void) {
+	for (int idrive=0; idrive<DOS_DRIVES; idrive++) CycleDisks(idrive, true);
 }
 
 int DriveManager::UnmountDrive(int drive) {

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,10 +11,15 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
+
+#ifdef __LIBRETRO__
+// Fix ODR violation (exposed when building with LTO.)
+#define STRING_OP STRING_OP_DYN_X86
+#endif
 
 enum STRING_OP {
 	STR_OUTSB=0,STR_OUTSW,STR_OUTSD,
@@ -78,11 +83,11 @@ static void dyn_string(STRING_OP op) {
 	}
 	DynState rep_state;
 	dyn_savestate(&rep_state);
-	Bit8u * rep_start=cache.pos;
-	Bit8u * rep_ecx_jmp;
+	const Bit8u * rep_start=cache.pos;
+	const Bit8u * rep_ecx_jmp;
 	/* Check if ECX!=zero */
 	if (decode.rep) {
-		gen_dop_word(DOP_OR,decode.big_addr,DREG(ECX),DREG(ECX));
+		gen_dop_word(DOP_TEST,decode.big_addr,DREG(ECX),DREG(ECX));
 		rep_ecx_jmp=gen_create_branch_long(BR_Z);
 	}
 	if (usesi) {
@@ -99,11 +104,11 @@ static void dyn_string(STRING_OP op) {
 		}
 		switch (op) {
 		case STR_OUTSB:
-			gen_call_function((void*)&IO_WriteB,"%Id%Dl",DREG(EDX),tmp_reg);break;
+			gen_call_function((void*)&IO_WriteB,"%Dw%Dl",DREG(EDX),tmp_reg);break;
 		case STR_OUTSW:
-			gen_call_function((void*)&IO_WriteW,"%Id%Dw",DREG(EDX),tmp_reg);break;
+			gen_call_function((void*)&IO_WriteW,"%Dw%Dw",DREG(EDX),tmp_reg);break;
 		case STR_OUTSD:
-			gen_call_function((void*)&IO_WriteD,"%Id%Dd",DREG(EDX),tmp_reg);break;
+			gen_call_function((void*)&IO_WriteD,"%Dw%Dd",DREG(EDX),tmp_reg);break;
 		}
 	}
 	if (usedi) {

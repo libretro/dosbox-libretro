@@ -1,0 +1,14 @@
+prefix="@CMAKE_INSTALL_PREFIX@"
+exec_prefix="${prefix}"
+libdir="${prefix}/@CMAKE_INSTALL_LIBDIR@"
+includedir="${prefix}/include/SDL_audiolib"
+
+Name: SDL_audiolib
+Description: An audio decoding, resampling and mixing library
+URL: https://github.com/realnc/SDL_audiolib
+Version: 0.0.0
+Requires: @PKGCONF_REQ_PUB@
+Requires.private: @PKGCONF_REQ_PRIV@
+Cflags: -I"${includedir}"
+Libs: -L"${libdir}" -lSDL_audiolib
+Libs.private: -L"${libdir}" -lSDL_audiolib @PKGCONF_LIBS_PRIV@

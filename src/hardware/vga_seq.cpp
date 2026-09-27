@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -96,7 +96,7 @@ void write_p3c5(Bitu /*port*/,Bitu val,Bitu iolen) {
 		/* 
 			0  Set if in an alphanumeric mode, clear in graphics modes.
 			1  Set if more than 64kbytes on the adapter.
-			2  Enables Odd/Even addressing mode if set. Odd/Even mode places all odd
+			2  Disables Odd/Even addressing mode if set. Odd/Even mode places all odd
 				bytes in plane 1&3, and all even bytes in plane 0&2.
 			3  If set address bit 0-1 selects video memory planes (256 color mode),
 				rather than the Map Mask and Read Map Select Registers.

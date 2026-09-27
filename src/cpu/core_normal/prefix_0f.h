@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 	CASE_0F_W(0x00)												/* GRP 6 Exxx */
@@ -144,7 +144,7 @@
 		break;
 	CASE_0F_B(0x08)												/* INVD */
 	CASE_0F_B(0x09)												/* WBINVD */
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		if (cpu.pmode && cpu.cpl) EXCEPTION(EXCEPTION_GP);
 		break;
 	CASE_0F_B(0x20)												/* MOV Rd.CRx */
@@ -227,7 +227,7 @@
 		break;
 	CASE_0F_B(0x31)												/* RDTSC */
 		{
-			if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUM) goto illegal_opcode;
+			if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMSLOW) goto illegal_opcode;
 			/* Use a fixed number when in auto cycles mode as else the reported value changes constantly */
 			Bit64s tsc=(Bit64s)(PIC_FullIndex()*(double) (CPU_CycleAutoAdjust?70000:CPU_CycleMax));
 			reg_edx=(Bit32u)(tsc>>32);
@@ -316,6 +316,7 @@
 				SETFLAGBIT(CF,(*earw & mask));
 			} else {
 				GetEAa;eaa+=(((Bit16s)*rmrw)>>4)*2;
+				if (!TEST_PREFIX_ADDR) FixEA16;
 				Bit16u old=LoadMw(eaa);
 				SETFLAGBIT(CF,(old & mask));
 			}
@@ -342,6 +343,7 @@
 				*earw|=mask;
 			} else {
 				GetEAa;eaa+=(((Bit16s)*rmrw)>>4)*2;
+				if (!TEST_PREFIX_ADDR) FixEA16;
 				Bit16u old=LoadMw(eaa);
 				SETFLAGBIT(CF,(old & mask));
 				SaveMw(eaa,old | mask);
@@ -359,7 +361,7 @@
 		break;
 	CASE_0F_B(0xb0) 										/* cmpxchg Eb,Gb */
 		{
-			if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+			if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 			FillFlags();
 			GetRMrb;
 			if (rm >= 0xc0 ) {
@@ -387,7 +389,7 @@
 		}
 	CASE_0F_W(0xb1) 									/* cmpxchg Ew,Gw */
 		{
-			if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+			if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 			FillFlags();
 			GetRMrw;
 			if (rm >= 0xc0 ) {
@@ -433,6 +435,7 @@
 				*earw&= ~mask;
 			} else {
 				GetEAa;eaa+=(((Bit16s)*rmrw)>>4)*2;
+				if (!TEST_PREFIX_ADDR) FixEA16;
 				Bit16u old=LoadMw(eaa);
 				SETFLAGBIT(CF,(old & mask));
 				SaveMw(eaa,old & ~mask);
@@ -526,6 +529,7 @@
 				*earw^=mask;
 			} else {
 				GetEAa;eaa+=(((Bit16s)*rmrw)>>4)*2;
+				if (!TEST_PREFIX_ADDR) FixEA16;
 				Bit16u old=LoadMw(eaa);
 				SETFLAGBIT(CF,(old & mask));
 				SaveMw(eaa,old ^ mask);
@@ -575,7 +579,7 @@
 		}
 	CASE_0F_B(0xc0)												/* XADD Gb,Eb */
 		{
-			if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+			if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 			GetRMrb;Bit8u oldrmrb=*rmrb;
 			if (rm >= 0xc0 ) {GetEArb;*rmrb=*earb;*earb+=oldrmrb;}
 			else {GetEAa;*rmrb=LoadMb(eaa);SaveMb(eaa,LoadMb(eaa)+oldrmrb);}
@@ -583,48 +587,34 @@
 		}
 	CASE_0F_W(0xc1)												/* XADD Gw,Ew */
 		{
-			if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+			if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 			GetRMrw;Bit16u oldrmrw=*rmrw;
 			if (rm >= 0xc0 ) {GetEArw;*rmrw=*earw;*earw+=oldrmrw;}
 			else {GetEAa;*rmrw=LoadMw(eaa);SaveMw(eaa,LoadMw(eaa)+oldrmrw);}
 			break;
 		}
-    CASE_0F_W(0xc7)
-        {
-            void CPU_CMPXCHG8B(PhysPt eaa);
-
-            if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUM) goto illegal_opcode;
-            GetRM;
-            if (((rm >> 3) & 7) == 1) { // CMPXCHG8B /1 r/m
-                if (rm >= 0xc0 ) goto illegal_opcode;
-                GetEAa;
-                CPU_CMPXCHG8B(eaa);
-            }
-            else goto illegal_opcode;
-            break;
-        }
 	CASE_0F_W(0xc8)												/* BSWAP AX */
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		BSWAPW(reg_ax);break;
 	CASE_0F_W(0xc9)												/* BSWAP CX */
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		BSWAPW(reg_cx);break;
 	CASE_0F_W(0xca)												/* BSWAP DX */
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		BSWAPW(reg_dx);break;
 	CASE_0F_W(0xcb)												/* BSWAP BX */
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		BSWAPW(reg_bx);break;
 	CASE_0F_W(0xcc)												/* BSWAP SP */
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		BSWAPW(reg_sp);break;
 	CASE_0F_W(0xcd)												/* BSWAP BP */
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		BSWAPW(reg_bp);break;
 	CASE_0F_W(0xce)												/* BSWAP SI */
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		BSWAPW(reg_si);break;
 	CASE_0F_W(0xcf)												/* BSWAP DI */
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		BSWAPW(reg_di);break;
 		

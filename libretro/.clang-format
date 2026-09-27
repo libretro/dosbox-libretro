@@ -1,0 +1,14 @@
+---
+Language: Cpp
+BasedOnStyle: InheritParentConfig
+
+BraceWrapping:
+    AfterClass: true
+    AfterEnum: true
+    AfterFunction: true
+    AfterStruct: true
+    AfterUnion: true
+    BeforeCatch: true
+IndentPPDirectives: BeforeHash
+UseTab: Never
+...

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -32,6 +32,7 @@
 #include "mem.h"
 #include "mixer.h"
 #include "SDL.h"
+#include "SDL_thread.h"
 
 #if defined(C_SDL_SOUND)
 #include "SDL_sound.h"
@@ -99,7 +100,7 @@ public:
 	virtual bool	PlayAudioSector		(unsigned long start,unsigned long len);
 	virtual bool	PauseAudio			(bool resume);
 	virtual bool	StopAudio			(void);
-	virtual void	ChannelControl		(TCtrl ctrl) { return; };
+	virtual void	ChannelControl		(TCtrl /*ctrl*/) { return; };
 	virtual bool	ReadSectors			(PhysPt /*buffer*/, bool /*raw*/, unsigned long /*sector*/, unsigned long /*num*/) { return false; };
 	virtual bool	LoadUnloadMedia		(bool unload);
 
@@ -125,7 +126,7 @@ public:
 	bool	PlayAudioSector		(unsigned long /*start*/,unsigned long /*len*/) { return true; };
 	bool	PauseAudio			(bool /*resume*/) { return true; };
 	bool	StopAudio			(void) { return true; };
-	void	ChannelControl		(TCtrl ctrl) { return; };
+	void	ChannelControl		(TCtrl /*ctrl*/) { return; };
 	bool	ReadSectors			(PhysPt /*buffer*/, bool /*raw*/, unsigned long /*sector*/, unsigned long /*num*/) { return true; };
 	bool	LoadUnloadMedia		(bool /*unload*/) { return true; };
 };	
@@ -148,7 +149,13 @@ private:
 		int getLength();
 	private:
 		BinaryFile();
-		std::ifstream *file;
+		/* RFILE, not ifstream: it goes through the frontend's VFS when one was
+		   handed over, which is how content behind Android's SAF (content://
+		   URIs, which no C library can open) reaches us. Falls back to stdio. */
+		struct RFILE *file;
+		/* Or a file on an emulated drive, for a "$C:\\..." path: an image
+		   inside a ZIP (drive_dbp.cpp). */
+		class DOS_File *dos_file;
 	};
 	
 	#if defined(C_SDL_SOUND)
@@ -236,7 +243,7 @@ typedef	std::vector<Track>::iterator	track_it;
 	Bit8u	subUnit;
 };
 
-#if defined(WIN32) && !defined(__LIBRETRO__) /* Win 32 */
+#if defined (WIN32)	/* Win 32 */
 
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 
@@ -262,7 +269,7 @@ public:
 	bool	PlayAudioSector		(unsigned long start,unsigned long len);
 	bool	PauseAudio			(bool resume);
 	bool	StopAudio			(void);
-	void	ChannelControl		(TCtrl ctrl) { return; };
+	void	ChannelControl		(TCtrl /*ctrl*/) { return; };
 	
 	bool	ReadSectors			(PhysPt buffer, bool raw, unsigned long sector, unsigned long num);
 

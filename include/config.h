@@ -29,7 +29,7 @@
 /* #undef OS2 */
 
 #ifdef __WIN32__
-# define WIN32 1
+//# define WIN32 1
 #else
 //# define MACOSX 1
 #endif
@@ -42,11 +42,13 @@
 /* #undef C_TARGETCPU */ /* The type of cpu this target has */
 #endif
 
+#if defined(__i386__) || defined(__x86_64__)
 #define C_UNALIGNED_MEMORY 1 /* Define to 1 to use a unaligned memory access */
+#endif
 
 // ----- DOSBOX CORE FEATURES: Many of these probably won't work even if you enable them
 #define C_FPU 1 /* Define to 1 to enable floating point emulation */
-/* #undef C_CORE_INLINE */ /* Define to 1 to use inlined memory functions in cpu core */
+#define C_CORE_INLINE 1 /* Define to 1 to use inlined memory functions in cpu core */
 /* #undef C_DIRECTSERIAL */ /* Define to 1 if you want serial passthrough support (Win32, Posix and OS/2). */
 /* #undef C_IPX */ /* Define to 1 to enable IPX over Internet networking, requires SDL_net */
 /* #undef C_MODEM */ /* Define to 1 to enable internal modem support, requires SDL_net */
@@ -58,21 +60,19 @@
 #define HAVE_NETINET_IN_H 1
 #define HAVE_STDINT_H 1
 #define HAVE_STDLIB_H 1
-#ifndef __PS3__
 #define HAVE_STRINGS_H 1
-#endif
 #define HAVE_STRING_H 1
 #define HAVE_SYS_SOCKET_H 1
 #define HAVE_SYS_STAT_H 1
 #define HAVE_SYS_TYPES_H 1
 #define HAVE_UNISTD_H 1
 
-#if !defined(__WIN32__) && !defined(__POWERPC__) && !defined(VITA) && !defined(_3DS)
+#if !defined(__WIN32__) && !defined(__POWERPC__)
 # define HAVE_PWD_H 1
 #endif
 
 // ----- STANDARD LIBRARY FEATURES
-#ifndef __QNX__
+#if !defined (__QNX__)
 #define DIRENT_HAS_D_TYPE 1 /* struct dirent has d_type */
 #endif
 /* #undef DB_HAVE_NO_POWF */ /* libm doesn't include powf */
@@ -91,7 +91,7 @@
 ///////////////////
 
 /* Version number of package */
-#define VERSION "SVN-libretro"
+#define VERSION "core"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
@@ -143,6 +143,10 @@
 #endif
 
 #include <stdint.h>
+#ifndef __STDC_FORMAT_MACROS
+#define __STDC_FORMAT_MACROS 1
+#endif
+#include <inttypes.h>
 typedef double Real64;
 typedef uint8_t Bit8u;
 typedef int8_t Bit8s;
@@ -152,5 +156,18 @@ typedef uint32_t Bit32u;
 typedef int32_t Bit32s;
 typedef uint64_t Bit64u;
 typedef int64_t Bit64s;
+
+#define sBit32t PRId32
+#define sBit64t PRId64
+#define sBit32fs(a) sBit32t #a
+#define sBit64fs(a) sBit64t #a
 typedef uintptr_t Bitu;
 typedef intptr_t Bits;
+#if UINTPTR_MAX == 0xFFFFFFFF
+#define sBitfs sBit32fs
+#elif UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
+#define sBitfs sBit64fs
+#else
+#error "Can't determine pointer size"
+#endif
+

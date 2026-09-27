@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,20 +11,23 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
 #include "dosbox.h"
 #include "inout.h"
+#include "paging.h"
 #include "mem.h"
 #include "pci_bus.h"
 #include "setup.h"
 #include "debug.h"
 #include "callback.h"
 #include "regs.h"
+#include "../ints/int10.h"
+#include "voodoo.h"
 
 
 #if defined(PCI_FUNCTIONALITY_ENABLED)
@@ -418,6 +421,53 @@ public:
 static PCI* pci_interface=NULL;
 
 
+void PCI_AddSVGAS3_Device(void) {
+	PCI_Device* svga_dev=new PCI_VGADevice();
+	if (pci_interface!=NULL) {
+		pci_interface->RegisterPCIDevice(svga_dev);
+	} else {
+		if (num_rqueued_devices<max_rqueued_devices)
+			rqueued_devices[num_rqueued_devices++]=svga_dev;
+	}
+}
+
+void PCI_RemoveSVGAS3_Device(void) {
+	if (pci_interface!=NULL) {
+		Bit16u vendor=PCI_VGADevice::VendorID();
+		Bit16u device=PCI_VGADevice::DeviceID();
+		pci_interface->RemoveDevice(vendor,device);
+	}
+}
+
+void PCI_AddSST_Device(Bitu type) {
+	Bitu ctype = 1;
+	switch (type) {
+		case 1:
+		case 2:
+			ctype = type;
+			break;
+		default:
+			LOG_MSG("PCI:SST: Invalid board type %x specified",type);
+			break;
+	}
+	PCI_Device* voodoo_dev=new PCI_SSTDevice(ctype);
+	if (pci_interface!=NULL) {
+		pci_interface->RegisterPCIDevice(voodoo_dev);
+	} else {
+		if (num_rqueued_devices<max_rqueued_devices)
+			rqueued_devices[num_rqueued_devices++]=voodoo_dev;
+	}
+}
+
+void PCI_RemoveSST_Device(void) {
+	if (pci_interface!=NULL) {
+		Bit16u vendor=PCI_SSTDevice::VendorID();
+		pci_interface->RemoveDevice(vendor,1);
+		pci_interface->RemoveDevice(vendor,2);
+	}
+}
+
+
 PhysPt PCI_GetPModeInterface(void) {
 	if (pci_interface) {
 		return pci_interface->GetPModeCallbackPointer();
@@ -439,6 +489,20 @@ void PCI_ShutDown(Section* sec){
 void PCI_Init(Section* sec) {
 	pci_interface = new PCI(sec);
 	sec->AddDestroyFunction(&PCI_ShutDown,false);
+}
+
+#else
+
+void PCI_AddSVGAS3_Device(void) {
+}
+
+void PCI_RemoveSVGAS3_Device(void) {
+}
+
+void PCI_AddSST_Device(Bitu type) {
+}
+
+void PCI_RemoveSST_Device(void) {
 }
 
 #endif

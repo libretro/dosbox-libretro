@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/xiph/flac.git
+	branch = 1.3.4
+	commit = 1151c93e992bb8c7c6394e04aa880d711c531c7f
+	parent = b789476642f772baf2da9a6c2968995f49857aa2
+	method = merge
+	cmdver = 0.4.3
