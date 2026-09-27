@@ -1,0 +1,6 @@
+workflow:
+  steps:
+    - branch_package:
+        source_project: home:derselbst:anmp
+        source_package: fluidsynth
+        target_project: home:derselbst:anmp:github-ci

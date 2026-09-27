@@ -1,0 +1,12 @@
+*.[oa]
+*.so
+*.so.*
+/doc
+/gh-pages
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+SDL_audiolib.pc
+aulib_config.h
+aulib_export.h
+Makefile

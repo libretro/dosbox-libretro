@@ -1,0 +1,152 @@
+version: 2.1
+
+parameters:
+  GHA_Actor:
+    type: string
+    default: ""
+  GHA_Action:
+    type: string
+    default: ""
+  GHA_Event:
+    type: string
+    default: ""
+  GHA_Meta:
+    type: string
+    default: ""
+
+workflows:
+  build:
+    when:
+      equal: ['build_linux_arm', << pipeline.parameters.GHA_Action >>]
+    jobs:
+      - build-linux:
+          name: build-linux-arm64v8
+          image_tag: 'linux-arm64v8'
+          dynarec: 'arm64'
+          file_arch: 'arm64'
+          context:
+            - global-org
+      - build-linux:
+          name: build-linux-arm32v7
+          image_tag: 'linux-arm32v7'
+          dynarec: 'arm'
+          file_arch: 'armhf'
+          context:
+            - global-org
+      - upload-linux:
+          filters:
+            branches:
+              only:
+                - 'libretro'
+          context:
+            - global-org
+          requires:
+            - build-linux-arm64v8
+            - build-linux-arm32v7
+
+jobs:
+  build-linux:
+    parameters:
+      image_tag:
+        type: string
+      dynarec:
+        type: string
+      file_arch:
+        type: string
+
+    resource_class: arm.medium
+    machine:
+      image: ubuntu-2004:current
+
+    steps:
+      - checkout
+      - run:
+          command: |
+            docker run \
+                -v "$PWD":/build \
+                -w /build \
+                -e CC=gcc-9 \
+                -e CXX=g++-9 \
+                -e platform=unix \
+                -e BUNDLED_AUDIO_CODECS=1 \
+                -e BUNDLED_LIBSNDFILE=1 \
+                -e BUNDLED_SDL=1 \
+                -e CMAKE_GENERATOR=Ninja \
+                -e STATIC_LIBCXX=1 \
+                -e WITH_BASSMIDI=1 \
+                -e WITH_DYNAREC=<< parameters.dynarec >> \
+                -e WITH_FLUIDSYNTH=1 \
+                -e WITH_VOODOO=1 \
+                realnc/dosbox-core-build:<< parameters.image_tag >> \
+                bash -c '(
+                    set -ex
+                    touch libretro/deps/mpg123/aclocal.m4
+                    sleep 1
+                    find libretro/deps/mpg123/ -name "*.in" -exec touch '{}' \;
+                    sleep 1
+                    touch libretro/deps/mpg123/configure
+                    make -C libretro -f Makefile.libretro clean
+                    make -C libretro -f Makefile.libretro deps
+                    export LDFLAGS="-Wl,--no-undefined"
+                    make -C libretro -f Makefile.libretro -j`nproc`
+                    strip libretro/dosbox_core_libretro.so
+                    chmod -x libretro/dosbox_core_libretro.so
+                )'
+            mkdir -p /tmp/workspace
+            cp libretro/dosbox_core_libretro.so /tmp/workspace/
+            cd /tmp/workspace
+            xz -9 -T0 dosbox_core_libretro.so
+            mv dosbox_core_libretro.so.xz linux-<< parameters.file_arch >>.xz
+
+      - when:
+          condition:
+            equal: [ 'libretro', << pipeline.git.branch >> ]
+          steps:
+            - persist_to_workspace:
+                root: /tmp/workspace
+                paths:
+                  - linux-<< parameters.file_arch >>.xz
+
+  upload-linux:
+    resource_class: small
+    docker:
+      - image:  cimg/go:1.19
+
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: "Upload release"
+          command: |
+            mkdir zip_release
+            mkdir /tmp/upload
+            cd zip_release
+            cp /tmp/workspace/*.xz .
+
+            bash -c '(
+                set -ex
+                for f in *.xz
+                do
+                    BASENAME=$(basename "$f" .xz)
+                    mkdir -p "${BASENAME}"
+                    cd "${BASENAME}"
+                    mv "../${BASENAME}.xz" dosbox_core_libretro.so.xz
+                    unxz dosbox_core_libretro.so.xz
+                    zip -9 "/tmp/upload/${BASENAME}.zip" dosbox_core_libretro.so
+                    cd ..
+                done
+            )'
+
+            go install github.com/tcnksm/ghr@latest
+            ghr \
+                -t "${GITHUB_TOKEN}" \
+                -u "${CIRCLE_PROJECT_USERNAME}" \
+                -r "${CIRCLE_PROJECT_REPONAME}" \
+                -c "${CIRCLE_SHA1}" \
+                -n "Latest Build (Linux ARM)" \
+                -b "Linux ARM builds of current libretro branch." \
+                -delete \
+                -prerelease \
+                latest_build_linux_arm \
+                /tmp/upload \
+            ;

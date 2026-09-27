@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -30,13 +30,13 @@ public:
 	bool Write(Bit8u * data,Bit16u * size);
 	bool Seek(Bit32u * pos,Bit32u type);
 	bool Close();
-	void ClearAnsi(void);
 	Bit16u GetInformation(void);
-	bool ReadFromControlChannel(PhysPt bufptr,Bit16u size,Bit16u * retcode){return false;}
-	bool WriteToControlChannel(PhysPt bufptr,Bit16u size,Bit16u * retcode){return false;}
+	bool ReadFromControlChannel(PhysPt /*bufptr*/,Bit16u /*size*/,Bit16u * /*retcode*/){return false;}
+	bool WriteToControlChannel(PhysPt /*bufptr*/,Bit16u /*size*/,Bit16u * /*retcode*/){return false;}
 private:
+	void ClearAnsi(void);
+	void Output(Bit8u chr);
 	Bit8u readcache;
-	Bit8u lastwrite;
 	struct ansi { /* should create a constructor, which would fill them with the appropriate values */
 		bool esc;
 		bool sci;
@@ -132,19 +132,14 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 				/* expand tab if not direct output */
 				page = real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
 				do {
-					INT10_TeletypeOutputAttr(' ',ansi.enabled?ansi.attr:7,true);
+					Output(' ');
 					col=CURSOR_POS_COL(page);
 				} while(col%8);
-				lastwrite = data[count++];
+				count++;
 				continue;
 			} else { 
-				/* Some sort of "hack" now that '\n' doesn't set col to 0 (int10_char.cpp old chessgame) */
-				if((data[count] == '\n') && (lastwrite != '\r')) {
-					INT10_TeletypeOutputAttr('\r',ansi.enabled?ansi.attr:7,true);
-				}
-				/* use ansi attribute if ansi is enabled, otherwise use DOS default attribute*/
-				INT10_TeletypeOutputAttr(data[count],ansi.enabled?ansi.attr:7,true);
-				lastwrite = data[count++];
+				Output(data[count]);
+				count++;
 				continue;
 		}
 	}
@@ -168,6 +163,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 		continue;
 	}
 	/*ansi.esc and ansi.sci are true */
+	if (!dos.internal_output) ansi.enabled=true;
 	page = real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
 	switch(data[count]){
 		case '0':
@@ -187,11 +183,9 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 			break;
 		case 'm':               /* SGR */
 			for(i=0;i<=ansi.numberofarg;i++){ 
-				ansi.enabled=true;
 				switch(ansi.data[i]){
 				case 0: /* normal */
 					ansi.attr=0x07;//Real ansi does this as well. (should do current defaults)
-					ansi.enabled=false;
 					break;
 				case 1: /* bold mode on*/
 					ansi.attr|=0x08;
@@ -282,7 +276,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 				LOG(LOG_IOCTL,LOG_WARN)("ANSI SEQUENCES USED");
 			}
 			ncols = real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
-			nrows = real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1;
+			nrows = IS_EGAVGA_ARCH ? (real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1) : 25;
 			/* Turn them into positions that are on the screen */
 			if(ansi.data[0] == 0) ansi.data[0] = 1;
 			if(ansi.data[1] == 0) ansi.data[1] = 1;
@@ -304,7 +298,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 		case 'B': /*cursor Down */
 			col=CURSOR_POS_COL(page) ;
 			row=CURSOR_POS_ROW(page) ;
-			nrows = real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1;
+			nrows = IS_EGAVGA_ARCH ? (real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1) : 25;
 			tempdata = (ansi.data[0]? ansi.data[0] : 1);
 			if(tempdata + static_cast<Bitu>(row) >= nrows)
 				{ row = nrows - 1;}
@@ -367,7 +361,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 		case 'M': /* delete line (NANSI) */
 			row = CURSOR_POS_ROW(page);
 			ncols = real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
-			nrows = real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1;
+			nrows = IS_EGAVGA_ARCH ? (real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1) : 25;
 			INT10_ScrollWindow(row,0,nrows-1,ncols-1,ansi.data[0]? -ansi.data[0] : -1,ansi.attr,0xFF);
 			ClearAnsi();
 			break;
@@ -385,7 +379,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 	return true;
 }
 
-bool device_CON::Seek(Bit32u * pos,Bit32u type) {
+bool device_CON::Seek(Bit32u * pos,Bit32u /*type*/) {
 	// seek is valid
 	*pos = 0;
 	return true;
@@ -414,7 +408,6 @@ Bit16u device_CON::GetInformation(void) {
 device_CON::device_CON() {
 	SetName("CON");
 	readcache=0;
-	lastwrite=0;
 	ansi.enabled=false;
 	ansi.attr=0x7;
 	ansi.saverow=0;
@@ -429,3 +422,19 @@ void device_CON::ClearAnsi(void){
 	ansi.sci=false;
 	ansi.numberofarg=0;
 }
+
+void device_CON::Output(Bit8u chr) {
+	if (dos.internal_output || ansi.enabled) {
+		if (CurMode->type==M_TEXT) {
+			Bit8u page=real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
+			Bit8u col=CURSOR_POS_COL(page);
+			Bit8u row=CURSOR_POS_ROW(page);
+			BIOS_NCOLS;BIOS_NROWS;
+			if (nrows==row+1 && (chr=='\n' || (ncols==col+1 && chr!='\r' && chr!=8 && chr!=7))) {
+				INT10_ScrollWindow(0,0,(Bit8u)(nrows-1),(Bit8u)(ncols-1),-1,ansi.attr,page);
+				INT10_SetCursorPos(row-1,col,page);
+			}
+		}
+		INT10_TeletypeOutputAttr(chr,ansi.attr,true);
+	} else INT10_TeletypeOutput(chr,7);
+ }

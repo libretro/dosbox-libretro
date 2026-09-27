@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 switch (inst.code.load) {
@@ -175,6 +175,7 @@ l_M_Ed:
 			inst_op2_d=LoadMw(inst.rm_eaa+4);
 			break;
 		case M_EA:
+			if (inst.rm>=0xc0) goto illegalopcode;
 			inst_op1_d=inst.rm_off;
 			break;
 		case M_POPw:
@@ -186,15 +187,19 @@ l_M_Ed:
 		case M_GRP:
 			inst.code=Groups[inst.code.op][inst.rm_index];
 			goto l_MODRMswitch;
-		case M_GRP_Ib:
-			inst_op2_d=Fetchb();
+		case M_SHIFT_Ib:
+			inst_op2_d=Fetchb() & 0x1f;
+			if (!inst_op2_d)
+				break;
 			inst.code=Groups[inst.code.op][inst.rm_index];
 			goto l_MODRMswitch;
-		case M_GRP_CL:
-			inst_op2_d=reg_cl;
+		case M_SHIFT_CL:
+			inst_op2_d=reg_cl & 0x1f;
+			if (!inst_op2_d)
+				break;
 			inst.code=Groups[inst.code.op][inst.rm_index];
 			goto l_MODRMswitch;
-		case M_GRP_1:
+		case M_SHIFT_1:
 			inst_op2_d=1;
 			inst.code=Groups[inst.code.op][inst.rm_index];
 			goto l_MODRMswitch;
@@ -501,7 +506,7 @@ l_M_Ed:
 		CPU_SW_Interrupt_NoIOPLCheck(1,GetIP());
 		continue;
 	case D_RDTSC: {
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUM) goto illegalopcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMSLOW) goto illegalopcode;
 		Bit64s tsc=(Bit64s)(PIC_FullIndex()*(double)(CPU_CycleAutoAdjust?70000:CPU_CycleMax));
 		reg_edx=(Bit32u)(tsc>>32);
 		reg_eax=(Bit32u)(tsc&0xffffffff);

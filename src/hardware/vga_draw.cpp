@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -22,9 +22,15 @@
 #include "dosbox.h"
 #include "video.h"
 #include "render.h"
-#include "render_scalers.h"
+#include "../gui/render_scalers.h"
 #include "vga.h"
 #include "pic.h"
+
+#ifdef __LIBRETRO__
+#include "CoreOptions.h"
+#include "libretro_core_options.h"
+#include "pinhack.h"
+#endif
 
 //#undef C_DEBUG
 //#define C_DEBUG 1
@@ -395,7 +401,7 @@ static Bit8u * VGA_TEXT_Draw_Line(Bitu vidstart, Bitu line) {
 		*draw++=(fg&mask1) | (bg&~mask1);
 		*draw++=(fg&mask2) | (bg&~mask2);
 	}
-	if (!vga.draw.cursor.enabled || !(vga.draw.cursor.count&0x8)) goto skip_cursor;
+	if (!vga.draw.cursor.enabled || !(vga.draw.cursor.count&0x10)) goto skip_cursor;
 	font_addr = (vga.draw.cursor.address-vidstart) >> 1;
 	if (font_addr>=0 && font_addr<(Bits)vga.draw.blocks) {
 		if (line<vga.draw.cursor.sline) goto skip_cursor;
@@ -444,7 +450,7 @@ static Bit8u * VGA_TEXT_Herc_Draw_Line(Bitu vidstart, Bitu line) {
 			*draw++=(fg&mask2) | (bg&~mask2);
 		}
 	}
-	if (!vga.draw.cursor.enabled || !(vga.draw.cursor.count&0x8)) goto skip_cursor;
+	if (!vga.draw.cursor.enabled || !(vga.draw.cursor.count&0x10)) goto skip_cursor;
 	font_addr = (vga.draw.cursor.address-vidstart) >> 1;
 	if (font_addr>=0 && font_addr<(Bits)vga.draw.blocks) {
 		if (line<vga.draw.cursor.sline) goto skip_cursor;
@@ -506,7 +512,7 @@ static Bit8u* VGA_TEXT_Draw_Line(Bitu vidstart, Bitu line) {
 		}
 	}
 	// draw the text mode cursor if needed
-	if ((vga.draw.cursor.count&0x8) && (line >= vga.draw.cursor.sline) &&
+	if ((vga.draw.cursor.count&0x10) && (line >= vga.draw.cursor.sline) &&
 		(line <= vga.draw.cursor.eline) && vga.draw.cursor.enabled) {
 		// the adress of the attribute that makes up the cell the cursor is in
 		Bits attr_addr = (vga.draw.cursor.address-vidstart) >> 1;
@@ -564,7 +570,7 @@ static Bit8u* VGA_TEXT_Xlat16_Draw_Line(Bitu vidstart, Bitu line) {
 		}
 	}
 	// draw the text mode cursor if needed
-	if ((vga.draw.cursor.count&0x8) && (line >= vga.draw.cursor.sline) &&
+	if ((vga.draw.cursor.count&0x10) && (line >= vga.draw.cursor.sline) &&
 		(line <= vga.draw.cursor.eline) && vga.draw.cursor.enabled) {
 		// the adress of the attribute that makes up the cell the cursor is in
 		Bits attr_addr = (vga.draw.cursor.address-vidstart) >> 1;
@@ -720,6 +726,9 @@ static void VGA_DrawPart(Bitu lines) {
 			vga.draw.address+=vga.draw.address_add;
 		}
 		vga.draw.lines_done++;
+#if defined(__LIBRETRO__) && defined(WITH_PINHACK)
+		if (!pinhack.trigger || !pinhack.active) {
+#endif
 		if (vga.draw.split_line==vga.draw.lines_done) {
 #ifdef VGA_KEEP_CHANGES
 			VGA_ChangesEnd( );
@@ -729,6 +738,9 @@ static void VGA_DrawPart(Bitu lines) {
 			vga.changes.start = vga.draw.address >> VGA_CHANGE_SHIFT;
 #endif
 		}
+#if defined(__LIBRETRO__) && defined(WITH_PINHACK)
+		}
+#endif
 	}
 	if (--vga.draw.parts_left) {
 		PIC_AddEvent(VGA_DrawPart,(float)vga.draw.delay.parts,
@@ -834,7 +846,9 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 		E_Exit("This new machine needs implementation in VGA_VerticalTimer too.");
 		break;
 	}
+
 	//Check if we can actually render, else skip the rest (frameskip)
+	vga.draw.cursor.count++; // Do this here, else the cursor speed depends on the frameskip
 	if (vga.draw.vga_override || !RENDER_StartUpdate())
 		return;
 
@@ -902,7 +916,7 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 		else vga.draw.linear_mask = 0x3fff; // CGA, Tandy 4 pages
 		vga.draw.cursor.address=vga.config.cursor_start*2;
 		vga.draw.address *= 2;
-		vga.draw.cursor.count++;
+		//vga.draw.cursor.count++; //Moved before the frameskip test.
 		/* check for blinking and blinking change delay */
 		FontMask[1]=(vga.draw.blinking & (vga.draw.cursor.count >> 4)) ?
 			0 : 0xffffffff;
@@ -1200,7 +1214,17 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	if (!vtotal) return;
 	
 	// The screen refresh frequency
+#ifdef __LIBRETRO__
+	if (const auto hz_override = retro::core_options[CORE_OPT_CORE_VGA_REFRESH].toInt();
+		hz_override == 0)
+	{
+		fps=(double)clock/(vtotal*htotal);
+	} else {
+		fps = std::max(50, hz_override);
+	}
+#else
 	fps=(double)clock/(vtotal*htotal);
+#endif
 	// Horizontal total (that's how long a line takes with whistles and bells)
 	vga.draw.delay.htotal = htotal*1000.0/clock; //in milliseconds
 	// Start and End of horizontal blanking
@@ -1369,8 +1393,13 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		// fall-through
 	case M_LIN32:
 		width<<=3;
-		if (vga.crtc.mode_control & 0x8)
+		if (vga.crtc.mode_control & 0x8) {
  			doublewidth = true;
+			if (vga.mode == M_LIN32) {
+				// vesa modes 10f/190/191/192
+				aspect_ratio *= 2.0;
+			}
+		}
 		/* Use HW mouse cursor drawer if enabled */
 		VGA_ActivateHardwareCursor();
 		break;
@@ -1380,6 +1409,10 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		width<<=2;
 		if ((vga.crtc.mode_control & 0x8) || (svgaCard == SVGA_S3Trio && (vga.s3.pll.cmd & 0x10)))
 			doublewidth = true;
+		else {
+			// vesa modes 165/175
+			aspect_ratio /= 2.0;
+		}
 		/* Use HW mouse cursor drawer if enabled */
 		VGA_ActivateHardwareCursor();
 		break;
@@ -1529,6 +1562,21 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 			height/=2;
 		}
 	}
+
+#if defined(__LIBRETRO__) && defined(WITH_PINHACK)
+	if (pinhack.enabled) {
+		pinhack.trigger = false;
+		if ((height >= pinhack.triggerheight.min && height <= pinhack.triggerheight.max) &&
+			(width >= pinhack.triggerwidth.min && width <= pinhack.triggerwidth.max) &&
+			pinhack.active) {
+			pinhack.trigger = true;
+			// If width or height not set, do not expand!
+			if (pinhack.expand.height) height = pinhack.expand.height;
+			if (pinhack.expand.width)  width  = pinhack.expand.width;
+		}
+	}
+#endif
+
 	vga.draw.lines_total=height;
 	vga.draw.parts_lines=vga.draw.lines_total/vga.draw.parts_total;
 	vga.draw.line_length = width * ((bpp + 1) / 8);
@@ -1537,11 +1585,11 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	vga.changes.frame = 0;
 	vga.changes.writeMask = 1;
 #endif
-    /* 
-	   Cheap hack to just make all > 640x480 modes have 4:3 aspect ratio
+	/*
+	   Cheap hack to just make all > 640x480 modes have square pixels
 	*/
 	if ( width >= 640 && height >= 480 ) {
-		aspect_ratio = ((float)width / (float)height) * ( 3.0 / 4.0);
+		aspect_ratio = 1.0;//((float)width / (float)height) * ( 3.0 / 4.0);
 	}
 //	LOG_MSG("ht %d vt %d ratio %f", htotal, vtotal, aspect_ratio );
 

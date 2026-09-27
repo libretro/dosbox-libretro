@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN and LPT support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -31,10 +29,17 @@
 #include <string>
   
 #include "dosbox.h"
+#include "cross.h"
 #include "debug.h"
 #include "support.h"
 #include "video.h"
 
+#ifdef __LIBRETRO__
+#include "emu_thread.h"
+#include "libretro.h"
+#include "libretro_dosbox.h"
+#include "log.h"
+#endif
 
 void upcase(std::string &str) {
 	int (*tf)(int) = std::toupper;
@@ -45,7 +50,13 @@ void lowcase(std::string &str) {
 	int (*tf)(int) = std::tolower;
 	std::transform(str.begin(), str.end(), str.begin(), tf);
 }
-  
+
+void trim(std::string &str) {
+	std::string::size_type loc = str.find_first_not_of(" \r\t\f\n");
+	if (loc != std::string::npos) str.erase(0,loc);
+	loc = str.find_last_not_of(" \r\t\f\n");
+	if (loc != std::string::npos) str.erase(loc+1);
+}
 
 /* 
 	Ripped some source from freedos for this one.
@@ -72,7 +83,7 @@ char *ltrim(char *str) {
 char *rtrim(char *str) {
 	char *p;
 	p = strchr(str, '\0');
-	while (--p >= str && *reinterpret_cast<unsigned char*>(p) != '\f' && isspace(*reinterpret_cast<unsigned char*>(p))) {};
+	while (--p >= str && isspace(*reinterpret_cast<unsigned char*>(p))) {};
 	p[1] = '\0';
 	return str;
 }
@@ -140,23 +151,6 @@ char * StripWord(char *&line) {
 	return begin;
 }
 
-char * StripArg(char *&line) {
-	char * scan=line;
-	int q=0;
-	scan=ltrim(scan);
-	char * begin=scan;
-	for (char c = *scan ;(c = *scan);scan++) {
-		if (*scan=='"') {
-			q++;
-		} else if (q/2*2==q && isspace(*reinterpret_cast<unsigned char*>(&c))) {
-			*scan++=0;
-			break;
-		}
-	}
-	line=scan;
-	return begin;
-}
-
 Bits ConvDecWord(char * word) {
 	bool negative=false;Bitu ret=0;
 	if (*word=='-') {
@@ -195,9 +189,18 @@ void E_Exit(const char * format,...) {
 #endif
 	va_list msg;
 	va_start(msg,format);
-	vsprintf(buf,format,msg);
+	vsnprintf(buf,sizeof(buf),format,msg);
 	va_end(msg);
-	strcat(buf,"\n");
 
+	buf[sizeof(buf) - 1] = '\0';
+	//strcat(buf,"\n"); catcher should handle the end of line.. 
+
+#ifdef __LIBRETRO__
+	retro::logError("{}", buf);
+	dosbox_exit = true;
+	switchThread();
+	throw EmuThreadCanceled();
+#else
 	throw(buf);
+#endif
 }
