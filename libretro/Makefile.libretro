@@ -12,6 +12,8 @@ BUNDLED_AUDIO_CODECS ?= 1
 BUNDLED_LIBSNDFILE ?= 1
 # Build and link our own sdl and sdl_net statically.
 BUNDLED_SDL ?= 0
+# Build and link our own fluidsynth statically.
+BUNDLED_FLUIDSYNTH ?= 1
 # Build with BASSMIDI support
 WITH_BASSMIDI ?= 1
 # Build with fluidsynth support
@@ -227,10 +229,15 @@ ifeq ($(WITH_FLUIDSYNTH), 1)
 		include deps/opus.makefile
 		include deps/flac.makefile
 	endif
-	ifeq ($(BUNDLED_LIBSNDFILE), 1)
-		include deps/libsndfile.makefile
+	ifeq ($(BUNDLED_FLUIDSYNTH), 1)
+		ifeq ($(BUNDLED_LIBSNDFILE), 1)
+			include deps/libsndfile.makefile
+		endif
+		include deps/fluidsynth.makefile
+	else
+		EXTRA_PACKAGES += fluidsynth
+		COMMONFLAGS += -DWITH_FLUIDSYNTH
 	endif
-	include deps/fluidsynth.makefile
 endif
 include deps/munt.makefile
 ifeq ($(WITH_SDL_SOUND_WRAPPER), 1)
